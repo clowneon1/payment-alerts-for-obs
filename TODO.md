@@ -8,14 +8,6 @@
 
 #### P0 — Critical & High Priority Fixes
 
-- [ ] **1. PhonePe & GPay Notification Parser Enhancement (APK Decompilation & Resource String Inspection)**:
-  - Decompile and inspect PhonePe (`com.phonepe.app`) and Google Pay (`com.google.android.apps.nbu.paisa.user`) APK string tables (`resources.arsc`, `strings.xml`, `.dex` bytecode).
-  - Extract 100% of notification format strings, title layouts (`"PhonePe - <Name>"`, `"PhonePe: <Name>"`, `"GPay - <Name>"`), and body templates (mapped in [`apk-analysis/PAYMENT_PATTERNS.md`](file:///d:/xwork/projects/payment-alerts-for-obs/apk-analysis/PAYMENT_PATTERNS.md)).
-  - Update `parsePayment()` in `server.js` with comprehensive regex patterns matching all current, legacy, and business merchant notification variations.
-  - Strip app name prefixes (`"PhonePe - "`, `"PhonePe: "`, `"GPay - "`) in `cleanSender()`.
-  - Pair title sender names directly with body amount lines (`"₹500 received"`) when the `from` keyword is omitted.
-  - Update PC dashboard simulator quick presets (`config.html`, `config.js`) and Android mobile tester presets (`NotificationTesterActivity.kt`) to match new PhonePe and GPay notification patterns.
-
 - [ ] **2. Service Discovery Rebranding & Mesh / Dual-Band Network Fixes**:
   - Rename mDNS service type from legacy `_payment-alerts._tcp` to `_streampe._tcp` across PC Server (`server.js`) and Android companion app (`ServerDiscoveryManager.kt`).
   - Add `<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />` & `WifiManager.MulticastLock` handling on Android (`ServerDiscoveryManager.kt`).
@@ -23,9 +15,6 @@
   - Implement Smart Unicast Probe fallback for 2.4GHz Wi-Fi, mesh routers, and cross-subnet setups (`192.168.169.x` ➔ `192.168.172.x`).
   - Implement IP:Port deduplication and clean server naming (`StreamPe - Hostname`) without UI text flashing.
   - Ensure desktop app (`StreamPe.exe`) connects strictly to its own sidecar server port without dev server port hijacking.
-
-- [ ] **3. Bug Fix: Mobile Notification Tester Edited Events Processed as Standard Events**:
-  - Fix issue where sending an edited/customized test notification from `NotificationTesterActivity` on the mobile companion app is processed and recorded by the PC server as a live standard payment event instead of a simulated test event.
 
 - [ ] **4. Default Portable Storage Root Migration to AppData**:
   - Move default root storage location from the portable working directory to Windows `%APPDATA%\StreamPe\` (and `~/.config/streampe` on POSIX systems) for better OS application consistency and to prevent data/configuration loss when upgrading portable release builds.
@@ -54,6 +43,11 @@
 ---
 
 ## ✅ Completed
+
+### Version 2.2.0
+
+- [x] **Declarative Payment Rules Engine & Whitelisting**: Created `payment-rules.json` array rules engine for PhonePe, Google Pay, and Amazon Pay. Refactored `parsePayment()` with positive whitelisting (rejecting non-payment/promotions), ReDoS input guards (<300 chars), startup self-testing, and real-time 🟢/🟡 `[PARSE]` diagnostic log badges. Published authoritative pattern specification in [`PAYMENT_PATTERNS.md`](file:///d:/xwork/projects/payment-alerts-for-obs/PAYMENT_PATTERNS.md).
+- [x] **Mobile Notification Tester Preset Synchronization & bigText Fix**: Updated mobile tester presets in `NotificationTesterActivity.kt` and PC simulator presets in `config.js` to match modern notification formats. Fixed `bigText` calculation so user-edited test notification text is honored.
 
 ### Version 2.1.0
 
