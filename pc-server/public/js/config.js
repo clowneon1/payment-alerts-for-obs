@@ -2470,25 +2470,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const a = data.analytics || {};
 
+      const formatCompact = (amt) => (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+        ? PaymentsCsv.formatCompactCurrency(amt)
+        : `₹${(parseFloat(amt) || 0).toLocaleString('en-IN')}`;
+
       // 3. Update KPI Cards & Single-Line Summary Bar
-      if (el('kpi-total-revenue')) el('kpi-total-revenue').innerHTML = a.formattedTotalRevenue || '&#8377;0.00';
+      if (el('kpi-total-revenue')) el('kpi-total-revenue').innerHTML = formatCompact(a.totalRevenue || 0);
       if (el('kpi-total-count')) el('kpi-total-count').textContent = (a.totalDonationsCount || 0).toLocaleString();
       if (el('kpi-unique-donors')) el('kpi-unique-donors').textContent = (a.uniqueDonorsCount || 0).toLocaleString();
-      if (el('kpi-avg-amount')) el('kpi-avg-amount').innerHTML = a.formattedAverageDonation || '&#8377;0.00';
+      if (el('kpi-avg-amount')) el('kpi-avg-amount').innerHTML = formatCompact(a.averageDonation || 0);
       if (el('kpi-peak-day')) {
         const peak = a.peakDay;
         if (peak && peak.date !== 'N/A' && peak.amount > 0) {
-          el('kpi-peak-day').textContent = `${peak.date} · ${peak.formattedAmount}`;
+          el('kpi-peak-day').textContent = `${peak.date} · ${formatCompact(peak.amount)}`;
         } else {
           el('kpi-peak-day').textContent = 'N/A';
         }
       }
 
       // Single-Line Filtered Stats Summary Bar
-      if (el('summary-stat-total')) el('summary-stat-total').innerHTML = a.formattedTotalRevenue || '&#8377;0.00';
+      if (el('summary-stat-total')) el('summary-stat-total').innerHTML = formatCompact(a.totalRevenue || 0);
       if (el('summary-stat-count')) el('summary-stat-count').textContent = (a.totalDonationsCount || 0).toLocaleString();
       if (el('summary-stat-donors')) el('summary-stat-donors').textContent = (a.uniqueDonorsCount || 0).toLocaleString();
-      if (el('summary-stat-avg')) el('summary-stat-avg').innerHTML = a.formattedAverageDonation || '&#8377;0.00';
+      if (el('summary-stat-avg')) el('summary-stat-avg').innerHTML = formatCompact(a.averageDonation || 0);
       if (el('summary-stat-badge')) {
         const filterParts = [];
         if (analyticsState.provider && analyticsState.provider !== 'all') {
@@ -2533,7 +2537,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const legend = el('analytics-donut-legend');
     if (!svg || !centerAmt || !legend) return;
 
-    centerAmt.textContent = donut.formattedTotal || '₹0.00';
+    centerAmt.textContent = (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+      ? PaymentsCsv.formatCompactCurrency(donut.totalRevenue || 0)
+      : (donut.formattedTotal || '₹0.00');
     if (centerLbl) centerLbl.textContent = `${donut.totalCount || 0} Donations`;
 
     const segments = donut.segments || [];
@@ -2636,9 +2642,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridSteps = [1.0, 0.75, 0.5, 0.25, 0.0];
 
     function formatShortCurrency(amount) {
-      if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-      if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}k`;
-      return `₹${amount}`;
+      return (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+        ? PaymentsCsv.formatCompactCurrency(amount)
+        : `₹${amount}`;
     }
 
     let gridHtml = '';
@@ -2723,16 +2729,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnNext = el('btn-ledger-next');
     if (!body) return;
 
-    body.innerHTML = `
-      <tr>
-        <td colspan="6" style="padding: 40px 20px; text-align: center;">
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
-            <div class="rotation-spinner spinner-lg"></div>
-            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Loading transactions ledger...</div>
-          </div>
-        </td>
-      </tr>
-    `;
+    if (!body.children.length || !body.querySelector('tr[style*="border-bottom"]')) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="7" style="padding: 40px 20px; text-align: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+              <div class="rotation-spinner spinner-lg"></div>
+              <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Loading transactions ledger...</div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
 
     try {
       const effectiveSearch = [analyticsState.search, analyticsState.searchDonor, analyticsState.searchNote].filter(Boolean).join(' ');

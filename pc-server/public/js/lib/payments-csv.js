@@ -698,6 +698,7 @@
     normalizeProviderKey,
     getCurrencySymbol,
     formatCurrency,
+    formatCompactCurrency,
     getMonthKey,
     escapeCsvField,
     formatCsvRow,
