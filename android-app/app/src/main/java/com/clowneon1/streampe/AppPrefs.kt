@@ -23,13 +23,13 @@ class AppPrefs(context: Context) {
         get() {
             val csv = prefs.getString("recent_servers_list", "") ?: ""
             if (csv.isNotBlank()) {
-                return csv.split(",").filter { it.isNotBlank() }.take(3)
+                return csv.split(",").filter { it.isNotBlank() }.take(AppConstants.MAX_RECENT_SERVERS)
             }
             val oldSet = prefs.getStringSet("saved_servers", emptySet()) ?: emptySet()
-            return oldSet.toList().take(3)
+            return oldSet.toList().take(AppConstants.MAX_RECENT_SERVERS)
         }
         set(value) {
-            val trimmedList = value.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(3)
+            val trimmedList = value.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(AppConstants.MAX_RECENT_SERVERS)
             prefs.edit().putString("recent_servers_list", trimmedList.joinToString(",")).apply()
         }
 
@@ -39,7 +39,7 @@ class AppPrefs(context: Context) {
             val current = savedServers.toMutableList()
             current.remove(trimmed)
             current.add(0, trimmed)
-            savedServers = current.take(3)
+            savedServers = current.take(AppConstants.MAX_RECENT_SERVERS)
         }
     }
 

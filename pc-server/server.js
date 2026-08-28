@@ -10,6 +10,19 @@ const dgram = require('dgram');
 const winston = require('winston');
 require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
+const {
+  APP_NAME,
+  APP_VERSION,
+  DEFAULT_PORT,
+  FALLBACK_PORTS,
+  UDP_DISCOVERY_PORT,
+  MDNS_SERVICE_TYPE,
+  MAX_REDOS_INPUT_LENGTH,
+  NETWORK_CHANGE_CHECK_INTERVAL_MS,
+  ANDROID_HEARTBEAT_INTERVAL_MS,
+  OBS_HEARTBEAT_INTERVAL_MS,
+  getDefaultAppDataDir
+} = require('./constants');
 
 const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('node.exe') &&
@@ -22,22 +35,59 @@ if (!fs.existsSync(PUBLIC_DIR)) {
   PUBLIC_DIR = path.join(__dirname, 'public');
 }
 
-let writableBaseDir = baseDir;
-
-// If compiled and running from a system/read-only location (e.g. Program Files), fall back to AppData Roaming
-if (isCompiled && (writableBaseDir.toLowerCase().includes('program files') || writableBaseDir.toLowerCase().includes('system32'))) {
-  try {
-    const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.local', 'share'));
-    writableBaseDir = path.join(appData, 'com.clowneon1.streampe');
-  } catch (e) { }
-}
+// Default storage root is Windows %APPDATA%\StreamPe (or ~/.config/StreamPe on POSIX)
+let defaultAppDataDir = getDefaultAppDataDir();
+let writableBaseDir = defaultAppDataDir;
 
 try {
-  // In Tauri the TAURI_APP_DATA env var is set by the Rust launcher
   if (process.env.TAURI_APP_DATA) {
     writableBaseDir = process.env.TAURI_APP_DATA;
   }
 } catch (e) { }
+
+// Auto-migrate legacy portable directory files (config, data, logs) to AppData if needed
+function migrateLocalDataIfNeeded(localBase, targetBase) {
+  try {
+    if (localBase === targetBase) return;
+    const foldersToMigrate = ['config', 'data', 'logs'];
+    let migratedCount = 0;
+
+    for (const folder of foldersToMigrate) {
+      const srcFolder = path.join(localBase, folder);
+      const destFolder = path.join(targetBase, folder);
+
+      if (fs.existsSync(srcFolder)) {
+        if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder, { recursive: true });
+
+        const copyRecursive = (src, dest) => {
+          const entries = fs.readdirSync(src, { withFileTypes: true });
+          for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+              if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
+              copyRecursive(srcPath, destPath);
+            } else if (!fs.existsSync(destPath)) {
+              fs.copyFileSync(srcPath, destPath);
+              migratedCount++;
+            }
+          }
+        };
+        copyRecursive(srcFolder, destFolder);
+      }
+    }
+    if (migratedCount > 0) {
+      console.log(`[Storage] 📦 Migrated ${migratedCount} data/config file(s) from local directory to ${targetBase}`);
+    }
+  } catch (err) {
+    console.warn(`[Storage] Migration notice: ${err.message}`);
+  }
+}
+
+migrateLocalDataIfNeeded(baseDir, writableBaseDir);
+if (baseDir !== __dirname) {
+  migrateLocalDataIfNeeded(__dirname, writableBaseDir);
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -2079,8 +2129,7 @@ app.get('/health', (req, res) => {
 });
 
 // HTTP and WS share the same underlying server — one port covers both.
-const PREFERRED_PORT = parseInt(process.env.PORT || '2907', 10);
-const FALLBACK_PORTS = [PREFERRED_PORT, 8876, 2708, 9091, 1001, 0];
+const PREFERRED_PORT = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
 const SESSION_TOKEN = process.env.STREAMPE_SESSION_TOKEN || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
 let activeServerPort = PREFERRED_PORT;
 
@@ -2088,7 +2137,6 @@ let activeServerPort = PREFERRED_PORT;
 let bonjourInstance = null;
 let publishedService = null;
 let udpSocket = null;
-const UDP_DISCOVERY_PORT = 58025;
 
 function startUdpBroadcastListener() {
   try {

@@ -24,10 +24,11 @@ class ServerDiscoveryManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ServerDiscovery"
-        private const val SERVICE_TYPE_STREAMPE = "_streampe._tcp."
-        private const val SERVICE_TYPE_LEGACY = "_payment-alerts._tcp."
-        const val DEFAULT_SCAN_DURATION_MS = 5000L
-        val FALLBACK_PORTS = listOf(2907, 8876, 2708, 9091, 1001)
+        private const val SERVICE_TYPE_STREAMPE = AppConstants.SERVICE_TYPE_STREAMPE
+        private const val SERVICE_TYPE_LEGACY = AppConstants.SERVICE_TYPE_LEGACY
+        const val DEFAULT_SCAN_DURATION_MS = AppConstants.DEFAULT_SCAN_DURATION_MS
+        val FALLBACK_PORTS = AppConstants.FALLBACK_PORTS
+        const val UDP_DISCOVERY_PORT = AppConstants.UDP_DISCOVERY_PORT
     }
 
     interface DiscoveryListener {

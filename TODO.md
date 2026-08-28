@@ -8,9 +8,6 @@
 
 #### P0 — Critical & High Priority Fixes
 
-- [ ] **4. Default Portable Storage Root Migration to AppData**:
-  - Move default root storage location from the portable working directory to Windows `%APPDATA%\StreamPe\` (and `~/.config/streampe` on POSIX systems) for better OS application consistency and to prevent data/configuration loss when upgrading portable release builds.
-
 #### P1 — Memory Optimization, Customization & Auto-Update
 
 - [ ] **5. Donor Name Display Formatting & Custom Alias System**:
@@ -38,6 +35,7 @@
 
 ### Version 2.2.0
 
+- [x] **Default Portable Storage Root Migration to AppData & Auto-Migration**: Moved default storage root to Windows `%APPDATA%\StreamPe\` (`~/.config/StreamPe` on POSIX) for consistent data persistence across portable updates. Built automatic migration engine `migrateLocalDataIfNeeded()` to transparently copy legacy portable `./data` and `./config` files to `%APPDATA%\StreamPe\` on first boot.
 - [x] **Service Discovery Rebranding, Mesh Fixes & Sidecar Token Isolation**: Rebranded mDNS discovery to `_streampe._tcp`, added Android `WifiManager.MulticastLock` with `CHANGE_WIFI_MULTICAST_STATE` permission, added Windows Defender Firewall mDNS UDP 5353 auto-rule, implemented fallback port cascade sequence (`2907 ➔ 8876 ➔ 2708 ➔ 9091 ➔ 1001 ➔ 0`), added mid-session network switch auto-recovery (LAN ⇄ Wi-Fi IP changes), and established desktop sidecar session token handshake (`[INSTANCE_AUTH]`) to eliminate port hijacking.
 - [x] **Declarative Payment Rules Engine & Whitelisting**: Created `payment-rules.json` array rules engine for PhonePe, Google Pay, and Amazon Pay. Refactored `parsePayment()` with positive whitelisting (rejecting non-payment/promotions), ReDoS input guards (<300 chars), startup self-testing, and real-time 🟢/🟡 `[PARSE]` diagnostic log badges. Published authoritative pattern specification in [`PAYMENT_PATTERNS.md`](file:///d:/xwork/projects/payment-alerts-for-obs/PAYMENT_PATTERNS.md).
 - [x] **Mobile Notification Tester Preset Synchronization & bigText Fix**: Updated mobile tester presets in `NotificationTesterActivity.kt` and PC simulator presets in `config.js` to match modern notification formats. Fixed `bigText` calculation so user-edited test notification text is honored.
