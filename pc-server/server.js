@@ -2295,6 +2295,19 @@ function stopMdnsDiscovery() {
 
 process.on('exit', () => stopMdnsDiscovery());
 
+if (process.platform === 'win32' && process.stdin && process.stdin.isTTY) {
+  try {
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.on('SIGINT', () => {
+      process.emit('SIGINT');
+    });
+  } catch (_) { }
+}
+
 process.on('SIGINT', () => {
   stopMdnsDiscovery();
   setTimeout(() => process.exit(0), 50);
