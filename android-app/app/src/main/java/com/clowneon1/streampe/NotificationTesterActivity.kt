@@ -161,7 +161,7 @@ class NotificationTesterActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val bigTextVal = if (preset.bigText.isNotBlank()) preset.bigText else text
+            val bigTextVal = if (text == preset.text && preset.bigText.isNotBlank()) preset.bigText else text
             fireNotification(title, text, bigTextVal)
 
             val alertId = UUID.randomUUID().toString()
