@@ -4,7 +4,9 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { exec } = require('child_process');
+const child_process = require('child_process');
+const { exec } = child_process;
+const dgram = require('dgram');
 const winston = require('winston');
 require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
@@ -2062,18 +2064,124 @@ wss.on('close', () => {
 });
 wss.on('error', () => { });
 
+// ── Health Check Route ────────────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'StreamPe',
+    version: '2.2.0',
+    hostname: os.hostname(),
+    port: activeServerPort || PREFERRED_PORT,
+    sessionToken: SESSION_TOKEN,
+    primaryIp: getPrimaryIp(),
+    wsPath: '/android'
+  });
+});
+
 // HTTP and WS share the same underlying server — one port covers both.
 const PREFERRED_PORT = parseInt(process.env.PORT || '2907', 10);
+const FALLBACK_PORTS = [PREFERRED_PORT, 8876, 2708, 9091, 1001, 0];
+const SESSION_TOKEN = process.env.STREAMPE_SESSION_TOKEN || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+let activeServerPort = PREFERRED_PORT;
 
-// ── mDNS Auto-Discovery (Bonjour / Zeroconf) ─────────────────────────
+// ── mDNS Auto-Discovery & UDP Direct Broadcast ─────────────────────────
 let bonjourInstance = null;
 let publishedService = null;
+let udpSocket = null;
+const UDP_DISCOVERY_PORT = 58025;
+
+function startUdpBroadcastListener() {
+  try {
+    if (udpSocket) {
+      try { udpSocket.close(); } catch (_) { }
+    }
+    udpSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    udpSocket.on('message', (msg, rinfo) => {
+      const text = msg.toString().trim();
+      if (text.includes('STREAMPE_DISCOVER')) {
+        const reply = JSON.stringify({
+          type: 'STREAMPE_RESPONSE',
+          app: 'StreamPe',
+          version: '2.2.0',
+          hostname: os.hostname(),
+          port: activeServerPort,
+          primaryIp: getPrimaryIp()
+        });
+        udpSocket.send(reply, 0, reply.length, rinfo.port, rinfo.address, () => {});
+      }
+    });
+    udpSocket.on('error', (err) => {
+      log.warn('UDP', `UDP Direct Broadcast notice: ${err.message}`);
+    });
+    udpSocket.bind(UDP_DISCOVERY_PORT, () => {
+      log.info('UDP', `UDP Direct Subnet Discovery listener active on port ${UDP_DISCOVERY_PORT}`);
+    });
+  } catch (e) {
+    log.warn('UDP', `Failed to start UDP discovery listener: ${e.message}`);
+  }
+}
+
+function stopUdpBroadcastListener() {
+  if (udpSocket) {
+    try { udpSocket.close(); } catch (_) { }
+    udpSocket = null;
+  }
+}
+
+function ensureWindowsFirewallMdnsRule() {
+  if (os.platform() !== 'win32') return;
+  try {
+    const cmd = 'netsh advfirewall firewall show rule name="StreamPe mDNS (UDP 5353)"';
+    child_process.exec(cmd, (err, stdout) => {
+      if (err || !stdout || !stdout.includes('StreamPe mDNS')) {
+        const addCmd = 'netsh advfirewall firewall add rule name="StreamPe mDNS (UDP 5353)" dir=in action=allow protocol=UDP localport=5353';
+        child_process.exec(addCmd, (addErr) => {
+          if (!addErr) log.info('Firewall', 'Added Windows Defender Firewall rule for mDNS (UDP 5353)');
+        });
+      }
+    });
+  } catch (_) { }
+}
+
+function saveActiveInstanceMetadata(port, token) {
+  try {
+    const activeFile = path.join(SETTINGS_DIR, 'active-instance.json');
+    if (!fs.existsSync(SETTINGS_DIR)) fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+    const meta = {
+      port,
+      sessionToken: token,
+      pid: process.pid,
+      primaryIp: getPrimaryIp(),
+      hostname: os.hostname(),
+      boundAt: Date.now()
+    };
+    fs.writeFileSync(activeFile, JSON.stringify(meta, null, 2), 'utf8');
+  } catch (_) { }
+}
+
+let lastPrimaryIp = '';
+function startNetworkChangeListener() {
+  lastPrimaryIp = getPrimaryIp();
+  setInterval(() => {
+    const currentIp = getPrimaryIp();
+    if (currentIp !== lastPrimaryIp && currentIp !== '127.0.0.1') {
+      log.info('Network', `🌐 Primary IP changed: ${lastPrimaryIp} ➔ ${currentIp}. Re-broadcasting mDNS and updating metadata.`);
+      lastPrimaryIp = currentIp;
+      if (activeServerPort) {
+        startMdnsDiscovery(activeServerPort);
+        saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
+        const payload = JSON.stringify({ type: 'network_changed', primaryIp: currentIp });
+        androidClients.forEach(ws => { try { ws.send(payload); } catch (_) {} });
+        obsClients.forEach(ws => { try { ws.send(payload); } catch (_) {} });
+      }
+    }
+  }, 10000);
+}
 
 function startMdnsDiscovery(port, retryCount = 0) {
   try {
     if (!bonjourInstance) {
       bonjourInstance = new Bonjour();
-      // Catch any unexpected socket errors on the underlying registry
       if (bonjourInstance._server && typeof bonjourInstance._server.on === 'function') {
         bonjourInstance._server.on('error', () => { });
       }
@@ -2081,25 +2189,33 @@ function startMdnsDiscovery(port, retryCount = 0) {
     const hostName = os.hostname() || 'Streamer-PC';
     let serviceName = `StreamPe - ${hostName}`;
     if (port !== PREFERRED_PORT || retryCount > 0) {
-      serviceName += ` (Port ${port}${retryCount > 0 ? ` #${retryCount}` : ''})`;
+      const instanceIdx = FALLBACK_PORTS.indexOf(port);
+      const displayNum = instanceIdx > 0 ? instanceIdx : (retryCount > 0 ? retryCount : 1);
+      serviceName += ` (${displayNum})`;
+    }
+
+    if (publishedService) {
+      try { publishedService.destroy(); } catch (_) { }
     }
 
     publishedService = bonjourInstance.publish({
       name: serviceName,
-      type: 'payment-alerts',
+      type: 'streampe',
       protocol: 'tcp',
       port: port,
       probe: false,
       txt: {
-        version: '2.1.0',
+        version: '2.2.0',
         server: 'streampe',
         hostname: hostName,
-        wsPath: '/android'
+        os: os.platform(),
+        wsPath: '/android',
+        sessionRequired: 'true'
       }
     });
 
     publishedService.on('up', () => {
-      log.info('mDNS', `Auto-Discovery active: _payment-alerts._tcp.local on port ${port} ("${serviceName}")`);
+      log.info('mDNS', `Auto-Discovery active: _streampe._tcp.local on port ${port} ("${serviceName}")`);
     });
 
     publishedService.on('error', (err) => {
@@ -2149,32 +2265,45 @@ process.once('SIGUSR2', () => {
   }, 50);
 });
 
-function startServer(port) {
-  server.listen(port, '0.0.0.0');
+function startServer(portIdx = 0) {
+  const targetPort = FALLBACK_PORTS[portIdx] !== undefined ? FALLBACK_PORTS[portIdx] : 0;
+
+  server.listen(targetPort, '0.0.0.0');
 
   server.once('listening', () => {
-    const actualPort = server.address().port;
-    if (actualPort !== PREFERRED_PORT) {
-      log.warn('Server', `⚠️  Port ${PREFERRED_PORT} was in use — started on fallback port ${actualPort}`);
+    activeServerPort = server.address().port;
+    console.log(`[INSTANCE_AUTH] PORT=${activeServerPort} TOKEN=${SESSION_TOKEN}`);
+
+    if (activeServerPort !== PREFERRED_PORT) {
+      log.warn('Server', `⚠️  Port ${PREFERRED_PORT} was in use — bound to fallback port ${activeServerPort}`);
     }
-    ensureWindowsFirewallRule();
-    startMdnsDiscovery(actualPort);
+
+    saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
+    ensureWindowsFirewallMdnsRule();
+    startMdnsDiscovery(activeServerPort);
+    startUdpBroadcastListener();
+    startNetworkChangeListener();
+
     const primaryIp = getPrimaryIp();
     const ips = getLocalIpAddresses();
     log.info('Server', `\n🚀 StreamPe PC Server Running!`);
     log.info('Server', `   -------------------------------------------------`);
-    log.info('Server', `   📱 Mobile App Connection IP: http://${primaryIp}:${actualPort}`);
-    log.info('Server', `   🔍 mDNS Auto-Discovery:      _payment-alerts._tcp (Port ${actualPort})`);
+    log.info('Server', `   📱 Mobile App Connection IP: http://${primaryIp}:${activeServerPort}`);
+    log.info('Server', `   🔍 mDNS Auto-Discovery:      _streampe._tcp (Port ${activeServerPort})`);
     ips.forEach(ip => log.info('Server', `      Network Adapter [${ip.name}]: ${ip.address}`));
-    log.info('Server', `   🖥️ OBS Config Dashboard:   http://${primaryIp}:${actualPort}/config`);
-    log.info('Server', `   📡 OBS Alert Overlay:       http://${primaryIp}:${actualPort}/overlay/alerts`);
+    log.info('Server', `   🖥️ OBS Config Dashboard:   http://${primaryIp}:${activeServerPort}/config`);
+    log.info('Server', `   📡 OBS Alert Overlay:       http://${primaryIp}:${activeServerPort}/overlay/alerts`);
     log.info('Server', `   -------------------------------------------------`);
   });
 
   server.once('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      log.warn('Server', `Port ${port} is already in use — retrying on a random available port...`);
-      server.close(() => startServer(0));
+    if (err.code === 'EADDRINUSE' && portIdx + 1 < FALLBACK_PORTS.length) {
+      const nextPort = FALLBACK_PORTS[portIdx + 1];
+      log.warn('Server', `Port ${targetPort} in use — retrying on fallback port ${nextPort}...`);
+      server.close(() => startServer(portIdx + 1));
+    } else if (err.code === 'EADDRINUSE') {
+      log.warn('Server', `All fallback ports in use — binding to random OS port...`);
+      server.close(() => startServer(FALLBACK_PORTS.length - 1));
     } else {
       log.error('Server', `Failed to start server: ${err.message}`);
       process.exit(1);
@@ -2182,9 +2311,7 @@ function startServer(port) {
   });
 }
 
-startServer(PREFERRED_PORT);
+startServer(0);
 
-// Export the http.Server instance so Electron's main.js can read
-// server.address().port after the server has started listening —
-// this works for both the preferred port and any random fallback port.
+// Export the http.Server instance
 module.exports = server;
