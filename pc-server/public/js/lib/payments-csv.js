@@ -132,7 +132,7 @@
       escapeCsvField(ts),
       escapeCsvField(dateStr),
       escapeCsvField(timeStr),
-      escapeCsvField(tx.sender || 'Unknown'),
+      escapeCsvField(tx.rawSender || tx.sender || 'Unknown'),
       effectiveAmount,
       escapeCsvField(currCode),
       escapeCsvField(tx.sourceApp || 'Unknown'),

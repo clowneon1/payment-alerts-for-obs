@@ -3,6 +3,7 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const os = require('os');
 const child_process = require('child_process');
 const { exec } = child_process;
@@ -135,13 +136,14 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
 
 aliasesStore.initAliasesStore(DATA_DIR);
 
-function decorateWithDisplayName(transactions, settings = {}) {
+function decorateWithDisplayName(transactions, settings = {}, profile = '') {
   const list = Array.isArray(transactions) ? transactions : [];
+  const targetProf = profile || (profilesStore && profilesStore.activeProfile) || 'Default';
   return list.map(tx => {
     if (!tx || typeof tx !== 'object') return tx;
-    const rawSender = tx.sender || 'Anonymous';
-    const displayName = aliasesStore.formatDonorName(rawSender, settings);
-    return { ...tx, displayName };
+    const raw = tx.rawSender || tx.sender || 'Anonymous';
+    const formatted = aliasesStore.formatDonorName(raw, settings, targetProf);
+    return { ...tx, rawSender: raw, sender: formatted };
   });
 }
 
@@ -291,7 +293,7 @@ function isWindowsStartupEnabled(callback) {
 
     // Clean up legacy registry keys silently without forcing startup enabled
     if (!err && stdout && (stdout.includes('PaymentAlertsOBS') || stdout.includes('Payment Alerts') || stdout.includes('electron.app.Payment Alerts'))) {
-      exec('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "PaymentAlertsOBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Payment Alerts for OBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "electron.app.Payment Alerts for OBS" /f 2>nul', () => {});
+      exec('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "PaymentAlertsOBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Payment Alerts for OBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "electron.app.Payment Alerts for OBS" /f 2>nul', () => { });
     }
 
     try {
@@ -464,7 +466,7 @@ try {
 function runPaymentRulesBootSelfTest(rulesStore) {
   let totalRules = 0;
   let passedRules = 0;
-  
+
   for (const appConfig of rulesStore.apps || []) {
     for (const rule of appConfig.rules || []) {
       totalRules++;
@@ -777,10 +779,16 @@ function saveDonations(profileName, transactions) {
     const realTransactions = (transactions || []).filter(t => !t.simulated);
 
     realTransactions.forEach(t => {
-      let ym = PaymentsCsv.getMonthKey(t.timestamp || t.date);
+      const rawTx = {
+        ...t,
+        sender: t.rawSender || t.sender
+      };
+      delete rawTx.rawSender;
+
+      let ym = PaymentsCsv.getMonthKey(rawTx.timestamp || rawTx.date);
       if (!ym) ym = getTodayYearMonth();
       if (!groups[ym]) groups[ym] = [];
-      groups[ym].push(t);
+      groups[ym].push(rawTx);
     });
 
     const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
@@ -826,7 +834,9 @@ function appendDonation(profileName, tx) {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
 
-    const row = PaymentsCsv.formatCsvRow(tx) + '\n';
+    const rawTx = { ...tx, sender: tx.rawSender || tx.sender };
+    delete rawTx.rawSender;
+    const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
 
     if (!fs.existsSync(filePath)) {
       saveDonations(profile, [tx]);
@@ -931,7 +941,7 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     metadata.goal.currentAmount = (parseFloat(metadata.goal.currentAmount) || 0) + amt;
 
     const rawSender = newTx.sender || 'Anonymous';
-    const donorName = aliasesStore.formatDonorName(rawSender, targetSettings);
+    const donorName = aliasesStore.formatDonorName(rawSender, targetSettings, profile);
 
     const supporters = metadata.leaderboard.supporters || {};
     supporters[donorName] = (parseFloat(supporters[donorName]) || 0) + amt;
@@ -939,7 +949,7 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
 
     let recent = metadata.recent.recentDonations || [];
     if (!Array.isArray(recent)) recent = [];
-    const decorated = decorateWithTemplate({ ...newTx, sender: donorName, displayName: donorName });
+    const decorated = decorateWithTemplate({ ...newTx, rawSender: rawSender, sender: donorName }, profile);
     recent.unshift(decorated);
     if (recent.length > 50) recent = recent.slice(0, 50);
     metadata.recent.recentDonations = recent;
@@ -952,7 +962,7 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
       metadata = loadProfileMetadata(profile);
     } else {
       const rawTransactions = loadDonations(profile);
-      const transactions = decorateWithDisplayName(rawTransactions, targetSettings);
+      const transactions = decorateWithDisplayName(rawTransactions, targetSettings, profile);
       const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
 
       metadata = {
@@ -1072,16 +1082,17 @@ function broadcastSettings(settings) {
 // ── Amount filter ─────────────────────────────────────────────────────
 const parseAmountNum = (rawAmount) => TemplateMatcher.parseAmount(rawAmount);
 
-function decorateWithTemplate(event) {
+function decorateWithTemplate(event, profile = '') {
   const amount = parseAmountNum(event.amount);
-  const rawSender = event.sender || 'Anonymous';
-  const displayName = event.displayName || aliasesStore.formatDonorName(rawSender, alertSettings);
+  const rawSender = event.rawSender || event.sender || 'Anonymous';
+  const targetProf = profile || (profilesStore && profilesStore.activeProfile) || 'Default';
+  const formattedSender = aliasesStore.formatDonorName(rawSender, alertSettings, targetProf);
   if (event.alertTemplateId) {
     const template = alertSettings.alertTemplates.find(t => t.id === event.alertTemplateId);
     return {
       ...event,
-      sender: displayName,
-      displayName: displayName,
+      rawSender: rawSender,
+      sender: formattedSender,
       amountValue: amount,
       alertTemplateId: template ? template.id : event.alertTemplateId,
       alertTemplateName: template ? template.name : ''
@@ -1090,8 +1101,8 @@ function decorateWithTemplate(event) {
   const template = TemplateMatcher.select(alertSettings.alertTemplates, amount);
   return {
     ...event,
-    sender: displayName,
-    displayName: displayName,
+    rawSender: rawSender,
+    sender: formattedSender,
     amountValue: amount,
     alertTemplateId: template ? template.id : null,
     alertTemplateName: template ? template.name : ''
@@ -1117,9 +1128,9 @@ function processPaymentForGoalAndLeaderboard(notification) {
 
     const numAmount = parseAmountNum(notification.amount);
     const effectiveAmount = numAmount > 0 ? numAmount : 0;
-    let senderName = (notification.sender || notification.title || 'Unknown').trim();
-    if (/received|sent/i.test(senderName))
-      senderName = senderName.split(/sent|received/i)[0].trim() || 'Unknown';
+
+    const rawSenderName = cleanSender(notification.rawSender || notification.sender || notification.title || 'Unknown');
+    const formattedSenderName = aliasesStore.formatDonorName(rawSenderName, alertSettings, profilesStore.activeProfile);
 
     const now = Number(notification.timestamp) || Date.now();
     const d = new Date(now);
@@ -1130,7 +1141,8 @@ function processPaymentForGoalAndLeaderboard(notification) {
       timestamp: now,
       date: !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '',
       time: !isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '',
-      sender: senderName,
+      rawSender: rawSenderName,
+      sender: formattedSenderName,
       amount: effectiveAmount,
       currency: currencyCode,
       rawAmount: PaymentsCsv.formatCurrency(effectiveAmount, currencyCode),
@@ -1145,7 +1157,7 @@ function processPaymentForGoalAndLeaderboard(notification) {
     const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, tx);
     if (alertId) processedAlertIds.add(alertId);
 
-    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${senderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
+    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${rawSenderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
   } catch (e) {
     log.error('Payment', 'Error in processPaymentForGoalAndLeaderboard: ' + e.message);
   }
@@ -1310,29 +1322,47 @@ app.get('/api/donations', (req, res) => {
 
 // ── Donor Aliases API ──────────────────────────────────────────
 app.get('/api/aliases', (req, res) => {
-  res.json({ ok: true, aliases: aliasesStore.getAliases() });
+  const profile = req.query.profile || profilesStore.activeProfile;
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile) });
+});
+
+app.get('/api/aliases/csv', (req, res) => {
+  const profile = req.query.profile || profilesStore.activeProfile;
+  const aliasList = aliasesStore.getAliases(profile);
+
+  let csv = 'sender,alias,updatedAt\n';
+  for (const entry of aliasList) {
+    csv += `${escapeCsvField(entry.sender)},${escapeCsvField(entry.alias)},${escapeCsvField(entry.updatedAt)}\n`;
+  }
+
+  const filename = `aliases_${profile}_${new Date().toISOString().split('T')[0]}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
 });
 
 app.post('/api/aliases', (req, res) => {
+  const profile = req.body.profile || req.query.profile || profilesStore.activeProfile;
   const { sender, alias, note } = req.body || {};
   if (!sender || !alias) {
     return res.status(400).json({ ok: false, error: 'Sender and alias are required' });
   }
-  aliasesStore.setAlias(sender, alias, note);
-  log.info('AliasesStore', `Set donor alias for "${sender}" -> "${alias}"`);
-  const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, null, true);
-  res.json({ ok: true, aliases: aliasesStore.getAliases(), metrics });
+  aliasesStore.setAlias(sender, alias, note, profile);
+  log.info('AliasesStore', `Set donor alias for "${sender}" -> "${alias}" [Profile: ${profile}]`);
+  const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });
 });
 
 app.delete('/api/aliases/:sender', (req, res) => {
+  const profile = req.query.profile || req.body?.profile || profilesStore.activeProfile;
   const sender = req.params.sender;
   if (!sender) {
     return res.status(400).json({ ok: false, error: 'Sender parameter required' });
   }
-  aliasesStore.deleteAlias(sender);
-  log.info('AliasesStore', `Deleted donor alias for "${sender}"`);
-  const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, null, true);
-  res.json({ ok: true, aliases: aliasesStore.getAliases(), metrics });
+  aliasesStore.deleteAlias(sender, profile);
+  log.info('AliasesStore', `Deleted donor alias for "${sender}" [Profile: ${profile}]`);
+  const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });
 });
 
 function getMonthsInRange(startDateStr, endDateStr) {
@@ -1399,7 +1429,6 @@ app.get('/api/donations/csv', (req, res) => {
 
   // Sort descending by timestamp
   filtered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
-
   const csvContent = PaymentsCsv.serializeCsv(filtered);
   const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
   const filename = `donations_${profile}_filtered_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
@@ -1408,30 +1437,291 @@ app.get('/api/donations/csv', (req, res) => {
   res.send(csvContent);
 });
 
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+class ZipBuilder {
+  constructor() {
+    this.files = [];
+  }
+
+  addFile(filename, contentBuffer) {
+    const buf = Buffer.isBuffer(contentBuffer) ? contentBuffer : Buffer.from(String(contentBuffer || ''), 'utf8');
+    const filenameBuf = Buffer.from(filename, 'utf8');
+    const crc = zlib.crc32 ? zlib.crc32(buf) : 0;
+
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+    this.files.push({
+      name: filename,
+      nameBuf: filenameBuf,
+      content: buf,
+      crc: crc,
+      dosTime: dosTime,
+      dosDate: dosDate,
+      uncompressedSize: buf.length,
+      compressedSize: buf.length
+    });
+  }
+
+  toBuffer() {
+    const localHeaders = [];
+    const cdEntries = [];
+    let offset = 0;
+
+    for (const f of this.files) {
+      const header = Buffer.alloc(30 + f.nameBuf.length);
+      header.writeUInt32LE(0x04034b50, 0);
+      header.writeUInt16LE(20, 4);
+      header.writeUInt16LE(0, 6);
+      header.writeUInt16LE(0, 8);
+      header.writeUInt16LE(f.dosTime, 10);
+      header.writeUInt16LE(f.dosDate, 12);
+      header.writeUInt32LE(f.crc, 14);
+      header.writeUInt32LE(f.compressedSize, 18);
+      header.writeUInt32LE(f.uncompressedSize, 22);
+      header.writeUInt16LE(f.nameBuf.length, 26);
+      header.writeUInt16LE(0, 28);
+      f.nameBuf.copy(header, 30);
+
+      const cdEntry = Buffer.alloc(46 + f.nameBuf.length);
+      cdEntry.writeUInt32LE(0x02014b50, 0);
+      cdEntry.writeUInt16LE(20, 4);
+      cdEntry.writeUInt16LE(20, 6);
+      cdEntry.writeUInt16LE(0, 8);
+      cdEntry.writeUInt16LE(0, 10);
+      cdEntry.writeUInt16LE(f.dosTime, 12);
+      cdEntry.writeUInt16LE(f.dosDate, 14);
+      cdEntry.writeUInt32LE(f.crc, 16);
+      cdEntry.writeUInt32LE(f.compressedSize, 20);
+      cdEntry.writeUInt32LE(f.uncompressedSize, 24);
+      cdEntry.writeUInt16LE(f.nameBuf.length, 28);
+      cdEntry.writeUInt16LE(0, 30);
+      cdEntry.writeUInt16LE(0, 32);
+      cdEntry.writeUInt16LE(0, 34);
+      cdEntry.writeUInt16LE(0, 36);
+      cdEntry.writeUInt32LE(0, 38);
+      cdEntry.writeUInt32LE(offset, 42);
+      f.nameBuf.copy(cdEntry, 46);
+
+      localHeaders.push(header, f.content);
+      cdEntries.push(cdEntry);
+      offset += header.length + f.content.length;
+    }
+
+    const cdStart = offset;
+    let cdSize = 0;
+    for (const cd of cdEntries) cdSize += cd.length;
+
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(0, 4);
+    eocd.writeUInt16LE(0, 6);
+    eocd.writeUInt16LE(this.files.length, 8);
+    eocd.writeUInt16LE(this.files.length, 10);
+    eocd.writeUInt32LE(cdSize, 12);
+    eocd.writeUInt32LE(cdStart, 16);
+    eocd.writeUInt16LE(0, 20);
+
+    return Buffer.concat([...localHeaders, ...cdEntries, eocd]);
+  }
+}
+
+function parseZipEntries(buffer) {
+  const entries = [];
+  if (!Buffer.isBuffer(buffer) || buffer.length < 30) return entries;
+
+  let offset = 0;
+  while (offset + 30 <= buffer.length) {
+    const sig = buffer.readUInt32LE(offset);
+    if (sig !== 0x04034b50) break;
+
+    const compMethod = buffer.readUInt16LE(offset + 8);
+    const compSize = buffer.readUInt32LE(offset + 18);
+    const nameLen = buffer.readUInt16LE(offset + 26);
+    const extraLen = buffer.readUInt16LE(offset + 28);
+
+    const name = buffer.toString('utf8', offset + 30, offset + 30 + nameLen);
+    const dataStart = offset + 30 + nameLen + extraLen;
+    const rawData = buffer.subarray(dataStart, dataStart + compSize);
+
+    let content = '';
+    if (compMethod === 0) {
+      content = rawData.toString('utf8');
+    } else if (compMethod === 8) {
+      try { content = zlib.inflateRawSync(rawData).toString('utf8'); } catch (_) { }
+    }
+
+    entries.push({ name, content });
+    offset = dataStart + compSize;
+  }
+  return entries;
+}
+
+function parseCsvLineSimple(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+app.get('/api/donations/export-zip', (req, res) => {
+  const profile = req.query.profile || profilesStore.activeProfile;
+  const month = req.query.month || 'all';
+  const provider = req.query.provider || 'all';
+  const search = req.query.search || '';
+  const minAmount = req.query.minAmount || '';
+  const maxAmount = req.query.maxAmount || '';
+  const specificDate = req.query.date || req.query.specificDate || '';
+  let startDate = req.query.startDate || '';
+  let endDate = req.query.endDate || '';
+
+  if (startDate && startDate.length === 7) startDate = `${startDate}-01`;
+  if (endDate && endDate.length === 7) {
+    const [year, monthVal] = endDate.split('-').map(Number);
+    const lastDay = new Date(year, monthVal, 0).getDate();
+    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
+  }
+
+  let transactions = [];
+  if (startDate && endDate) {
+    const months = getMonthsInRange(startDate, endDate);
+    for (const ym of months) {
+      transactions = transactions.concat(loadDonations(profile, ym));
+    }
+  } else {
+    transactions = loadDonations(profile, month);
+  }
+
+  const filtered = PaymentsCsv.filterTransactions(transactions, {
+    month, provider, search, minAmount, maxAmount, specificDate, startDate, endDate, includeSimulated: false
+  });
+  filtered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+
+  const csvLedger = PaymentsCsv.serializeCsv(filtered);
+  const aliasList = aliasesStore.getAliases(profile);
+
+  let csvAliases = 'sender,alias,updatedAt\n';
+  for (const entry of aliasList) {
+    csvAliases += `${escapeCsvField(entry.sender)},${escapeCsvField(entry.alias)},${escapeCsvField(entry.updatedAt)}\n`;
+  }
+
+  const zip = new ZipBuilder();
+  zip.addFile('donations_ledger.csv', csvLedger);
+  zip.addFile('aliases.csv', csvAliases);
+
+  const zipBuf = zip.toBuffer();
+  const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
+  const filename = `streampe_backup_${profile}_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.zip`;
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(zipBuf);
+});
+
 app.post('/api/donations/import', (req, res) => {
   try {
     const profile = req.body.profile || profilesStore.activeProfile;
     const mode = req.body.mode || 'replace';
-    const csvContent = req.body.csv || '';
+    const rawContent = req.body.csv || req.body.data || '';
 
-    if (!csvContent.trim()) {
-      return res.status(400).json({ ok: false, error: 'Empty CSV content' });
+    if (!rawContent) {
+      return res.status(400).json({ ok: false, error: 'Empty import content' });
     }
 
-    const importedTxs = PaymentsCsv.parseCsv(csvContent);
+    let inputBuffer = null;
+    if (typeof rawContent === 'string' && (rawContent.startsWith('data:') || /^[A-Za-z0-9+/=]+$/.test(rawContent.trim().substring(0, 100)))) {
+      const base64Data = rawContent.includes('base64,') ? rawContent.split('base64,')[1] : rawContent;
+      try { inputBuffer = Buffer.from(base64Data, 'base64'); } catch (_) { }
+    }
+
+    let importedTxs = [];
+    let aliasCount = 0;
+
+    const isZip = (inputBuffer && inputBuffer.length >= 4 && inputBuffer.readUInt32LE(0) === 0x04034b50) ||
+      (typeof rawContent === 'string' && rawContent.startsWith('PK\x03\x04'));
+
+    if (isZip) {
+      const zipBuf = inputBuffer || Buffer.from(rawContent, 'binary');
+      const entries = parseZipEntries(zipBuf);
+
+      for (const entry of entries) {
+        if (!entry.content) continue;
+        const entryName = (entry.name || '').toLowerCase();
+        const firstLine = entry.content.split(/\r?\n/)[0].toLowerCase();
+
+        if (entryName.includes('alias') || (firstLine.includes('alias') && !firstLine.includes('amount'))) {
+          const aliasLines = entry.content.split(/\r?\n/).filter(l => l.trim().length > 0);
+          const startIdx = aliasLines[0].toLowerCase().startsWith('sender,alias') ? 1 : 0;
+          for (let i = startIdx; i < aliasLines.length; i++) {
+            const parts = parseCsvLineSimple(aliasLines[i]);
+            if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+              aliasesStore.setAlias(parts[0].trim(), parts[1].trim(), profile);
+              aliasCount++;
+            }
+          }
+        } else if (entryName.includes('donations') || entryName.includes('ledger') || firstLine.includes('amount') || firstLine.includes('sourceapp')) {
+          const txs = PaymentsCsv.parseCsv(entry.content);
+          importedTxs = importedTxs.concat(txs);
+        }
+      }
+    } else {
+      const text = typeof rawContent === 'string' ? rawContent : rawContent.toString('utf8');
+      const firstLine = text.split(/\r?\n/)[0].toLowerCase();
+      if (firstLine.includes('alias') && !firstLine.includes('amount')) {
+        const aliasLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        const startIdx = aliasLines[0].toLowerCase().startsWith('sender,alias') ? 1 : 0;
+        for (let i = startIdx; i < aliasLines.length; i++) {
+          const parts = parseCsvLineSimple(aliasLines[i]);
+          if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+            aliasesStore.setAlias(parts[0].trim(), parts[1].trim(), profile);
+            aliasCount++;
+          }
+        }
+      } else {
+        importedTxs = PaymentsCsv.parseCsv(text);
+      }
+    }
+
     let finalTxs = importedTxs;
-
-    if (mode === 'merge') {
-      const existing = loadDonations(profile);
-      const existingMap = new Map(existing.map(t => [t.id, t]));
-      importedTxs.forEach(t => existingMap.set(t.id, t));
-      finalTxs = Array.from(existingMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    if (importedTxs.length > 0) {
+      if (mode === 'merge') {
+        const existing = loadDonations(profile);
+        const existingMap = new Map(existing.map(t => [t.id, t]));
+        importedTxs.forEach(t => existingMap.set(t.id, t));
+        finalTxs = Array.from(existingMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      }
+      saveDonations(profile, finalTxs);
     }
 
-    saveDonations(profile, finalTxs);
     const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
-    log.info('DonationsCSV', `Imported ${importedTxs.length} transactions (mode: ${mode}) into ${profile}`);
-    res.json({ ok: true, profile, importedCount: importedTxs.length, totalCount: finalTxs.length, metrics });
+    log.info('DonationsCSV', `Imported ${importedTxs.length} transactions, ${aliasCount} aliases into profile [${profile}]`);
+    res.json({ ok: true, profile, importedCount: importedTxs.length, aliasCount, totalCount: finalTxs.length, metrics });
   } catch (e) {
     log.error('DonationsCSV', 'Import error: ' + e.message);
     res.status(500).json({ ok: false, error: e.message });
@@ -2210,7 +2500,7 @@ function startUdpBroadcastListener() {
           port: activeServerPort,
           primaryIp: getPrimaryIp()
         });
-        udpSocket.send(reply, 0, reply.length, rinfo.port, rinfo.address, () => {});
+        udpSocket.send(reply, 0, reply.length, rinfo.port, rinfo.address, () => { });
       }
     });
     udpSocket.on('error', (err) => {
@@ -2274,8 +2564,8 @@ function startNetworkChangeListener() {
         startMdnsDiscovery(activeServerPort);
         saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
         const payload = JSON.stringify({ type: 'network_changed', primaryIp: currentIp });
-        androidClients.forEach(ws => { try { ws.send(payload); } catch (_) {} });
-        obsClients.forEach(ws => { try { ws.send(payload); } catch (_) {} });
+        androidClients.forEach(ws => { try { ws.send(payload); } catch (_) { } });
+        obsClients.forEach(ws => { try { ws.send(payload); } catch (_) { } });
       }
     }
   }, 10000);
