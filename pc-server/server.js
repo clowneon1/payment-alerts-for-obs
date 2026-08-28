@@ -27,6 +27,7 @@ const {
   getDefaultAppDataDir
 } = require('./constants');
 
+// App Configuration and Constants
 const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('node.exe') &&
   !process.execPath.endsWith('bun') &&

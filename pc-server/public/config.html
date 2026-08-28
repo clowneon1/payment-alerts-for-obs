@@ -107,6 +107,11 @@
         <button class="tab-btn" data-tab="server-logs">
           <span class="icon"><i data-lucide="clipboard-list"></i></span> Logs
         </button>
+        <button class="tab-btn" data-tab="updates" id="btn-sidebar-nav-updates" type="button" style="display: flex; align-items: center; justify-content: flex-start; width: 100%;">
+          <span class="icon"><i data-lucide="sparkles" style="color: var(--accent);"></i></span>
+          <span>Updates</span>
+          <span id="nav-update-pill" style="display: none; margin-left: auto; background: var(--accent); color: #050811; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;">NEW</span>
+        </button>
       </nav>
 
       <!-- Profile Switcher Card -->
@@ -174,24 +179,9 @@
         </label>
       </div>
 
-      <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 8px; align-items: stretch;">
-        <div id="sidebar-update-badge" style="display: none; background: linear-gradient(135deg, rgba(0, 229, 255, 0.15), rgba(124, 77, 255, 0.2)); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--accent); cursor: pointer; align-items: center; justify-content: space-between;">
-          <span style="display: flex; align-items: center; gap: 6px; font-weight: 600;">
-            <i data-lucide="sparkles" style="width: 13px; height: 13px;"></i>
-            <span id="sidebar-update-text">Update Available</span>
-          </span>
-          <i data-lucide="chevron-right" style="width: 12px; height: 12px;"></i>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <div class="status-dot"></div>
-            <span style="font-size: 11px;">Server Connected</span>
-          </div>
-          <button type="button" id="btn-check-updates" class="btn btn-outline" style="font-size: 10px; padding: 2px 7px; height: 22px;" title="Check for StreamPe updates">
-            <i data-lucide="refresh-cw" style="width: 10px; height: 10px;"></i> Updates
-          </button>
-        </div>
+      <div class="sidebar-footer">
+        <div class="status-dot"></div>
+        <span>Server Connected</span>
       </div>
     </aside>
 
@@ -2440,6 +2430,95 @@
           </div>
         </div>
 
+        <!-- ── TAB: In-App Updates ──────────────────────────────────────── -->
+        <div class="tab-content" id="tab-updates">
+          <div class="section-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+            <div>
+              <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 10px;">
+                <i data-lucide="sparkles" style="color: var(--accent); width: 22px; height: 22px;"></i> Software Updates
+              </h2>
+              <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">
+                Check, download, and install StreamPe software updates in 1-click.
+              </p>
+            </div>
+            <button type="button" class="btn btn-outline" id="btn-tab-check-updates" style="font-size: 13px; padding: 8px 14px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Check for Updates
+            </button>
+          </div>
+
+          <!-- Version Comparison & Status Hero Card -->
+          <div id="updates-hero-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(0, 229, 255, 0.1); border: 1px solid rgba(0, 229, 255, 0.3); display: flex; align-items: center; justify-content: center;">
+                  <i data-lucide="shield-check" id="updates-status-icon" style="width: 26px; height: 26px; color: var(--accent);"></i>
+                </div>
+                <div>
+                  <div id="updates-status-headline" style="font-size: 17px; font-weight: 700; color: #f1f5f9;">Checking for updates...</div>
+                  <div id="updates-status-subtext" style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Comparing current version with GitHub releases</div>
+                </div>
+              </div>
+
+              <!-- Version Badges -->
+              <div style="display: flex; align-items: center; gap: 12px; background: rgba(0, 0, 0, 0.3); padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border);">
+                <div style="font-size: 13px; color: var(--text-muted);">Current: <strong id="tab-update-current-ver" style="color: var(--text);">v2.0.0</strong></div>
+                <i data-lucide="arrow-right" style="width: 14px; height: 14px; color: var(--accent);"></i>
+                <div style="font-size: 13px; color: var(--accent);">Latest: <strong id="tab-update-latest-ver">v2.1.0</strong></div>
+              </div>
+            </div>
+
+            <!-- 1-Click Update Actions & Progress Section -->
+            <div id="tab-update-actions-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" id="btn-tab-install-now" class="btn btn-primary" style="font-size: 13px; padding: 9px 18px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                  <i data-lucide="zap" style="width: 15px; height: 15px;"></i> 1-Click Update &amp; Restart
+                </button>
+                <a id="btn-tab-download-zip" href="#" target="_blank" class="btn btn-secondary" style="font-size: 13px; padding: 9px 14px; display: flex; align-items: center; gap: 6px;">
+                  <i data-lucide="download" style="width: 14px; height: 14px;"></i> Manual .zip
+                </a>
+              </div>
+              <a id="btn-tab-view-github" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-outline" style="font-size: 12px; padding: 7px 12px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="external-link" style="width: 13px; height: 13px;"></i> View on GitHub
+              </a>
+            </div>
+
+            <!-- Animated Progress Bar -->
+            <div id="tab-update-progress-container" style="display: none; margin-top: 18px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px;">
+                <span id="tab-update-progress-label" style="font-weight: 600; color: var(--accent);">Downloading update bundle...</span>
+                <span id="tab-update-progress-percent" style="font-weight: 700; color: var(--text);">0%</span>
+              </div>
+              <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
+                <div id="tab-update-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), #7c4dff); transition: width 0.2s ease;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Release Notes & Changelog Card -->
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="file-text" style="width: 16px; height: 16px; color: var(--accent);"></i>
+                <span id="tab-update-release-title">What's New in this Release</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="tab-update-published-date" style="font-size: 12px; color: var(--text-muted);"></span>
+                <div style="display: flex; gap: 2px; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 2px 4px;" title="Changelog box height preset">
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-sm" title="Compact view (260px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px;">S</button>
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-md" title="Default view (460px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px; color: var(--accent);">M</button>
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-lg" title="Expanded view (760px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px;">L</button>
+                </div>
+                <button type="button" class="btn-box-toggle" id="btn-update-notes-expand" title="Expand / Collapse height" style="padding: 5px;">
+                  <i data-lucide="chevrons-up-down" style="width:14px; height:14px;"></i>
+                </button>
+              </div>
+            </div>
+            <div id="tab-update-release-notes" class="box-expandable" style="background: #030712; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 12.5px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; font-family: 'Fira Code', 'Consolas', monospace; height: 460px; overflow-y: auto; transition: height 0.2s ease;">
+              Loading release notes from GitHub...
+            </div>
+          </div>
+        </div>
+
         <!-- Form Action Buttons Bar (Always visible at bottom of form panel) -->
         <div class="action-bar" style="display: none;">
           <button class="btn btn-primary" id="btn-save"><i data-lucide="save"></i> Save Settings</button>
@@ -2726,60 +2805,6 @@
         <button type="button" class="btn btn-secondary" id="btn-cancel-new-list">Cancel</button>
         <button type="button" class="btn btn-primary" id="btn-confirm-new-list"><i data-lucide="check"></i> Create
           List</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal: In-App Auto-Update & What's New -->
-  <div class="modal-backdrop" id="modal-app-update" style="display: none;">
-    <div class="modal-card" style="max-width: 580px; width: 94%;">
-      <div class="modal-header">
-        <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px; font-size: 16px;">
-          <i data-lucide="sparkles" style="width: 18px; height: 18px; color: var(--accent);"></i>
-          <span id="update-modal-title">StreamPe Update Available</span>
-        </h3>
-        <button type="button" class="modal-close-btn" id="modal-app-update-close"><i data-lucide="x"></i></button>
-      </div>
-      <div class="modal-body" style="padding: 18px 20px;">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
-          <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px;">
-            Current: <strong id="update-current-version" style="color: var(--text-muted);">v2.1.0</strong>
-          </div>
-          <i data-lucide="arrow-right" style="width: 14px; height: 14px; color: var(--accent);"></i>
-          <div style="background: rgba(0, 229, 255, 0.12); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--accent);">
-            Latest: <strong id="update-latest-version">v2.2.0</strong>
-          </div>
-          <span id="update-published-date" style="font-size: 11px; color: var(--text-muted); margin-left: auto;"></span>
-        </div>
-
-        <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text);">What's New in this Release:</div>
-        <div id="update-release-notes" style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border); border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; font-size: 12px; line-height: 1.5; color: var(--text-muted); white-space: pre-wrap; font-family: monospace;">
-          Loading release notes...
-        </div>
-
-        <!-- 1-Click Auto-Update Progress Indicator -->
-        <div id="update-progress-container" style="display: none; margin-top: 14px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
-            <span id="update-progress-label" style="font-weight: 600; color: var(--accent);">Downloading update bundle...</span>
-            <span id="update-progress-percent" style="font-weight: 700; color: var(--text);">0%</span>
-          </div>
-          <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
-            <div id="update-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), #7c4dff); transition: width 0.2s ease;"></div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 20px; flex-wrap: wrap;">
-        <a id="btn-update-view-github" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-outline" style="font-size: 12px;">
-          <i data-lucide="external-link" style="width: 13px; height: 13px;"></i> GitHub
-        </a>
-        <div style="display: flex; gap: 8px;">
-          <a id="btn-update-download-zip" href="#" target="_blank" class="btn btn-secondary" style="font-size: 12px;">
-            <i data-lucide="download" style="width: 13px; height: 13px;"></i> Manual .zip
-          </a>
-          <button type="button" id="btn-update-install-now" class="btn btn-primary" style="font-size: 12px;">
-            <i data-lucide="zap" style="width: 13px; height: 13px;"></i> 1-Click Update &amp; Restart
-          </button>
-        </div>
       </div>
     </div>
   </div>
