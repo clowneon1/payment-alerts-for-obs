@@ -3402,6 +3402,188 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // ── In-App Update Checker ──────────────────────────────────────────
+    let latestUpdateInfo = null;
+
+    async function checkAppUpdates(silent = true, force = false) {
+      try {
+        const url = force ? '/api/updates/check?force=true' : '/api/updates/check';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data || !data.ok) {
+          if (!silent) showToast('<i data-lucide="alert-circle"></i> Failed to check updates: ' + (data?.error || 'Network error'));
+          return;
+        }
+
+        latestUpdateInfo = data;
+        const updateBadge = el('sidebar-update-badge');
+        const updateText = el('sidebar-update-text');
+
+        if (data.updateAvailable) {
+          if (updateBadge) {
+            updateBadge.style.display = 'flex';
+            if (updateText) updateText.textContent = `Update v${data.latestVersion}`;
+          }
+          if (!silent) {
+            openUpdateModal(data);
+          }
+        } else {
+          if (updateBadge) updateBadge.style.display = 'none';
+          if (!silent) {
+            showToast(`<i data-lucide="check-circle"></i> StreamPe is up to date (v${data.currentVersion})`);
+          }
+        }
+      } catch (err) {
+        if (!silent) showToast('<i data-lucide="alert-circle"></i> Update check error: ' + err.message);
+      }
+    }
+
+    function openUpdateModal(data) {
+      if (!data) return;
+      const modal = el('modal-app-update');
+      if (!modal) return;
+
+      if (el('update-current-version')) el('update-current-version').textContent = `v${data.currentVersion}`;
+      if (el('update-latest-version')) el('update-latest-version').textContent = `v${data.latestVersion}`;
+      if (el('update-published-date') && data.publishedAt) {
+        const d = new Date(data.publishedAt);
+        el('update-published-date').textContent = `Released: ${d.toLocaleDateString()}`;
+      }
+      if (el('update-modal-title')) el('update-modal-title').textContent = data.releaseName || `StreamPe v${data.latestVersion} Available`;
+      if (el('update-release-notes')) el('update-release-notes').textContent = data.releaseNotes || 'No release notes provided.';
+
+      if (el('btn-update-view-github') && data.releaseUrl) {
+        el('btn-update-view-github').href = data.releaseUrl;
+      }
+
+      const zipBtn = el('btn-update-download-zip');
+      if (zipBtn && data.assets && data.assets.portableZip) {
+        zipBtn.href = data.assets.portableZip.downloadUrl;
+        zipBtn.style.display = 'inline-flex';
+      } else if (zipBtn) {
+        zipBtn.href = data.releaseUrl || 'https://github.com/clowneon1/streampe/releases/latest';
+      }
+
+      const apkBtn = el('btn-update-download-apk');
+      if (apkBtn && data.assets && data.assets.companionApk) {
+        apkBtn.href = data.assets.companionApk.downloadUrl;
+        apkBtn.style.display = 'inline-flex';
+      } else if (apkBtn) {
+        apkBtn.style.display = 'none';
+      }
+
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('active'), 10);
+      if (window.lucide) lucide.createIcons();
+    }
+
+    const closeUpdateModal = () => {
+      const modal = el('modal-app-update');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    };
+
+    on('modal-app-update-close', 'click', closeUpdateModal);
+    on('modal-app-update', 'click', (e) => {
+      if (e.target.id === 'modal-app-update') closeUpdateModal();
+    });
+    on('sidebar-update-badge', 'click', () => {
+      if (latestUpdateInfo) openUpdateModal(latestUpdateInfo);
+      else checkAppUpdates(false, true);
+    });
+    on('btn-check-updates', 'click', () => {
+      showToast('<i data-lucide="refresh-cw"></i> Checking for StreamPe updates...');
+      checkAppUpdates(false, true);
+    });
+
+    let updatePollTimer = null;
+
+    async function startOneClickUpdate() {
+      const installBtn = el('btn-update-install-now');
+      const progressContainer = el('update-progress-container');
+      const progressBar = el('update-progress-bar');
+      const progressPercent = el('update-progress-percent');
+      const progressLabel = el('update-progress-label');
+
+      if (!latestUpdateInfo || !latestUpdateInfo.assets || !latestUpdateInfo.assets.portableZip) {
+        showToast('<i data-lucide="alert-triangle"></i> No desktop portable zip found for this release.');
+        return;
+      }
+
+      if (installBtn) {
+        installBtn.disabled = true;
+        installBtn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Preparing Update...';
+      }
+      if (progressContainer) progressContainer.style.display = 'block';
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressPercent) progressPercent.textContent = '0%';
+      if (progressLabel) progressLabel.textContent = 'Starting background download...';
+
+      try {
+        const downloadUrl = latestUpdateInfo.assets.portableZip.downloadUrl;
+        const res = await fetch('/api/updates/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: downloadUrl })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to start download');
+
+        if (updatePollTimer) clearInterval(updatePollTimer);
+        updatePollTimer = setInterval(async () => {
+          try {
+            const statusRes = await fetch('/api/updates/status');
+            const statusData = await statusRes.json();
+
+            if (statusData.status === 'downloading') {
+              if (progressBar) progressBar.style.width = `${statusData.progress}%`;
+              if (progressPercent) progressPercent.textContent = `${statusData.progress}%`;
+              const mbDownloaded = (statusData.downloadedBytes / (1024 * 1024)).toFixed(1);
+              const mbTotal = (statusData.totalBytes / (1024 * 1024)).toFixed(1);
+              if (progressLabel) progressLabel.textContent = `Downloading update bundle (${mbDownloaded} / ${mbTotal} MB)...`;
+            } else if (statusData.status === 'extracting') {
+              if (progressBar) progressBar.style.width = '100%';
+              if (progressPercent) progressPercent.textContent = '100%';
+              if (progressLabel) progressLabel.textContent = '📦 Extracting and verifying update files...';
+            } else if (statusData.status === 'ready') {
+              clearInterval(updatePollTimer);
+              updatePollTimer = null;
+              if (progressLabel) progressLabel.textContent = '✅ Update ready! Restarting StreamPe...';
+              if (installBtn) {
+                installBtn.innerHTML = '<i data-lucide="refresh-cw" class="spin"></i> Restarting...';
+              }
+              showToast('<i data-lucide="check-circle"></i> Applying update and restarting StreamPe...');
+
+              setTimeout(async () => {
+                try {
+                  await fetch('/api/updates/apply', { method: 'POST' });
+                } catch (_) { }
+              }, 600);
+            } else if (statusData.status === 'error') {
+              clearInterval(updatePollTimer);
+              updatePollTimer = null;
+              if (progressLabel) progressLabel.textContent = '❌ Update failed: ' + (statusData.error || 'Error');
+              if (installBtn) {
+                installBtn.disabled = false;
+                installBtn.innerHTML = '<i data-lucide="zap"></i> Retry 1-Click Update';
+              }
+            }
+          } catch (_) { }
+        }, 300);
+
+      } catch (err) {
+        if (progressLabel) progressLabel.textContent = '❌ Error: ' + err.message;
+        if (installBtn) {
+          installBtn.disabled = false;
+          installBtn.innerHTML = '<i data-lucide="zap"></i> 1-Click Update & Restart';
+        }
+      }
+    }
+
+    on('btn-update-install-now', 'click', startOneClickUpdate);
+
     // Manual Payment Modal (Record & Edit)
     on('btn-open-record-modal', 'click', (e) => {
       if (e) {
@@ -3776,6 +3958,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }, 500);
+
+    // Trigger silent background update check
+    setTimeout(() => { checkAppUpdates(true); }, 1200);
   }
 
   initDashboard();

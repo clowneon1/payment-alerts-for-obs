@@ -10,11 +10,6 @@
 
 #### P1 — Memory Optimization, Customization & Auto-Update
 
-- [ ] **5. Donor Name Display Formatting & Custom Alias System**:
-  - **Display Format Options**: Add global & per-template name formatting modes: `Full Name` ("Rahul Sharma"), `First Name Only` ("Rahul"), `First Name + Last Initial` ("Rahul S."), or `Word Limit (1-N) / Max Character Truncation`.
-  - **Handlebars Helper**: Provide `{{displayName name mode="first" maxLength=12}}` helper in template engine (`template-engine.js`).
-  - **Custom Donor Alias Dictionary**: Allow streamers to assign custom nicknames/aliases to frequent supporters (e.g., map `"Rahul Sharma"` ➔ `"BigBossRahul"`). Display custom alias on live overlays, subgoals, and leaderboards while retaining actual name in private CSV income logs.
-
 - [ ] **6. Lazy Month CSV Reader & RAM Eviction (< 15 MB RAM for Multi-Month History)**:
   - Implement Early-Exit Reverse Reader in `loadDonations()` (`server.js`) so page queries (50/100 items) stop reading disk files as soon as enough matching items are collected, avoiding loading all 12+ months into RAM.
   - Implement Date-Range Month Pruning to skip opening unneeded monthly CSV files during filtered searches.
@@ -25,15 +20,24 @@
   - **PC Server / Desktop App**: Tauri auto-updater & 1-click update download/install for portable desktop releases.
   - **Android Companion App**: In-app update prompt with direct APK download & install prompt, eliminating manual GitHub zip/APK downloading.
 
+- [ ] **8. Rework on UI Styling**:
+  - Comprehensive UI styling rework across the StreamPe Dashboard: modern glassmorphic accents, polished typography, harmonious color palette, refined cards, modal animations, micro-interactions, and cleaner responsive layout for OBS streamers.
+
 #### P2 — Security & Enhancements
 
-- [ ] **8. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
+- [ ] **9. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
 
 ---
 
 ## ✅ Completed
 
 ### Version 2.2.0
+
+- [x] **Profile-Based Donor Alias System & Zero-Dependency ZIP Backup Engine**:
+  - Implemented profile-isolated alias storage (`data/[profile]/aliases.csv`) with automatic fallback to `rawSender` for profiles without alias dictionaries.
+  - Built zero-dependency native Node.js ZIP backup generator (`/api/donations/export-zip`) bundling `donations_ledger.csv` and `aliases.csv`.
+  - Created resilient ZIP/CSV direct import engine (`POST /api/donations/import`) with header inspection, preventing column misidentification (`upDATEdAt`).
+  - Added Export Format & Import Backup modals with **Merge** vs **Replace** mode selector and streamlined 3-column CSV schema (`sender,alias,updatedAt`).
 
 - [x] **Default Portable Storage Root Migration to AppData & Auto-Migration**: Moved default storage root to Windows `%APPDATA%\StreamPe\` (`~/.config/StreamPe` on POSIX) for consistent data persistence across portable updates. Built automatic migration engine `migrateLocalDataIfNeeded()` to transparently copy legacy portable `./data` and `./config` files to `%APPDATA%\StreamPe\` on first boot.
 - [x] **Service Discovery Rebranding, Mesh Fixes & Sidecar Token Isolation**: Rebranded mDNS discovery to `_streampe._tcp`, added Android `WifiManager.MulticastLock` with `CHANGE_WIFI_MULTICAST_STATE` permission, added Windows Defender Firewall mDNS UDP 5353 auto-rule, implemented fallback port cascade sequence (`2907 ➔ 8876 ➔ 2708 ➔ 9091 ➔ 1001 ➔ 0`), added mid-session network switch auto-recovery (LAN ⇄ Wi-Fi IP changes), and established desktop sidecar session token handshake (`[INSTANCE_AUTH]`) to eliminate port hijacking.
