@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-    } catch (_) {}
+    } catch (_) { }
   }
   function _flashCopied(btn) {
     if (!btn || btn._copying) return;
@@ -998,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       console.log('[Server IO] Save response:', data);
       if (data.ok && data.settings) {
-        populateForm(data.settings);
+        config = ConfigMigration.migrate(data.settings);
         if (data.profiles) await loadProfilesList(data.activeProfile);
         await fetchAndRenderAnalytics();
       }
@@ -1479,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const insert = `${selector} {\n  \n}\n`;
           setVal(textarea.id, currentVal + (currentVal ? '\n' : '') + insert);
         }
-        copyToClipboard(selector).catch(() => {});
+        copyToClipboard(selector).catch(() => { });
         showToast('<i data-lucide="copy"></i> Copied selector "' + selector + '"');
       });
     });
@@ -1550,6 +1550,20 @@ document.addEventListener('DOMContentLoaded', () => {
     on('chk-goal-use-gradient', 'change', (e) => {
       el('goal-fill2-container').style.display = e.target.checked ? 'block' : 'none';
       syncLivePreview();
+    });
+
+    on('chk-goal-allow-overflow', 'change', async () => {
+      readFormValues();
+      await saveToServer();
+      showToast('<i data-lucide="check"></i> Goal Overflow mode updated');
+    });
+
+    ['chk-enable-goal', 'chk-enable-list', 'chk-enable-cycling'].forEach(id => {
+      on(id, 'change', async () => {
+        readFormValues();
+        await saveToServer();
+        showToast('<i data-lucide="check"></i> Widget status updated');
+      });
     });
 
     document.querySelectorAll('.btn-format-code').forEach(btn => {
@@ -1859,11 +1873,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Code reset buttons
     [['btn-reset-alert-code', 'alert', ['input-custom-html', 'input-custom-css', 'input-custom-js']],
-     ['btn-reset-goal-code', 'goal', ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js']],
-     ['btn-reset-lb-code', 'leaderboard', ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js']],
-     ['btn-reset-recent-code', 'recent', ['input-recent-custom-html', 'input-recent-custom-css', 'input-recent-custom-js']],
-     ['btn-reset-list-code', 'list', ['input-list-custom-html', 'input-list-custom-css', 'input-list-custom-js']],
-     ['btn-reset-cycling-code', 'cycling', ['input-cycling-custom-html', 'input-cycling-custom-css', 'input-cycling-custom-js']]
+    ['btn-reset-goal-code', 'goal', ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js']],
+    ['btn-reset-lb-code', 'leaderboard', ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js']],
+    ['btn-reset-recent-code', 'recent', ['input-recent-custom-html', 'input-recent-custom-css', 'input-recent-custom-js']],
+    ['btn-reset-list-code', 'list', ['input-list-custom-html', 'input-list-custom-css', 'input-list-custom-js']],
+    ['btn-reset-cycling-code', 'cycling', ['input-cycling-custom-html', 'input-cycling-custom-css', 'input-cycling-custom-js']]
     ].forEach(([btnId, kind, ids]) => {
       on(btnId, 'click', () => {
         let defaults = ConfigSchema.DEFAULT_CODE[kind];
@@ -1952,9 +1966,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const SIM_PRESETS = {
       phonepe: { provider: 'phonepe', sender: 'Rahul Kumar', amount: '500', message: 'Awesome stream!' },
-      gpay:    { provider: 'gpay',    sender: 'Priya Singh', amount: '1000', message: 'Keep up the great work!' },
-      amazon:  { provider: 'amazon',  sender: 'Sneha Patel', amount: '1500', message: 'Thanks for streaming!' },
-      cash:    { provider: 'cash',    sender: 'Amit Verma',  amount: '250',  message: 'Chai paani subscription ☕' },
+      gpay: { provider: 'gpay', sender: 'Priya Singh', amount: '1000', message: 'Keep up the great work!' },
+      amazon: { provider: 'amazon', sender: 'Sneha Patel', amount: '1500', message: 'Thanks for streaming!' },
+      cash: { provider: 'cash', sender: 'Amit Verma', amount: '250', message: 'Chai paani subscription ☕' },
       highval: { provider: 'phonepe', sender: 'Vikramaditya', amount: '5000', message: 'ULTRA DONATION! 👑🔥' }
     };
 
@@ -2107,7 +2121,7 @@ document.addEventListener('DOMContentLoaded', () => {
               refreshEarningsAnalytics();
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       };
       dashboardWs.onclose = () => setTimeout(connectDashboardWebSocket, 3000);
     } catch (e) {
@@ -2177,11 +2191,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isNaN(d.getTime())) {
         timeDisplay = d.toLocaleTimeString([], { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const levelStyles = {
-      INFO:  'background: rgba(0, 229, 255, 0.12); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.28);',
-      WARN:  'background: rgba(255, 214, 0, 0.12); color: #ffd600; border: 1px solid rgba(255, 214, 0, 0.28);',
+      INFO: 'background: rgba(0, 229, 255, 0.12); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.28);',
+      WARN: 'background: rgba(255, 214, 0, 0.12); color: #ffd600; border: 1px solid rgba(255, 214, 0, 0.28);',
       ERROR: 'background: rgba(255, 82, 82, 0.16); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.35); font-weight: 700;',
       EVENT: 'background: rgba(224, 64, 251, 0.15); color: #e040fb; border: 1px solid rgba(224, 64, 251, 0.3);',
       PARSE: 'background: rgba(0, 230, 118, 0.12); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.28);',
@@ -2313,7 +2327,7 @@ document.addEventListener('DOMContentLoaded', () => {
       let url = iframe.src;
       const path = new URL(url, location.origin).pathname;
       if (path === '/preview.html' || path === '/overlay/alert') {
-          url = '/overlay/alerts';
+        url = '/overlay/alerts';
       }
       window.open(url, '_blank');
     });
@@ -2370,6 +2384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timelineMode: 'month',
     search: '',
     searchDonor: '',
+    searchAlias: '',
     searchNote: '',
     minAmount: '',
     specificDate: '',
@@ -2432,7 +2447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             monthSelect.innerHTML = optionsHtml;
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 2. Fetch aggregated analytics
       const effectiveSearch = [analyticsState.search, analyticsState.searchDonor, analyticsState.searchNote].filter(Boolean).join(' ');
@@ -2726,6 +2741,7 @@ document.addEventListener('DOMContentLoaded', () => {
         month: analyticsState.month,
         provider: analyticsState.provider,
         search: effectiveSearch,
+        alias: analyticsState.searchAlias || '',
         minAmount: analyticsState.minAmount,
         date: analyticsState.specificDate,
         startDate: analyticsState.startDate,
@@ -2748,7 +2764,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btnNext) btnNext.disabled = data.page >= data.totalPages;
 
       if (!txs.length) {
-        body.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">No matching transactions found</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: var(--text-muted);">No matching transactions found</td></tr>';
         return;
       }
 
@@ -2756,6 +2772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const meta = PaymentsCsv.getProviderMeta(tx.sourceApp);
         const pKey = PaymentsCsv.normalizeProviderKey(tx.sourceApp);
         const curr = tx.currency || 'INR';
+        const hasAlias = tx.displayName && tx.displayName.trim() && tx.displayName.trim().toLowerCase() !== String(tx.sender || '').trim().toLowerCase();
 
         return `
           <tr style="border-bottom: 1px solid var(--border);">
@@ -2765,6 +2782,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </td>
             <td style="padding: 8px 10px;">
               <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${TemplateEngine.escapeHtml(tx.sender || 'Unknown')}</div>
+            </td>
+            <td style="padding: 8px 10px;">
+              ${hasAlias ? `<div style="color: var(--accent); font-weight: 600; font-size: 12px;"><i data-lucide="tag" style="width: 11px; height: 11px; vertical-align: middle; margin-right: 3px;"></i>${TemplateEngine.escapeHtml(tx.displayName)}</div>` : '<span style="opacity: 0.3; font-size: 11px;">—</span>'}
             </td>
             <td style="padding: 8px 10px;">
               <span class="provider-badge ${pKey}">${TemplateEngine.escapeHtml(meta.name)}</span>
@@ -2800,6 +2820,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (el('input-manual-edit-id')) el('input-manual-edit-id').value = targetTx.id;
           if (el('input-manual-donor')) el('input-manual-donor').value = targetTx.sender || '';
+          if (el('input-manual-alias')) el('input-manual-alias').value = (targetTx.displayName && targetTx.displayName.trim().toLowerCase() !== (targetTx.sender || '').trim().toLowerCase()) ? targetTx.displayName : '';
           if (el('input-manual-amount')) el('input-manual-amount').value = targetTx.amount || 0;
           if (el('select-manual-provider')) el('select-manual-provider').value = targetTx.sourceApp || 'Manual Entry';
           if (el('input-manual-date')) el('input-manual-date').value = targetTx.date || '';
@@ -2990,6 +3011,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 250);
     });
 
+    on('filter-col-alias', 'input', (e) => {
+      clearTimeout(analyticsSearchDebounce);
+      analyticsSearchDebounce = setTimeout(() => {
+        analyticsState.searchAlias = e.target.value;
+        analyticsState.page = 1;
+        fetchAndRenderAnalytics();
+      }, 250);
+    });
+
     on('filter-col-note', 'input', (e) => {
       clearTimeout(analyticsSearchDebounce);
       analyticsSearchDebounce = setTimeout(() => {
@@ -3019,6 +3049,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (el('filter-col-date-from')) el('filter-col-date-from').value = '';
       if (el('filter-col-date-to')) el('filter-col-date-to').value = '';
       if (el('filter-col-donor')) el('filter-col-donor').value = '';
+      if (el('filter-col-alias')) el('filter-col-alias').value = '';
       if (el('filter-col-note')) el('filter-col-note').value = '';
       if (el('filter-col-min-amount')) el('filter-col-min-amount').value = '';
       if (el('filter-col-provider')) el('filter-col-provider').value = 'all';
@@ -3151,12 +3182,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       function setLedgerHeight(px) {
         container.style.height = px + 'px';
-        try { localStorage.setItem(LEDGER_HEIGHT_KEY, String(px)); } catch (_) {}
+        try { localStorage.setItem(LEDGER_HEIGHT_KEY, String(px)); } catch (_) { }
         const btnSm = el('btn-ledger-height-sm');
         const btnMd = el('btn-ledger-height-md');
         const btnLg = el('btn-ledger-height-lg');
         const accent = 'var(--accent)';
-        const muted  = 'var(--text-muted)';
+        const muted = 'var(--text-muted)';
         if (btnSm) btnSm.style.color = px === LEDGER_HEIGHTS.sm ? accent : muted;
         if (btnMd) btnMd.style.color = px === LEDGER_HEIGHTS.md ? accent : muted;
         if (btnLg) btnLg.style.color = px === LEDGER_HEIGHTS.lg ? accent : muted;
@@ -3177,8 +3208,8 @@ document.addEventListener('DOMContentLoaded', () => {
       on('btn-ledger-expand', 'click', () => {
         const current = parseInt(container.style.height, 10) || LEDGER_HEIGHTS.md;
         const next = current <= LEDGER_HEIGHTS.sm ? LEDGER_HEIGHTS.md
-                   : current <= LEDGER_HEIGHTS.md  ? LEDGER_HEIGHTS.lg
-                   : LEDGER_HEIGHTS.sm;
+          : current <= LEDGER_HEIGHTS.md ? LEDGER_HEIGHTS.lg
+            : LEDGER_HEIGHTS.sm;
         setLedgerHeight(next);
       });
     })();
@@ -3236,30 +3267,30 @@ document.addEventListener('DOMContentLoaded', () => {
     on('btn-submit-export-csv', 'click', () => {
       const activeProf = getCurrentProfileName();
       const scope = el('select-export-scope').value;
-      
+
       let url = `/api/donations/csv?profile=${encodeURIComponent(activeProf)}`;
-      
+
       if (scope === 'range') {
         const startVal = el('input-export-start').value;
         const endVal = el('input-export-end').value;
-        
+
         if (!startVal || !endVal) {
           showToast('<i data-lucide="alert-triangle"></i> Please select both start and end months.');
           return;
         }
-        
+
         if (new Date(startVal) > new Date(endVal)) {
           showToast('<i data-lucide="alert-triangle"></i> Start month cannot be after end month.');
           return;
         }
-        
+
         url += `&startDate=${encodeURIComponent(startVal)}&endDate=${encodeURIComponent(endVal)}`;
         showToast(`<i data-lucide="download"></i> Downloading transactions CSV from ${startVal} to ${endVal}...`);
       } else {
         url += `&month=all`;
         showToast('<i data-lucide="download"></i> Downloading all-time transactions CSV...');
       }
-      
+
       window.open(url, '_blank');
       closeExportModal();
     });
@@ -3281,6 +3312,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (el('input-manual-edit-id')) el('input-manual-edit-id').value = '';
       if (el('input-manual-donor')) el('input-manual-donor').value = 'Anonymous Donor';
+      if (el('input-manual-alias')) el('input-manual-alias').value = '';
       if (el('input-manual-amount')) el('input-manual-amount').value = '500';
       if (el('select-manual-provider')) el('select-manual-provider').value = 'Manual Entry';
       if (el('input-manual-date')) el('input-manual-date').value = `${yr}-${mo}-${da}`;
@@ -3329,6 +3361,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const editId = (val('input-manual-edit-id', '') || '').trim();
       const isEdit = !!editId;
       const donor = (val('input-manual-donor', 'Anonymous Donor') || 'Anonymous Donor').trim();
+      const aliasVal = val('input-manual-alias', '').trim();
       const amount = parseFloat(val('input-manual-amount', '0')) || 0;
       const source = val('select-manual-provider', 'Manual Entry');
       const dateVal = val('input-manual-date', '');
@@ -3338,6 +3371,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (amount <= 0) {
         return showToast('<i data-lucide="alert-triangle"></i> Please enter a valid donation amount');
+      }
+
+      if (donor) {
+        try {
+          if (aliasVal) {
+            await fetch('/api/aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sender: donor, alias: aliasVal })
+            });
+          } else {
+            await fetch(`/api/aliases/${encodeURIComponent(donor)}`, { method: 'DELETE' });
+          }
+        } catch (_) { }
       }
 
       try {
@@ -3517,7 +3564,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setTimeout(() => {
       if (window.lucide) {
-        try { lucide.createIcons(); } catch (e) {}
+        try { lucide.createIcons(); } catch (e) { }
       }
     }, 20);
 
@@ -3610,6 +3657,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     console.log('[Config] Dashboard boot sequence completed with active profile:', activeProf);
+
+    // Dismiss boot loader dynamically after all loads complete, with a standard 500ms backoff buffer for smooth icon/font painting
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        const loader = el('dashboard-boot-loader');
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.visibility = 'hidden';
+          setTimeout(() => { try { loader.remove(); } catch (_) { } }, 400);
+        }
+      });
+    }, 500);
   }
 
   initDashboard();

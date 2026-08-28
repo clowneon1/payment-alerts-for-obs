@@ -8,6 +8,7 @@ const { exec } = require('child_process');
 const winston = require('winston');
 require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
+const aliasesStore = require('./aliases-store');
 
 const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('node.exe') &&
@@ -78,6 +79,18 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   } catch (e) {
     console.error(`[Server] Failed to create directory ${dir}:`, e.message);
   }
+}
+
+aliasesStore.initAliasesStore(DATA_DIR);
+
+function decorateWithDisplayName(transactions, settings = {}) {
+  const list = Array.isArray(transactions) ? transactions : [];
+  return list.map(tx => {
+    if (!tx || typeof tx !== 'object') return tx;
+    const rawSender = tx.sender || 'Anonymous';
+    const displayName = aliasesStore.formatDonorName(rawSender, settings);
+    return { ...tx, displayName };
+  });
 }
 
 const customLevels = {
@@ -865,13 +878,16 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     const amt = parseFloat(newTx.amount) || 0;
     metadata.goal.currentAmount = (parseFloat(metadata.goal.currentAmount) || 0) + amt;
 
+    const rawSender = newTx.sender || 'Anonymous';
+    const donorName = aliasesStore.formatDonorName(rawSender, targetSettings);
+
     const supporters = metadata.leaderboard.supporters || {};
-    supporters[newTx.sender] = (parseFloat(supporters[newTx.sender]) || 0) + amt;
+    supporters[donorName] = (parseFloat(supporters[donorName]) || 0) + amt;
     metadata.leaderboard.supporters = supporters;
 
     let recent = metadata.recent.recentDonations || [];
     if (!Array.isArray(recent)) recent = [];
-    const decorated = decorateWithTemplate(newTx);
+    const decorated = decorateWithTemplate({ ...newTx, sender: donorName, displayName: donorName });
     recent.unshift(decorated);
     if (recent.length > 50) recent = recent.slice(0, 50);
     metadata.recent.recentDonations = recent;
@@ -883,7 +899,8 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     if (!forceRebuild && fs.existsSync(metadataPath)) {
       metadata = loadProfileMetadata(profile);
     } else {
-      const transactions = loadDonations(profile);
+      const rawTransactions = loadDonations(profile);
+      const transactions = decorateWithDisplayName(rawTransactions, targetSettings);
       const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
 
       metadata = {
@@ -1005,10 +1022,14 @@ const parseAmountNum = (rawAmount) => TemplateMatcher.parseAmount(rawAmount);
 
 function decorateWithTemplate(event) {
   const amount = parseAmountNum(event.amount);
+  const rawSender = event.sender || 'Anonymous';
+  const displayName = event.displayName || aliasesStore.formatDonorName(rawSender, alertSettings);
   if (event.alertTemplateId) {
     const template = alertSettings.alertTemplates.find(t => t.id === event.alertTemplateId);
     return {
       ...event,
+      sender: displayName,
+      displayName: displayName,
       amountValue: amount,
       alertTemplateId: template ? template.id : event.alertTemplateId,
       alertTemplateName: template ? template.name : ''
@@ -1017,6 +1038,8 @@ function decorateWithTemplate(event) {
   const template = TemplateMatcher.select(alertSettings.alertTemplates, amount);
   return {
     ...event,
+    sender: displayName,
+    displayName: displayName,
     amountValue: amount,
     alertTemplateId: template ? template.id : null,
     alertTemplateName: template ? template.name : ''
@@ -1159,6 +1182,7 @@ app.get('/api/donations/query', (req, res) => {
   const month = req.query.month || 'all';
   const provider = req.query.provider || 'all';
   const search = req.query.search || '';
+  const alias = req.query.alias || '';
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
@@ -1169,11 +1193,14 @@ app.get('/api/donations/query', (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 50));
 
-  const allTransactions = loadDonations(profile, month);
+  const rawTransactions = loadDonations(profile, month);
+  const targetSettings = profilesStore.profiles[profile] || alertSettings;
+  const allTransactions = decorateWithDisplayName(rawTransactions, targetSettings);
   const filtered = PaymentsCsv.filterTransactions(allTransactions, {
     month,
     provider,
     search,
+    alias,
     minAmount,
     maxAmount,
     specificDate,
@@ -1215,8 +1242,9 @@ app.get('/api/donations/query', (req, res) => {
 
 app.get('/api/donations', (req, res) => {
   const profile = req.query.profile || profilesStore.activeProfile;
-  const transactions = loadDonations(profile);
+  const rawTransactions = loadDonations(profile);
   const targetSettings = profilesStore.profiles[profile] || alertSettings;
+  const transactions = decorateWithDisplayName(rawTransactions, targetSettings);
   const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
   const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
   res.json({
@@ -1226,6 +1254,33 @@ app.get('/api/donations', (req, res) => {
     transactions,
     metrics
   });
+});
+
+// ── Donor Aliases API ──────────────────────────────────────────
+app.get('/api/aliases', (req, res) => {
+  res.json({ ok: true, aliases: aliasesStore.getAliases() });
+});
+
+app.post('/api/aliases', (req, res) => {
+  const { sender, alias, note } = req.body || {};
+  if (!sender || !alias) {
+    return res.status(400).json({ ok: false, error: 'Sender and alias are required' });
+  }
+  aliasesStore.setAlias(sender, alias, note);
+  log.info('AliasesStore', `Set donor alias for "${sender}" -> "${alias}"`);
+  const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, null, true);
+  res.json({ ok: true, aliases: aliasesStore.getAliases(), metrics });
+});
+
+app.delete('/api/aliases/:sender', (req, res) => {
+  const sender = req.params.sender;
+  if (!sender) {
+    return res.status(400).json({ ok: false, error: 'Sender parameter required' });
+  }
+  aliasesStore.deleteAlias(sender);
+  log.info('AliasesStore', `Deleted donor alias for "${sender}"`);
+  const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, null, true);
+  res.json({ ok: true, aliases: aliasesStore.getAliases(), metrics });
 });
 
 function getMonthsInRange(startDateStr, endDateStr) {

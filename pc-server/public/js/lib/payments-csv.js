@@ -302,9 +302,16 @@
       if (filters.search) {
         const q = filters.search.toLowerCase().trim();
         const sMatch = (tx.sender || '').toLowerCase().includes(q);
+        const dMatch = (tx.displayName || '').toLowerCase().includes(q);
         const mMatch = (tx.message || '').toLowerCase().includes(q);
         const idMatch = (tx.id || '').toLowerCase().includes(q);
-        if (!sMatch && !mMatch && !idMatch) return false;
+        if (!sMatch && !dMatch && !mMatch && !idMatch) return false;
+      }
+
+      if (filters.alias) {
+        const q = filters.alias.toLowerCase().trim();
+        const dMatch = (tx.displayName || '').toLowerCase().includes(q);
+        if (!dMatch) return false;
       }
 
       if (filters.minAmount !== undefined && filters.minAmount !== null && filters.minAmount !== '') {
@@ -596,7 +603,7 @@
       const amt = parseFloat(tx.amount) || 0;
       totalRevenue += amt;
 
-      const sender = (tx.sender || 'Unknown').trim() || 'Unknown';
+      const sender = (tx.displayName || tx.sender || 'Unknown').trim() || 'Unknown';
       supportersMap[sender] = (supportersMap[sender] || 0) + amt;
       donorCounts[sender] = (donorCounts[sender] || 0) + 1;
 
@@ -623,7 +630,7 @@
       const curr = tx.currency || 'INR';
       return {
         id: tx.id,
-        sender: tx.sender || 'Unknown',
+        sender: tx.displayName || tx.sender || 'Unknown',
         amount: tx.rawAmount || formatCurrency(tx.amount, curr),
         amountValue: tx.amount,
         currency: curr,
