@@ -1815,9 +1815,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    on('btn-sidebar-import-donations', 'click', () => {
-      const f = el('file-import-donations-csv');
-      if (f) f.click();
+    on('btn-sidebar-import-donations', 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        if (el('input-import-file-picker')) el('input-import-file-picker').value = '';
+        if (el('select-import-mode')) el('select-import-mode').value = 'merge';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
     });
 
     on('file-import-donations-csv', 'change', async (e) => {
@@ -1826,10 +1835,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         try {
-          const text = ev.target.result;
-          let csvPayload = text;
-          if (file.name.endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
-            const parsed = JSON.parse(text);
+          let csvPayload = ev.target.result;
+          if (file.name.endsWith('.json') || (typeof csvPayload === 'string' && (csvPayload.trim().startsWith('{') || csvPayload.trim().startsWith('[')))) {
+            const parsed = JSON.parse(csvPayload);
             const list = Array.isArray(parsed) ? parsed : (parsed.recentDonations || Object.entries(parsed.supporters || parsed).map(([name, total]) => ({ sender: name, amount: total })));
             const txs = list.map((r, i) => ({
               id: r.id || `imported_${Date.now()}_${i}`,
@@ -1851,7 +1859,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const res = await fetch('/api/donations/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile: activeProf, csv: csvPayload, mode: 'replace' })
+            body: JSON.stringify({ profile: activeProf, csv: csvPayload, mode: 'merge' })
           });
           const data = await res.json();
           if (data.ok) {
@@ -1867,7 +1875,11 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('<i data-lucide="alert-triangle"></i> Invalid file format: ' + err.message);
         }
       };
-      reader.readAsText(file);
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
       e.target.value = '';
     });
 
@@ -3280,11 +3292,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     on('btn-submit-export-csv', 'click', () => {
       const activeProf = getCurrentProfileName();
+      const format = el('select-export-format') ? el('select-export-format').value : 'zip';
       const scope = el('select-export-scope').value;
 
-      let url = `/api/donations/csv?profile=${encodeURIComponent(activeProf)}`;
+      let baseUrl = '/api/donations/export-zip';
+      if (format === 'csv') baseUrl = '/api/donations/csv';
+      if (format === 'aliases') baseUrl = '/api/aliases/csv';
 
-      if (scope === 'range') {
+      let url = `${baseUrl}?profile=${encodeURIComponent(activeProf)}`;
+
+      if (scope === 'range' && format !== 'aliases') {
         const startVal = el('input-export-start').value;
         const endVal = el('input-export-end').value;
 
@@ -3299,14 +3316,90 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         url += `&startDate=${encodeURIComponent(startVal)}&endDate=${encodeURIComponent(endVal)}`;
-        showToast(`<i data-lucide="download"></i> Downloading transactions CSV from ${startVal} to ${endVal}...`);
+        showToast(`<i data-lucide="download"></i> Downloading backup (${format.toUpperCase()}) from ${startVal} to ${endVal}...`);
       } else {
         url += `&month=all`;
-        showToast('<i data-lucide="download"></i> Downloading all-time transactions CSV...');
+        showToast(`<i data-lucide="download"></i> Downloading all-time backup (${format.toUpperCase()})...`);
       }
 
       window.open(url, '_blank');
       closeExportModal();
+    });
+
+    // Import Backup Modal Controls
+    on('btn-analytics-import', 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        if (el('input-import-file-picker')) el('input-import-file-picker').value = '';
+        if (el('select-import-mode')) el('select-import-mode').value = 'merge';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
+    });
+
+    const closeImportModal = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    };
+
+    on('modal-import-backup-close', 'click', closeImportModal);
+    on('btn-cancel-import-backup', 'click', closeImportModal);
+    on('modal-import-backup', 'click', (e) => {
+      if (e.target.id === 'modal-import-backup') closeImportModal(e);
+    });
+
+    on('btn-submit-import-backup', 'click', () => {
+      const fileInput = el('input-import-file-picker');
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      if (!file) {
+        showToast('<i data-lucide="alert-triangle"></i> Please select a .zip or .csv backup file to import.');
+        return;
+      }
+
+      const activeProf = getCurrentProfileName();
+      const importMode = el('select-import-mode') ? el('select-import-mode').value : 'merge';
+      const reader = new FileReader();
+
+      showToast(`<i data-lucide="upload"></i> Reading ${file.name}...`);
+
+      reader.onload = async (event) => {
+        try {
+          const rawData = event.target.result;
+          const res = await fetch('/api/donations/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: activeProf, mode: importMode, csv: rawData })
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showToast(`<i data-lucide="check-circle"></i> Imported ${data.importedCount || 0} transactions and ${data.aliasCount || 0} aliases into profile [${activeProf}]`);
+            fetchAndRenderAnalytics();
+            fetchAndRenderLedger();
+            closeImportModal();
+          } else {
+            showToast('<i data-lucide="alert-triangle"></i> Import failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          showToast('<i data-lucide="alert-triangle"></i> Import error: ' + err.message);
+        }
+      };
+
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
     });
 
     // Manual Payment Modal (Record & Edit)

@@ -84,25 +84,25 @@
 
       <nav class="nav-tabs">
         <button class="tab-btn active" data-tab="earnings">
-          <span class="icon"><i data-lucide="line-chart"></i></span> Earning Overview
+          <span class="icon"><i data-lucide="line-chart"></i></span> Earnings
         </button>
         <button class="tab-btn" data-tab="text">
           <span class="icon"><i data-lucide="bell"></i></span> Alert Templates
         </button>
         <button class="tab-btn" data-tab="style">
-          <span class="icon"><i data-lucide="palette"></i></span> Alert Style &amp; Animations
+          <span class="icon"><i data-lucide="palette"></i></span> Alert Styling
         </button>
         <button class="tab-btn" data-tab="goal">
-          <span class="icon"><i data-lucide="target"></i></span> Payment Goal
+          <span class="icon"><i data-lucide="target"></i></span> Stream Goal
         </button>
         <button class="tab-btn" data-tab="lists">
-          <span class="icon"><i data-lucide="list-ordered"></i></span> List Widgets
+          <span class="icon"><i data-lucide="list-ordered"></i></span> Leaderboards
         </button>
         <button class="tab-btn" data-tab="cycling">
           <span class="icon"><i data-lucide="refresh-cw"></i></span> Cycling Widget
         </button>
         <button class="tab-btn" data-tab="test-panel">
-          <span class="icon"><i data-lucide="send"></i></span> Event Dispatcher
+          <span class="icon"><i data-lucide="send"></i></span> Test Alerts
         </button>
         <button class="tab-btn" data-tab="server-logs">
           <span class="icon"><i data-lucide="clipboard-list"></i></span> Logs
@@ -112,8 +112,7 @@
       <!-- Profile Switcher Card -->
       <div class="profile-switcher-card">
         <label for="select-profile" class="profile-label"><i data-lucide="user"
-            style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i> Active Profile
-          Context</label>
+            style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i> Active Profile</label>
         <select id="select-profile" class="form-control select-profile-dropdown"></select>
         <div class="profile-actions-grid">
           <button class="btn btn-secondary profile-icon-btn" type="button" id="btn-profile-new" title="New Profile"><i
@@ -137,10 +136,8 @@
           style="font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
           <span style="display: flex; align-items: center; gap: 5px;">
             <i data-lucide="table" style="width: 14px; height: 14px; color: var(--accent);"></i>
-            <span>Donations Data</span>
+            <span>Donations</span>
           </span>
-          <span
-            style="font-size: 10px; background: rgba(0, 229, 255, 0.12); color: var(--accent); padding: 1px 6px; border-radius: 4px; font-weight: 700;">CSV</span>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
           <button class="btn btn-outline" type="button" id="btn-sidebar-export-donations"
@@ -153,7 +150,7 @@
             title="Import CSV spreadsheet to update Goal, Leaderboard & Recent donations">
             <i data-lucide="download" style="width: 12px; height: 12px;"></i> Import
           </button>
-          <input type="file" id="file-import-donations-csv" accept=".csv,.json" style="display: none;" />
+          <input type="file" id="file-import-donations-csv" accept=".zip,.csv" style="display: none;" />
         </div>
       </div>
 
@@ -2014,8 +2011,13 @@
               </button>
               <button class="btn btn-outline" id="btn-analytics-export-csv" type="button"
                 style="font-size: 12px; padding: 6px 12px;">
-                <i data-lucide="file-spreadsheet"></i> Export CSV
+                <i data-lucide="file-spreadsheet"></i> Export Backup
               </button>
+              <button class="btn btn-outline" id="btn-analytics-import" type="button"
+                style="font-size: 12px; padding: 6px 12px;">
+                <i data-lucide="download"></i> Import Backup
+              </button>
+              <input type="file" id="input-backup-file" accept=".zip,.csv" style="display: none;" />
             </div>
           </div>
 
@@ -2595,7 +2597,7 @@
       <div class="modal-header">
         <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
           <i data-lucide="file-spreadsheet" style="color: var(--accent);"></i>
-          <span>Export Donations CSV</span>
+          <span>Export Backup / CSV</span>
         </h3>
         <button type="button" class="modal-close-btn" id="modal-export-csv-close"><i data-lucide="x"></i></button>
       </div>
@@ -2603,6 +2605,14 @@
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
           Select whether to export your entire history, or filter the backup to a specific month and year range.
         </p>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="select-export-format" style="font-weight: 600;">Export Format</label>
+          <select id="select-export-format" class="form-control">
+            <option value="zip" selected>📦 ZIP Backup Bundle (Ledger + Aliases)</option>
+            <option value="csv">📄 Transactions Ledger Only (.csv)</option>
+            <option value="aliases">🏷️ Donor Aliases Dictionary Only (.csv)</option>
+          </select>
+        </div>
         <div class="form-group" style="margin-bottom: 12px;">
           <label for="select-export-scope" style="font-weight: 600;">Export Scope</label>
           <select id="select-export-scope" class="form-control">
@@ -2628,7 +2638,42 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="btn-cancel-export-csv">Cancel</button>
         <button type="button" class="btn btn-primary" id="btn-submit-export-csv">
-          <i data-lucide="download"></i> Download CSV
+          <i data-lucide="download"></i> Download Backup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Backup Modal -->
+  <div id="modal-import-backup" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 440px; width: 92%;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="download" style="color: var(--accent);"></i>
+          <span>Import Backup / Data</span>
+        </h3>
+        <button type="button" class="modal-close-btn" id="modal-import-backup-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Upload a <strong>ZIP Backup Bundle (.zip)</strong> or standalone <strong>CSV File (.csv)</strong> to restore transactions and donor aliases into your active profile.
+        </p>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="select-import-mode" style="font-weight: 600;">Import Action / Mode</label>
+          <select id="select-import-mode" class="form-control">
+            <option value="merge" selected>🔀 Merge (Combine with existing ledger)</option>
+            <option value="replace">⚠️ Replace (Overwrite profile ledger with imported data)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="input-import-file-picker" style="font-weight: 600;">Select Backup File (.zip or .csv)</label>
+          <input type="file" id="input-import-file-picker" class="form-control" accept=".zip,.csv" style="padding: 6px;" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-import-backup">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-import-backup">
+          <i data-lucide="download"></i> Start Import
         </button>
       </div>
     </div>
