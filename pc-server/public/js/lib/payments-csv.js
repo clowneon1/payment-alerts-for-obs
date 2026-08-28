@@ -72,6 +72,27 @@
     return `${sym}${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
+  function formatCompactCurrency(amount, curr = 'INR') {
+    const num = parseFloat(amount) || 0;
+    const sym = getCurrencySymbol(curr);
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+
+    if (abs >= 1000000000) { // 1 Billion+
+      const val = (abs / 1000000000).toFixed(abs % 1000000000 === 0 ? 0 : 1);
+      return `${sign}${sym}${val}B`;
+    }
+    if (abs >= 1000000) { // 1 Million+
+      const val = (abs / 1000000).toFixed(abs % 1000000 === 0 ? 0 : 1);
+      return `${sign}${sym}${val}M`;
+    }
+    if (abs >= 1000) { // 1 Thousand+
+      const val = (abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1);
+      return `${sign}${sym}${val}K`;
+    }
+    return `${sign}${sym}${abs.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  }
+
   function escapeCsvField(val) {
     if (val === null || val === undefined) return '""';
     const str = String(val);
@@ -302,9 +323,16 @@
       if (filters.search) {
         const q = filters.search.toLowerCase().trim();
         const sMatch = (tx.sender || '').toLowerCase().includes(q);
+        const dMatch = (tx.displayName || '').toLowerCase().includes(q);
         const mMatch = (tx.message || '').toLowerCase().includes(q);
         const idMatch = (tx.id || '').toLowerCase().includes(q);
-        if (!sMatch && !mMatch && !idMatch) return false;
+        if (!sMatch && !dMatch && !mMatch && !idMatch) return false;
+      }
+
+      if (filters.alias) {
+        const q = filters.alias.toLowerCase().trim();
+        const dMatch = (tx.displayName || '').toLowerCase().includes(q);
+        if (!dMatch) return false;
       }
 
       if (filters.minAmount !== undefined && filters.minAmount !== null && filters.minAmount !== '') {
@@ -354,7 +382,7 @@
       return {
         ...p,
         percentage: parseFloat(percentage.toFixed(1)),
-        formattedAmount: formatCurrency(p.totalAmount)
+        formattedAmount: formatCompactCurrency(p.totalAmount)
       };
     }).sort((a, b) => b.totalAmount - a.totalAmount);
 
@@ -369,7 +397,7 @@
 
     return {
       totalRevenue,
-      formattedTotal: formatCurrency(totalRevenue),
+      formattedTotal: formatCompactCurrency(totalRevenue),
       totalCount: list.length,
       segments
     };
@@ -596,7 +624,7 @@
       const amt = parseFloat(tx.amount) || 0;
       totalRevenue += amt;
 
-      const sender = (tx.sender || 'Unknown').trim() || 'Unknown';
+      const sender = (tx.displayName || tx.sender || 'Unknown').trim() || 'Unknown';
       supportersMap[sender] = (supportersMap[sender] || 0) + amt;
       donorCounts[sender] = (donorCounts[sender] || 0) + 1;
 
@@ -611,7 +639,7 @@
         return {
           name,
           total,
-          formattedTotal: formatCurrency(total),
+          formattedTotal: formatCompactCurrency(total),
           donationCount,
           percentage: parseFloat(percentage.toFixed(1))
         };
@@ -623,7 +651,7 @@
       const curr = tx.currency || 'INR';
       return {
         id: tx.id,
-        sender: tx.sender || 'Unknown',
+        sender: tx.displayName || tx.sender || 'Unknown',
         amount: tx.rawAmount || formatCurrency(tx.amount, curr),
         amountValue: tx.amount,
         currency: curr,
@@ -648,11 +676,11 @@
       recentDonations,
       analytics: {
         totalRevenue,
-        formattedTotalRevenue: formatCurrency(totalRevenue),
+        formattedTotalRevenue: formatCompactCurrency(totalRevenue),
         totalDonationsCount: filteredTxs.length,
         uniqueDonorsCount: Object.keys(supportersMap).length,
         averageDonation: filteredTxs.length > 0 ? (totalRevenue / filteredTxs.length) : 0,
-        formattedAverageDonation: formatCurrency(filteredTxs.length > 0 ? (totalRevenue / filteredTxs.length) : 0),
+        formattedAverageDonation: formatCompactCurrency(filteredTxs.length > 0 ? (totalRevenue / filteredTxs.length) : 0),
         peakDay: daily.peakDay,
         donut,
         dailyTrends: daily.trends,
@@ -670,6 +698,7 @@
     normalizeProviderKey,
     getCurrencySymbol,
     formatCurrency,
+    formatCompactCurrency,
     getMonthKey,
     escapeCsvField,
     formatCsvRow,

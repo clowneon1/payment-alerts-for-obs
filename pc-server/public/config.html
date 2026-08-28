@@ -57,6 +57,20 @@
 
 <body>
 
+  <!-- Full Screen Dashboard Boot Loader -->
+  <div id="dashboard-boot-loader" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: #080b11; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease, visibility 0.4s ease;">
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+      <div style="width: 60px; height: 60px; border-radius: 16px; background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.25); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0, 229, 255, 0.25);">
+        <img src="/icon.png" alt="StreamPe Logo" style="width: 42px; height: 42px; object-fit: contain; border-radius: 8px;" />
+      </div>
+      <div style="font-size: 20px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.5px;">StreamPe Dashboard</div>
+      <div style="display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px;">
+        <div class="rotation-spinner spinner-sm" style="border-top-color: var(--accent);"></div>
+        <span>Initializing configuration &amp; analytics...</span>
+      </div>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
@@ -2248,10 +2262,17 @@
                       </div>
                       <div class="col-resize-handle" title="Drag to resize column width"></div>
                     </th>
-                    <th style="padding: 8px 10px; min-width: 160px; background: var(--surface-2); position: relative;"
+                    <th style="padding: 8px 10px; min-width: 150px; background: var(--surface-2); position: relative;"
                       class="resizable-col">
-                      <div style="margin-bottom: 4px; font-weight: 600;">Donor / Supporter</div>
+                      <div style="margin-bottom: 4px; font-weight: 600;">Original Sender</div>
                       <input type="text" id="filter-col-donor" class="form-control" placeholder="Filter donor..."
+                        style="font-size: 11px; padding: 3px 6px; height: 26px;" />
+                      <div class="col-resize-handle" title="Drag to resize column width"></div>
+                    </th>
+                    <th style="padding: 8px 10px; min-width: 150px; background: var(--surface-2); position: relative;"
+                      class="resizable-col">
+                      <div style="margin-bottom: 4px; font-weight: 600;">Overlay Alias</div>
+                      <input type="text" id="filter-col-alias" class="form-control" placeholder="Filter alias..."
                         style="font-size: 11px; padding: 3px 6px; height: 26px;" />
                       <div class="col-resize-handle" title="Drag to resize column width"></div>
                     </th>
@@ -2518,11 +2539,15 @@
         </p>
         <div class="form-row" style="margin-bottom: 12px;">
           <div class="form-group" style="flex: 1;">
-            <label for="input-manual-donor" style="font-weight: 600;">Donor / Supporter Name</label>
+            <label for="input-manual-donor" style="font-weight: 600;">Original Sender Name</label>
             <input type="text" id="input-manual-donor" class="form-control" placeholder="e.g. Rahul Sharma"
               value="Anonymous Donor" />
           </div>
-          <div class="form-group" style="width: 140px;">
+          <div class="form-group" style="flex: 1;">
+            <label for="input-manual-alias" style="font-weight: 600;">Overlay Alias (Optional)</label>
+            <input type="text" id="input-manual-alias" class="form-control" placeholder="e.g. Big Boss Rahul 👑" />
+          </div>
+          <div class="form-group" style="width: 130px;">
             <label for="input-manual-amount" style="font-weight: 600;">Amount (&#8377;)</label>
             <input type="number" id="input-manual-amount" class="form-control" placeholder="e.g. 500" min="1" step="any"
               value="500" />
