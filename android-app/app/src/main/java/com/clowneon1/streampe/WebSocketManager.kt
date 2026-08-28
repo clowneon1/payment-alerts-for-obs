@@ -144,6 +144,22 @@ object WebSocketManager {
                 }
             }
 
+            override fun onMessage(ws: WebSocket, text: String) {
+                try {
+                    val json = org.json.JSONObject(text)
+                    if (json.optString("type") == "network_changed") {
+                        val newIp = json.optString("primaryIp")
+                        if (newIp.isNotBlank() && serverUrl.isNotBlank()) {
+                            val uri = java.net.URI(serverUrl)
+                            val newUrl = "ws://$newIp:${if (uri.port > 0) uri.port else 2907}/android"
+                            Log.d(TAG, "🌐 PC Server IP changed mid-session: reconnecting to $newUrl")
+                            serverUrl = newUrl
+                            openSocket()
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "Connection failure to $serverUrl: ${t.message}")
                 isConnecting.set(false)

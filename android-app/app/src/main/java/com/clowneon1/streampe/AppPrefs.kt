@@ -19,21 +19,32 @@ class AppPrefs(context: Context) {
         get() = prefs.getStringSet("selected_packages", emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet("selected_packages", value).apply()
 
-    var savedServers: Set<String>
-        get() = prefs.getStringSet("saved_servers", emptySet()) ?: emptySet()
-        set(value) = prefs.edit().putStringSet("saved_servers", value).apply()
+    var savedServers: List<String>
+        get() {
+            val csv = prefs.getString("recent_servers_list", "") ?: ""
+            if (csv.isNotBlank()) {
+                return csv.split(",").filter { it.isNotBlank() }.take(AppConstants.MAX_RECENT_SERVERS)
+            }
+            val oldSet = prefs.getStringSet("saved_servers", emptySet()) ?: emptySet()
+            return oldSet.toList().take(AppConstants.MAX_RECENT_SERVERS)
+        }
+        set(value) {
+            val trimmedList = value.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(AppConstants.MAX_RECENT_SERVERS)
+            prefs.edit().putString("recent_servers_list", trimmedList.joinToString(",")).apply()
+        }
 
     fun addSavedServer(url: String) {
         val trimmed = url.trim()
         if (trimmed.isNotBlank()) {
-            val current = savedServers.toMutableSet()
-            current.add(trimmed)
-            savedServers = current
+            val current = savedServers.toMutableList()
+            current.remove(trimmed)
+            current.add(0, trimmed)
+            savedServers = current.take(AppConstants.MAX_RECENT_SERVERS)
         }
     }
 
     fun removeSavedServer(url: String) {
-        val current = savedServers.toMutableSet()
+        val current = savedServers.toMutableList()
         if (current.remove(url.trim())) {
             savedServers = current
         }
