@@ -42,6 +42,11 @@ out/
 artifacts/
 *.exe
 *.tgz
+*.apk
+*.xapk
+apk-analysis/*.apk
+apk-analysis/*.xapk
+apk-analysis/extracted_strings.json
 
 # ── Environment variables ─────────────────────────────────────
 .env

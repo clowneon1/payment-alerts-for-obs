@@ -33,51 +33,43 @@ class NotificationTesterActivity : AppCompatActivity() {
 
     private val presets = listOf(
         Preset(
+            label   = "PhonePe (₹500)",
+            title   = "PhonePe - Rahul Sharma",
+            text    = "has sent ₹500.00",
+            bigText = "has sent ₹500.00",
+            pkg     = "com.phonepe.app",
+            appName = "PhonePe"
+        ),
+        Preset(
+            label   = "PhonePe (Business)",
+            title   = "PhonePe Business",
+            text    = "Payment of ₹2,500 received from Suresh",
+            bigText = "Payment of ₹2,500 received from Suresh",
+            pkg     = "com.phonepe.app",
+            appName = "PhonePe"
+        ),
+        Preset(
             label   = "Google Pay (₹500)",
             title   = "Google Pay",
-            text    = "Awesome stream! 🔥",
-            bigText = "Rahul Kumar paid you ₹500",
+            text    = "Rahul Kumar paid you ₹500",
+            bigText = "Awesome stream! 🔥",
             pkg     = "com.google.android.apps.nbu.paisa.user",
             appName = "Google Pay"
         ),
         Preset(
             label   = "Google Pay (500 rupees)",
             title   = "Google Pay",
-            text    = "GG WP for the next match!",
-            bigText = "Amit Sharma paid you 500 rupees",
+            text    = "Amit Sharma paid you 500 rupees",
+            bigText = "GG WP for the next match!",
             pkg     = "com.google.android.apps.nbu.paisa.user",
             appName = "Google Pay"
         ),
         Preset(
-            label   = "Google Pay (UPI Suffix)",
-            title   = "Google Pay",
-            text    = "ULTRA DONATION! 👑",
-            bigText = "Vikramaditya paid you ₹2,500.00 using UPI",
-            pkg     = "com.google.android.apps.nbu.paisa.user",
-            appName = "Google Pay"
-        ),
-        Preset(
-            label   = "PhonePe (₹500)",
-            title   = "PhonePe",
-            text    = "Received \u20b9500 from D SINGH",
-            bigText = "Received \u20b9500 from D SINGH",
-            pkg     = "com.phonepe.app",
-            appName = "PhonePe"
-        ),
-        Preset(
-            label   = "PhonePe (has sent)",
-            title   = "PhonePe",
-            text    = "D SINGH has sent Rs. 500.00 to your bank account",
-            bigText = "D SINGH has sent Rs. 500.00 to your bank account",
-            pkg     = "com.phonepe.app",
-            appName = "PhonePe"
-        ),
-        Preset(
-            label   = "Amazon Pay",
-            title   = "1.00 received",
-            text    = "Money received from RJ on amazon pay",
-            bigText = "Money received from RJ on amazon pay",
-            pkg     = "in.amazon.mShop.android.shopping",
+            label   = "Amazon Pay (₹500)",
+            title   = "₹500 received",
+            text    = "Money received from Rahul Sharma on Amazon Pay",
+            bigText = "Money received from Rahul Sharma on Amazon Pay",
+            pkg     = "com.amazon.mShop.android.shopping",
             appName = "Amazon Pay"
         ),
         Preset(

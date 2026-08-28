@@ -4,7 +4,52 @@
 
 ## 🚀 Upcoming Features & Tasks
 
-- [ ] **19. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
+### Version 2.2.0 (Planned)
+
+#### P0 — Critical & High Priority Fixes
+
+- [ ] **1. PhonePe & GPay Notification Parser Enhancement (APK Decompilation & Resource String Inspection)**:
+  - Decompile and inspect PhonePe (`com.phonepe.app`) and Google Pay (`com.google.android.apps.nbu.paisa.user`) APK string tables (`resources.arsc`, `strings.xml`, `.dex` bytecode).
+  - Extract 100% of notification format strings, title layouts (`"PhonePe - <Name>"`, `"PhonePe: <Name>"`, `"GPay - <Name>"`), and body templates (mapped in [`apk-analysis/PAYMENT_PATTERNS.md`](file:///d:/xwork/projects/payment-alerts-for-obs/apk-analysis/PAYMENT_PATTERNS.md)).
+  - Update `parsePayment()` in `server.js` with comprehensive regex patterns matching all current, legacy, and business merchant notification variations.
+  - Strip app name prefixes (`"PhonePe - "`, `"PhonePe: "`, `"GPay - "`) in `cleanSender()`.
+  - Pair title sender names directly with body amount lines (`"₹500 received"`) when the `from` keyword is omitted.
+  - Update PC dashboard simulator quick presets (`config.html`, `config.js`) and Android mobile tester presets (`NotificationTesterActivity.kt`) to match new PhonePe and GPay notification patterns.
+
+- [ ] **2. Service Discovery Rebranding & Mesh / Dual-Band Network Fixes**:
+  - Rename mDNS service type from legacy `_payment-alerts._tcp` to `_streampe._tcp` across PC Server (`server.js`) and Android companion app (`ServerDiscoveryManager.kt`).
+  - Add `<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />` & `WifiManager.MulticastLock` handling on Android (`ServerDiscoveryManager.kt`).
+  - Add mDNS UDP port 5353 Windows Defender Firewall auto-rule on PC Server (`server.js`).
+  - Implement Smart Unicast Probe fallback for 2.4GHz Wi-Fi, mesh routers, and cross-subnet setups (`192.168.169.x` ➔ `192.168.172.x`).
+  - Implement IP:Port deduplication and clean server naming (`StreamPe - Hostname`) without UI text flashing.
+  - Ensure desktop app (`StreamPe.exe`) connects strictly to its own sidecar server port without dev server port hijacking.
+
+- [ ] **3. Bug Fix: Mobile Notification Tester Edited Events Processed as Standard Events**:
+  - Fix issue where sending an edited/customized test notification from `NotificationTesterActivity` on the mobile companion app is processed and recorded by the PC server as a live standard payment event instead of a simulated test event.
+
+- [ ] **4. Default Portable Storage Root Migration to AppData**:
+  - Move default root storage location from the portable working directory to Windows `%APPDATA%\StreamPe\` (and `~/.config/streampe` on POSIX systems) for better OS application consistency and to prevent data/configuration loss when upgrading portable release builds.
+
+#### P1 — Memory Optimization, Customization & Auto-Update
+
+- [ ] **5. Donor Name Display Formatting & Custom Alias System**:
+  - **Display Format Options**: Add global & per-template name formatting modes: `Full Name` ("Rahul Sharma"), `First Name Only` ("Rahul"), `First Name + Last Initial` ("Rahul S."), or `Word Limit (1-N) / Max Character Truncation`.
+  - **Handlebars Helper**: Provide `{{displayName name mode="first" maxLength=12}}` helper in template engine (`template-engine.js`).
+  - **Custom Donor Alias Dictionary**: Allow streamers to assign custom nicknames/aliases to frequent supporters (e.g., map `"Rahul Sharma"` ➔ `"BigBossRahul"`). Display custom alias on live overlays, subgoals, and leaderboards while retaining actual name in private CSV income logs.
+
+- [ ] **6. Lazy Month CSV Reader & RAM Eviction (< 15 MB RAM for Multi-Month History)**:
+  - Implement Early-Exit Reverse Reader in `loadDonations()` (`server.js`) so page queries (50/100 items) stop reading disk files as soon as enough matching items are collected, avoiding loading all 12+ months into RAM.
+  - Implement Date-Range Month Pruning to skip opening unneeded monthly CSV files during filtered searches.
+  - Add LRU cache eviction to clear historical month CSVs from `donationsCache` memory after serving queries, retaining only the active current month in RAM.
+
+- [ ] **7. In-App Auto-Update System (PC Server & Android App)**:
+  - Integrate GitHub Releases API version checker (`/api/version/check` on PC server, background check on Android companion).
+  - **PC Server / Desktop App**: Tauri auto-updater & 1-click update download/install for portable desktop releases.
+  - **Android Companion App**: In-app update prompt with direct APK download & install prompt, eliminating manual GitHub zip/APK downloading.
+
+#### P2 — Security & Enhancements
+
+- [ ] **8. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
 
 ---
 
@@ -50,7 +95,7 @@
   - **Slide 1 (Notification Access - Required)**: Clear instructions with quick Android 13/14/15 "Restricted setting" fix guide.
   - **Slide 2 (Battery Keepalive - Recommended)**: Explains background sleep prevention for long stream continuity.
   - **Slide 3 (Accessibility Reader - Optional / Caution)**: Highlights why PhonePe is preferred (no accessibility needed), warns about banking UPI interference, and clarifies Amazon Pay / Android 15 fallback usage.
-  - **Clean Connection Dashboard**: Streamlined [MainActivity.kt](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/src/main/java/com/clowneon1/paymentalertsobs/MainActivity.kt) purely for server discovery and connection.
+  - **Clean Connection Dashboard**: Streamlined [MainActivity.kt](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/src-main/java/com/clowneon1/paymentalertsobs/MainActivity.kt) purely for server discovery and connection.
 
 - [x] **6. Server Auto-Discovery (mDNS/Bonjour)**:
   - **PC Server (`server.js`)**: Integrated `bonjour-service` to broadcast `_payment-alerts._tcp` on local Wi-Fi, supporting dynamic fallback ports (`Port 58024`), collision auto-recovery, and clean teardown on app exit / nodemon restarts (`SIGINT`, `SIGTERM`, `SIGUSR2`).
@@ -81,4 +126,4 @@
 
 ---
 
-*Last updated: 2026-08-16*
+*Last updated: 2026-08-28*

@@ -1,0 +1,202 @@
+{
+  "version": "1.0.0",
+  "description": "StreamPe Active Declarative Payment Notification Rules",
+  "apps": [
+    {
+      "id": "phonepe",
+      "appName": "PhonePe",
+      "packageNames": ["com.phonepe.app"],
+      "rules": [
+        {
+          "id": "phonepe_title_name_body_amount",
+          "description": "PhonePe - <Sender> in Title with amount in Body",
+          "titlePattern": "^PhonePe\\s*[-:]\\s*(.+)$",
+          "bodyPattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received|has\\s+sent\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)",
+          "senderSource": "title.1",
+          "amountSource": "body.1 || body.2",
+          "sample": {
+            "title": "PhonePe - Rahul Sharma",
+            "text": "has sent ₹500.00",
+            "expectedSender": "Rahul Sharma",
+            "expectedAmount": 500
+          }
+        },
+        {
+          "id": "phonepe_has_sent",
+          "description": "<Sender> has sent ₹<Amount>",
+          "bodyPattern": "^(.+?)\\s+has\\s+sent\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)",
+          "senderSource": "body.1",
+          "amountSource": "body.2",
+          "sample": {
+            "title": "PhonePe",
+            "text": "Rahul Sharma has sent ₹500",
+            "expectedSender": "Rahul Sharma",
+            "expectedAmount": 500
+          }
+        },
+        {
+          "id": "phonepe_amount_received_from",
+          "description": "₹<Amount> received from <Sender>",
+          "bodyPattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "sample": {
+            "title": "PhonePe",
+            "text": "₹250 received from Amit Kumar",
+            "expectedSender": "Amit Kumar",
+            "expectedAmount": 250
+          }
+        },
+        {
+          "id": "phonepe_payment_of_amount_received",
+          "description": "Payment of ₹<Amount> received from <Sender>",
+          "bodyPattern": "payment\\s+of\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "sample": {
+            "title": "PhonePe Business",
+            "text": "Payment of ₹2,500 received from Suresh",
+            "expectedSender": "Suresh",
+            "expectedAmount": 2500
+          }
+        },
+        {
+          "id": "phonepe_sent_amount",
+          "description": "<Sender> sent ₹<Amount>",
+          "bodyPattern": "^(.+?)\\s+sent\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)",
+          "senderSource": "body.1",
+          "amountSource": "body.2",
+          "sample": {
+            "title": "PhonePe",
+            "text": "Priya Patel sent ₹100",
+            "expectedSender": "Priya Patel",
+            "expectedAmount": 100
+          }
+        },
+        {
+          "id": "phonepe_bank_credit",
+          "description": "₹<Amount> credited to your bank account ... from <Sender>",
+          "bodyPattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+credited\\s+to\\s+your\\s+bank\\s+account.*from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "sample": {
+            "title": "PhonePe",
+            "text": "₹1,500.00 credited to your bank account XX5678 from Amit",
+            "expectedSender": "Amit",
+            "expectedAmount": 1500
+          }
+        }
+      ]
+    },
+    {
+      "id": "gpay",
+      "appName": "Google Pay",
+      "packageNames": ["com.google.android.apps.nbu.paisa.user", "paisa", "gpay"],
+      "rules": [
+        {
+          "id": "gpay_paid_you_symbol",
+          "description": "<Sender> paid you ₹<Amount>",
+          "bodyPattern": "^(.+?)\\s+paid\\s+you\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)",
+          "senderSource": "body.1",
+          "amountSource": "body.2",
+          "extractMessage": true,
+          "sample": {
+            "title": "Google Pay",
+            "text": "Rahul Sharma paid you ₹500",
+            "expectedSender": "Rahul Sharma",
+            "expectedAmount": 500
+          }
+        },
+        {
+          "id": "gpay_paid_you_words",
+          "description": "<Sender> paid you <Amount> rupees",
+          "bodyPattern": "^(.+?)\\s+paid\\s+you\\s+([\\d,]+(?:\\.\\d{1,2})?)\\s+rupees",
+          "senderSource": "body.1",
+          "amountSource": "body.2",
+          "extractMessage": true,
+          "sample": {
+            "title": "Google Pay",
+            "text": "Amit Verma paid you 250 rupees",
+            "expectedSender": "Amit Verma",
+            "expectedAmount": 250
+          }
+        },
+        {
+          "id": "gpay_you_received_from",
+          "description": "You received ₹<Amount> from <Sender>",
+          "bodyPattern": "you\\s+received\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "extractMessage": true,
+          "sample": {
+            "title": "Google Pay",
+            "text": "You received ₹1,200 from Sneha Gupta",
+            "expectedSender": "Sneha Gupta",
+            "expectedAmount": 1200
+          }
+        },
+        {
+          "id": "gpay_amount_received_from",
+          "description": "₹<Amount> received from <Sender>",
+          "bodyPattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "extractMessage": true,
+          "sample": {
+            "title": "Google Pay Business",
+            "text": "₹500 received from Vikram",
+            "expectedSender": "Vikram",
+            "expectedAmount": 500
+          }
+        }
+      ]
+    },
+    {
+      "id": "amazon",
+      "appName": "Amazon Pay",
+      "packageNames": ["com.amazon.mshop.android.shopping", "amazon"],
+      "rules": [
+        {
+          "id": "amazon_money_received_from",
+          "description": "Title: ₹<Amount> received | Body: Money received from <Sender> on Amazon Pay",
+          "titlePattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received",
+          "bodyPattern": "money\\s+rec(?:ei)?ved\\s+from\\s+(.+?)\\s+on\\s+amazon\\s+pay",
+          "senderSource": "body.1",
+          "amountSource": "title.1",
+          "sample": {
+            "title": "₹500 received",
+            "text": "Money received from Rahul Sharma on Amazon Pay",
+            "expectedSender": "Rahul Sharma",
+            "expectedAmount": 500
+          }
+        },
+        {
+          "id": "amazon_amount_received_from",
+          "description": "₹<Amount> received from <Sender>",
+          "bodyPattern": "(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+received\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "sample": {
+            "title": "Amazon Pay",
+            "text": "₹1,000 received from Vikas Singh",
+            "expectedSender": "Vikas Singh",
+            "expectedAmount": 1000
+          }
+        },
+        {
+          "id": "amazon_you_received_from",
+          "description": "You received ₹<Amount> from <Sender> on Amazon Pay",
+          "bodyPattern": "you\\s+received\\s+(?:\\u20B9|rs\\.?\\s*)([\\d,]+(?:\\.\\d{1,2})?)\\s+from\\s+(.+)",
+          "senderSource": "body.2",
+          "amountSource": "body.1",
+          "sample": {
+            "title": "Amazon Pay",
+            "text": "You received ₹300 from Ananya on Amazon Pay",
+            "expectedSender": "Ananya on Amazon Pay",
+            "expectedAmount": 300
+          }
+        }
+      ]
+    }
+  ]
+}

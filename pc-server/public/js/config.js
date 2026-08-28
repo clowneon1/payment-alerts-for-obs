@@ -1911,17 +1911,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let appName = 'PhonePe';
       let packageName = 'com.phonepe.app';
-      let title = 'PhonePe';
-      let text = `${sender} has sent Rs. ${formattedAmount}.00 to your bank account`;
+      let title = `PhonePe - ${sender}`;
+      let text = `has sent ₹${formattedAmount}.00`;
 
       if (providerKey === 'gpay') {
         appName = 'Google Pay';
         packageName = 'com.google.android.apps.nbu.paisa.user';
-        title = `${sender} paid you ₹${formattedAmount}`;
-        text = msg || `${sender} paid you ₹${formattedAmount}`;
+        title = `Google Pay`;
+        text = `${sender} paid you ₹${formattedAmount}`;
       } else if (providerKey === 'amazon') {
         appName = 'Amazon Pay';
-        packageName = 'in.amazon.mShop.android.shopping';
+        packageName = 'com.amazon.mShop.android.shopping';
         title = `₹${formattedAmount} received`;
         text = `Money received from ${sender} on Amazon Pay`;
       } else if (providerKey === 'cash') {
@@ -1932,8 +1932,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         appName = 'PhonePe';
         packageName = 'com.phonepe.app';
-        title = 'PhonePe';
-        text = `${sender} has sent Rs. ${formattedAmount}.00 to your bank account`;
+        title = `PhonePe - ${sender}`;
+        text = `has sent ₹${formattedAmount}.00`;
       }
 
       const isIsolated = config.simulation ? config.simulation.isolatedMode !== false : true;

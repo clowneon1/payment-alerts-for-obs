@@ -331,9 +331,15 @@ function ensureWindowsFirewallRule(callback) {
   });
 }
 
-log.info('Server', `Log directory: ${LOG_DIR} (daily rotating with 7-day retention)`);
+// ── Payment Parser (Declarative JSON Rule Engine) ────────────────────────
+const STRIP_PREFIXES = [
+  /^phonepe\s*[-:]\s*/i,
+  /^gpay\s*[-:]\s*/i,
+  /^google pay\s*[-:]\s*/i,
+  /^amazon pay\s*[-:]\s*/i,
+  /^from\s+/i,
+];
 
-// ── Payment Parser (JS) ────────────────────────────────────────────
 const STRIP_SUFFIXES = [
   / on amazon pay$/i,
   / on google pay$/i,
@@ -344,9 +350,11 @@ const STRIP_SUFFIXES = [
 ];
 
 function cleanSender(name) {
-  let s = name.trim();
+  if (!name) return 'Donor';
+  let s = String(name).trim();
+  for (const rx of STRIP_PREFIXES) s = s.replace(rx, '');
   for (const rx of STRIP_SUFFIXES) s = s.replace(rx, '');
-  return s.trim();
+  return s.trim() || 'Donor';
 }
 
 function cleanMessage(text) {
@@ -359,7 +367,7 @@ function cleanMessage(text) {
 }
 
 function normaliseAmount(raw) {
-  if (!raw) return '₹0';
+  if (!raw) return '\u20B90';
   const stripped = String(raw).trim()
     .replace(/^\u20B9\s*/, '')
     .replace(/^[Rr][Ss]\.?\s*/, '')
@@ -368,129 +376,162 @@ function normaliseAmount(raw) {
   return `\u20B9${stripped}`;
 }
 
-const RE_PHONEPE_AMOUNT = /has\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_HAS_SENT = /^(.+?)\s+has\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_AMT_RECEIVED_FROM = /(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+received\s+from\s+(.+)/i;
-const RE_PAYMENT_OF = /payment\s+of\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+received\s+from\s+(.+)/i;
-const RE_NAME_SENT = /^(.+?)\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_YOU_PAID = /you\s+(?:have\s+)?paid\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+to\s+(.+)/i;
-const RE_RECEIVED_FROM = /received\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
-const RE_FROM_NAME = /^from\s+(.+)/i;
-const RE_AMT_TITLE = /(?:\u20B9|rs\.?\s*)?([\d,.]+(?:\.\d{1,2})?)\s+received/i;
-const RE_AMT_FROM_TITLE = /(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
-const RE_AMAZON_SENDER = /money\s+rec(?:ei)?ved\s+from\s+(.+?)\s+on\s+amazon\s+pay/i;
+function normaliseAmountNumber(raw) {
+  const norm = normaliseAmount(raw);
+  return parseFloat(norm.replace(/[^\d.]/g, '')) || 0;
+}
 
-// Google Pay (GPay) Patterns
-const RE_GPAY_PAID_YOU_SYMBOL = /^(.+?)\s+paid\s+you\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_GPAY_PAID_YOU_WORDS = /^(.+?)\s+paid\s+you\s+([\d,.]+(?:\.\d{1,2})?)\s+rupees/i;
-const RE_GPAY_YOU_RECEIVED = /you\s+received\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
+// Load declarative payment-rules.json
+const PAYMENT_RULES_PATH = path.join(__dirname, 'payment-rules.json');
+let paymentRulesStore = { version: '1.0.0', apps: [] };
 
-// Non-payment filter regex
-const RE_NON_PAYMENT = /(?:otp|verification code|one time password|security code|cashback won|scratch card|reward earned|reward points|congratulations.*reward|bank balance|available balance|account balance|bill due|bill generated|recharge successful|recharge of|check your credit score|exclusive offer|flat .* off|discount on|special offer)/i;
+try {
+  if (fs.existsSync(PAYMENT_RULES_PATH)) {
+    const rawRules = fs.readFileSync(PAYMENT_RULES_PATH, 'utf8');
+    paymentRulesStore = JSON.parse(rawRules);
+    log.info('Parser', `Loaded payment-rules.json v${paymentRulesStore.version} (${paymentRulesStore.apps.length} app rule suites)`);
+    runPaymentRulesBootSelfTest(paymentRulesStore);
+  }
+} catch (e) {
+  log.error('Parser', 'Failed to load payment-rules.json: ' + e.message);
+}
+
+function runPaymentRulesBootSelfTest(rulesStore) {
+  let totalRules = 0;
+  let passedRules = 0;
+  
+  for (const appConfig of rulesStore.apps || []) {
+    for (const rule of appConfig.rules || []) {
+      totalRules++;
+      if (rule.sample) {
+        const sampleNotif = {
+          packageName: appConfig.packageNames[0] || '',
+          appName: appConfig.appName,
+          title: rule.sample.title || '',
+          text: rule.sample.text || '',
+          bigText: rule.sample.bigText || '',
+          message: rule.sample.message || ''
+        };
+        const parsed = parsePayment(sampleNotif);
+        if (parsed && normaliseAmountNumber(parsed.amount) === rule.sample.expectedAmount) {
+          passedRules++;
+        } else {
+          log.warn('ParserSelfTest', `Rule self-test warning for [${rule.id}]: expected ${rule.sample.expectedAmount}, got ${JSON.stringify(parsed)}`);
+        }
+      } else {
+        passedRules++;
+      }
+    }
+  }
+  log.info('ParserSelfTest', `⚡ Payment rules startup self-test: ${passedRules}/${totalRules} rules verified`);
+}
+
+function evaluateSourceExpression(expr, titleMatch, bodyMatch) {
+  if (!expr) return '';
+  if (expr.includes('||')) {
+    const parts = expr.split('||').map(p => p.trim());
+    for (const p of parts) {
+      const res = evaluateSourceExpression(p, titleMatch, bodyMatch);
+      if (res) return res;
+    }
+    return '';
+  }
+
+  if (expr.startsWith('title.')) {
+    const idx = parseInt(expr.replace('title.', ''), 10);
+    return titleMatch && titleMatch[idx] ? titleMatch[idx] : '';
+  }
+
+  if (expr.startsWith('body.')) {
+    const idx = parseInt(expr.replace('body.', ''), 10);
+    return bodyMatch && bodyMatch[idx] ? bodyMatch[idx] : '';
+  }
+
+  return '';
+}
 
 function parsePayment(notification) {
-  const pkg = (notification.packageName || '').trim().toLowerCase();
-  const appName = (notification.appName || '').trim();
-  const title = (notification.title || '').trim();
-  const titleBig = (notification.titleBig || '').trim();
-  const text = (notification.text || '').trim();
-  const bigText = (notification.bigText || '').trim();
+  if (!notification) return null;
 
-  // Combine content for non-payment filtering
-  const allContent = `${title} ${titleBig} ${text} ${bigText}`;
-  if (RE_NON_PAYMENT.test(allContent)) {
-    const isPaymentMatch = RE_GPAY_PAID_YOU_SYMBOL.test(title) || RE_GPAY_PAID_YOU_SYMBOL.test(titleBig) || RE_GPAY_PAID_YOU_SYMBOL.test(bigText) ||
-      RE_PHONEPE_AMOUNT.test(title) || RE_PHONEPE_AMOUNT.test(text) || RE_PHONEPE_AMOUNT.test(bigText);
-    if (!isPaymentMatch) {
-      return null; // Ignore promotional, OTP, or balance alert
-    }
-  }
-
-  const isGPay = pkg.includes('paisa') || pkg.includes('gpay') || appName.toLowerCase().includes('google pay') || appName.toLowerCase().includes('gpay');
-  const isPhonePe = pkg.includes('phonepe') || appName.toLowerCase().includes('phonepe');
-  const isAmazon = pkg.includes('amazon') || appName.toLowerCase().includes('amazon');
+  // Input Sanity & ReDoS Guard (max 300 chars)
+  const pkg = String(notification.packageName || '').trim().toLowerCase();
+  const appName = String(notification.appName || '').trim();
+  const title = String(notification.title || '').trim().substring(0, 300);
+  const titleBig = String(notification.titleBig || '').trim().substring(0, 300);
+  const text = String(notification.text || '').trim().substring(0, 300);
+  const bigText = String(notification.bigText || '').trim().substring(0, 300);
 
   const body = bigText || text;
+  const targetTitle = title || titleBig;
+  const allContent = `${title} ${titleBig} ${text} ${bigText}`.trim();
 
-  // ─ 1. Google Pay (GPay) ───────────────────────────────────────────
-  if (isGPay) {
-    for (const candidate of [title, titleBig, bigText, text].filter(Boolean)) {
-      let m;
-      if ((m = RE_GPAY_PAID_YOU_SYMBOL.exec(candidate))) {
-        const sender = cleanSender(m[1]);
-        const amount = normaliseAmount(m[2]);
-        const rawMsg = (text && text !== candidate && !RE_GPAY_PAID_YOU_SYMBOL.test(text)) ? text : (notification.message || '');
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(rawMsg) };
-      }
-      if ((m = RE_GPAY_PAID_YOU_WORDS.exec(candidate))) {
-        const sender = cleanSender(m[1]);
-        const amount = normaliseAmount(m[2]);
-        const rawMsg = (text && text !== candidate && !RE_GPAY_PAID_YOU_WORDS.test(text)) ? text : (notification.message || '');
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(rawMsg) };
-      }
-      if ((m = RE_GPAY_YOU_RECEIVED.exec(candidate))) {
-        const sender = cleanSender(m[2]);
-        const amount = normaliseAmount(m[1]);
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(notification.message || '') };
-      }
-      if ((m = RE_AMT_RECEIVED_FROM.exec(candidate))) {
-        const sender = cleanSender(m[2]);
-        const amount = normaliseAmount(m[1]);
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(notification.message || '') };
-      }
-    }
-  }
+  if (!allContent) return null;
 
-  // ─ 2. Amazon Pay ───────────────────────────────────────────────
-  if (isAmazon) {
-    const senderM = RE_AMAZON_SENDER.exec(body);
-    const amtM = RE_AMT_TITLE.exec(title);
-    if (senderM && amtM) {
-      return { sender: cleanSender(senderM[1]), amount: normaliseAmount(amtM[1]), sourceApp: 'Amazon Pay' };
-    }
-    const m = RE_AMT_RECEIVED_FROM.exec(body) || RE_AMT_RECEIVED_FROM.exec(title);
-    if (m) return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: 'Amazon Pay' };
-  }
+  // Identify matching app configuration
+  const matchedAppConfig = (paymentRulesStore.apps || []).find(app => {
+    return (app.packageNames || []).some(p => pkg.includes(p.toLowerCase())) ||
+      (app.appName && appName.toLowerCase().includes(app.appName.toLowerCase()));
+  });
 
-  // ─ 3. PhonePe ─────────────────────────────────────────────────
-  if (isPhonePe) {
-    for (const candidate of [body, text, title].filter(Boolean)) {
-      const hasIdx = candidate.indexOf(' has ');
-      const amtM = RE_PHONEPE_AMOUNT.exec(candidate);
-      if (hasIdx > 0 && amtM) {
-        return {
-          sender: cleanSender(candidate.substring(0, hasIdx)),
-          amount: normaliseAmount(amtM[1]),
-          sourceApp: 'PhonePe'
+  // Evaluate matching app rules or fallback rules
+  const appsToEvaluate = matchedAppConfig ? [matchedAppConfig] : (paymentRulesStore.apps || []);
+
+  for (const appConfig of appsToEvaluate) {
+    for (const rule of appConfig.rules || []) {
+      let titleMatch = null;
+      let bodyMatch = null;
+
+      if (rule.titlePattern) {
+        const titleRx = new RegExp(rule.titlePattern, 'i');
+        titleMatch = titleRx.exec(targetTitle);
+        if (!titleMatch && !rule.bodyPattern) continue;
+      }
+
+      if (rule.bodyPattern) {
+        const bodyRx = new RegExp(rule.bodyPattern, 'i');
+        bodyMatch = bodyRx.exec(body) || bodyRx.exec(text) || bodyRx.exec(title);
+        if (!bodyMatch) continue;
+      }
+
+      if (rule.titlePattern && !titleMatch) continue;
+
+      let rawSender = '';
+      let rawAmount = '';
+
+      if (rule.senderSource) {
+        rawSender = evaluateSourceExpression(rule.senderSource, titleMatch, bodyMatch);
+      }
+      if (rule.amountSource) {
+        rawAmount = evaluateSourceExpression(rule.amountSource, titleMatch, bodyMatch);
+      }
+
+      if (rawSender && rawAmount) {
+        const sender = cleanSender(rawSender);
+        const amount = normaliseAmount(rawAmount);
+
+        let message = '';
+        if (rule.extractMessage) {
+          const rawMsg = (text && text !== bodyMatch[0] && !bodyMatch[0].includes(text)) ? text : (notification.message || '');
+          message = cleanMessage(rawMsg);
+        }
+
+        const parsed = {
+          sender,
+          amount,
+          sourceApp: appConfig.appName || appName || 'UPI',
+          message
         };
+
+        log.info('PARSE', `🟢 Matched rule [${rule.id}] => Sender: "${sender}", Amount: ${amount} via ${parsed.sourceApp}`);
+        return parsed;
       }
-    }
-    const amtTitleM = RE_AMT_TITLE.exec(title);
-    const fromTextM = RE_FROM_NAME.exec(text);
-    if (amtTitleM && fromTextM) {
-      return { sender: cleanSender(fromTextM[1]), amount: normaliseAmount(amtTitleM[1]), sourceApp: 'PhonePe' };
-    }
-    const compactM = RE_AMT_FROM_TITLE.exec(title);
-    if (compactM) {
-      return { sender: cleanSender(compactM[2]), amount: normaliseAmount(compactM[1]), sourceApp: 'PhonePe' };
     }
   }
 
-  // ─ 4. Generic fallbacks ──────────────────────────────────────────
-  for (const candidate of [body, title].filter(Boolean)) {
-    let m;
-    if ((m = RE_HAS_SENT.exec(candidate)))
-      return { sender: cleanSender(m[1]), amount: normaliseAmount(m[2]), sourceApp: appName || 'UPI' };
-    if ((m = RE_PAYMENT_OF.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_RECEIVED_FROM.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_AMT_RECEIVED_FROM.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_NAME_SENT.exec(candidate)))
-      return { sender: cleanSender(m[1]), amount: normaliseAmount(m[2]), sourceApp: appName || 'UPI' };
-    if ((m = RE_YOU_PAID.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
+  // Strict Positive Whitelist Fallback:
+  // Non-matching notifications from payment apps are logged as promotional and ignored
+  if (matchedAppConfig) {
+    log.info('PARSE', `🟡 Ignored (${matchedAppConfig.appName} non-payment / promotional alert) => Title: "${title}", Text: "${text}"`);
   }
 
   return null;
@@ -1053,6 +1094,8 @@ app.get('/alert', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'overlay.html
 app.get('/goal', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'goal.html')));
 app.get('/leaderboard', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'list.html')));
 app.get('/list', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'list.html')));
+
+app.get('/api/payment-rules', (req, res) => res.json(paymentRulesStore));
 
 // ── CSV Donations & Analytics Endpoints ──────────────────────────────
 app.get('/api/donations/months', (req, res) => {
