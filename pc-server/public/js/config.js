@@ -2780,7 +2780,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const meta = PaymentsCsv.getProviderMeta(tx.sourceApp);
         const pKey = PaymentsCsv.normalizeProviderKey(tx.sourceApp);
         const curr = tx.currency || 'INR';
-        const hasAlias = tx.displayName && tx.displayName.trim() && tx.displayName.trim().toLowerCase() !== String(tx.sender || '').trim().toLowerCase();
+        const rawName = tx.rawSender || tx.sender || 'Unknown';
+        const formattedName = tx.sender || rawName;
+        const hasAlias = formattedName && rawName && formattedName.trim().toLowerCase() !== rawName.trim().toLowerCase();
 
         return `
           <tr style="border-bottom: 1px solid var(--border);">
@@ -2789,10 +2791,10 @@ document.addEventListener('DOMContentLoaded', () => {
               <div style="font-size: 10px;">${tx.time || ''}</div>
             </td>
             <td style="padding: 8px 10px;">
-              <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${TemplateEngine.escapeHtml(tx.sender || 'Unknown')}</div>
+              <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${TemplateEngine.escapeHtml(rawName)}</div>
             </td>
             <td style="padding: 8px 10px;">
-              ${hasAlias ? `<div style="color: var(--accent); font-weight: 600; font-size: 12px;"><i data-lucide="tag" style="width: 11px; height: 11px; vertical-align: middle; margin-right: 3px;"></i>${TemplateEngine.escapeHtml(tx.displayName)}</div>` : '<span style="opacity: 0.3; font-size: 11px;">—</span>'}
+              ${hasAlias ? `<div style="color: var(--accent); font-weight: 600; font-size: 12px;"><i data-lucide="tag" style="width: 11px; height: 11px; vertical-align: middle; margin-right: 3px;"></i>${TemplateEngine.escapeHtml(formattedName)}</div>` : '<span style="opacity: 0.3; font-size: 11px;">—</span>'}
             </td>
             <td style="padding: 8px 10px;">
               <span class="provider-badge ${pKey}">${TemplateEngine.escapeHtml(meta.name)}</span>
@@ -2826,9 +2828,13 @@ document.addEventListener('DOMContentLoaded', () => {
           const targetTx = txs.find(t => t.id === txId);
           if (!targetTx) return;
 
+          const rawName = targetTx.rawSender || targetTx.sender || '';
+          const formattedName = targetTx.sender || rawName;
+          const hasAlias = formattedName && rawName && formattedName.trim().toLowerCase() !== rawName.trim().toLowerCase();
+
           if (el('input-manual-edit-id')) el('input-manual-edit-id').value = targetTx.id;
-          if (el('input-manual-donor')) el('input-manual-donor').value = targetTx.sender || '';
-          if (el('input-manual-alias')) el('input-manual-alias').value = (targetTx.displayName && targetTx.displayName.trim().toLowerCase() !== (targetTx.sender || '').trim().toLowerCase()) ? targetTx.displayName : '';
+          if (el('input-manual-donor')) el('input-manual-donor').value = rawName;
+          if (el('input-manual-alias')) el('input-manual-alias').value = hasAlias ? formattedName : '';
           if (el('input-manual-amount')) el('input-manual-amount').value = targetTx.amount || 0;
           if (el('select-manual-provider')) el('select-manual-provider').value = targetTx.sourceApp || 'Manual Entry';
           if (el('input-manual-date')) el('input-manual-date').value = targetTx.date || '';

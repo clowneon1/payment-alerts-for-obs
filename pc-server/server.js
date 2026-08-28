@@ -139,9 +139,9 @@ function decorateWithDisplayName(transactions, settings = {}) {
   const list = Array.isArray(transactions) ? transactions : [];
   return list.map(tx => {
     if (!tx || typeof tx !== 'object') return tx;
-    const rawSender = tx.sender || 'Anonymous';
-    const displayName = aliasesStore.formatDonorName(rawSender, settings);
-    return { ...tx, displayName };
+    const raw = tx.rawSender || tx.sender || 'Anonymous';
+    const formatted = aliasesStore.formatDonorName(raw, settings);
+    return { ...tx, rawSender: raw, sender: formatted };
   });
 }
 
@@ -777,10 +777,16 @@ function saveDonations(profileName, transactions) {
     const realTransactions = (transactions || []).filter(t => !t.simulated);
 
     realTransactions.forEach(t => {
-      let ym = PaymentsCsv.getMonthKey(t.timestamp || t.date);
+      const rawTx = {
+        ...t,
+        sender: t.rawSender || t.sender
+      };
+      delete rawTx.rawSender;
+
+      let ym = PaymentsCsv.getMonthKey(rawTx.timestamp || rawTx.date);
       if (!ym) ym = getTodayYearMonth();
       if (!groups[ym]) groups[ym] = [];
-      groups[ym].push(t);
+      groups[ym].push(rawTx);
     });
 
     const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
@@ -826,7 +832,9 @@ function appendDonation(profileName, tx) {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
 
-    const row = PaymentsCsv.formatCsvRow(tx) + '\n';
+    const rawTx = { ...tx, sender: tx.rawSender || tx.sender };
+    delete rawTx.rawSender;
+    const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
 
     if (!fs.existsSync(filePath)) {
       saveDonations(profile, [tx]);
@@ -939,7 +947,7 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
 
     let recent = metadata.recent.recentDonations || [];
     if (!Array.isArray(recent)) recent = [];
-    const decorated = decorateWithTemplate({ ...newTx, sender: donorName, displayName: donorName });
+    const decorated = decorateWithTemplate({ ...newTx, rawSender: rawSender, sender: donorName });
     recent.unshift(decorated);
     if (recent.length > 50) recent = recent.slice(0, 50);
     metadata.recent.recentDonations = recent;
@@ -1074,14 +1082,14 @@ const parseAmountNum = (rawAmount) => TemplateMatcher.parseAmount(rawAmount);
 
 function decorateWithTemplate(event) {
   const amount = parseAmountNum(event.amount);
-  const rawSender = event.sender || 'Anonymous';
-  const displayName = event.displayName || aliasesStore.formatDonorName(rawSender, alertSettings);
+  const rawSender = event.rawSender || event.sender || 'Anonymous';
+  const formattedSender = aliasesStore.formatDonorName(rawSender, alertSettings);
   if (event.alertTemplateId) {
     const template = alertSettings.alertTemplates.find(t => t.id === event.alertTemplateId);
     return {
       ...event,
-      sender: displayName,
-      displayName: displayName,
+      rawSender: rawSender,
+      sender: formattedSender,
       amountValue: amount,
       alertTemplateId: template ? template.id : event.alertTemplateId,
       alertTemplateName: template ? template.name : ''
@@ -1090,8 +1098,8 @@ function decorateWithTemplate(event) {
   const template = TemplateMatcher.select(alertSettings.alertTemplates, amount);
   return {
     ...event,
-    sender: displayName,
-    displayName: displayName,
+    rawSender: rawSender,
+    sender: formattedSender,
     amountValue: amount,
     alertTemplateId: template ? template.id : null,
     alertTemplateName: template ? template.name : ''
@@ -1117,9 +1125,9 @@ function processPaymentForGoalAndLeaderboard(notification) {
 
     const numAmount = parseAmountNum(notification.amount);
     const effectiveAmount = numAmount > 0 ? numAmount : 0;
-    let senderName = (notification.sender || notification.title || 'Unknown').trim();
-    if (/received|sent/i.test(senderName))
-      senderName = senderName.split(/sent|received/i)[0].trim() || 'Unknown';
+    
+    const rawSenderName = cleanSender(notification.rawSender || notification.sender || notification.title || 'Unknown');
+    const formattedSenderName = aliasesStore.formatDonorName(rawSenderName, alertSettings);
 
     const now = Number(notification.timestamp) || Date.now();
     const d = new Date(now);
@@ -1130,7 +1138,8 @@ function processPaymentForGoalAndLeaderboard(notification) {
       timestamp: now,
       date: !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '',
       time: !isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '',
-      sender: senderName,
+      rawSender: rawSenderName,
+      sender: formattedSenderName,
       amount: effectiveAmount,
       currency: currencyCode,
       rawAmount: PaymentsCsv.formatCurrency(effectiveAmount, currencyCode),
@@ -1145,7 +1154,7 @@ function processPaymentForGoalAndLeaderboard(notification) {
     const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, tx);
     if (alertId) processedAlertIds.add(alertId);
 
-    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${senderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
+    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${rawSenderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
   } catch (e) {
     log.error('Payment', 'Error in processPaymentForGoalAndLeaderboard: ' + e.message);
   }
