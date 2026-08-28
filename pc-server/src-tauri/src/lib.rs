@@ -216,11 +216,22 @@ pub fn run() {
 
             // Spawn Node sidecar + wait for it to be ready, then open window
             tauri::async_runtime::spawn(async move {
-                // Launch the bun-compiled server sidecar (server.js baked in — no args needed)
+                let session_token = format!(
+                    "{:x}{:x}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos(),
+                    std::process::id()
+                );
+                let (auth_tx, mut auth_rx) = tokio::sync::mpsc::channel::<(u16, String)>(1);
+
+                // Launch the bun-compiled server sidecar passing session token env
                 let sidecar_cmd = app_handle
                     .shell()
                     .sidecar("server")
-                    .expect("server sidecar not found");
+                    .expect("server sidecar not found")
+                    .env("STREAMPE_SESSION_TOKEN", &session_token);
 
                 let (mut rx, child) = sidecar_cmd
                     .spawn()
@@ -229,13 +240,22 @@ pub fn run() {
                 // Store child process handle so it terminates when the app exits
                 state_clone.lock().unwrap().child_process = Some(child);
 
-                // Forward sidecar stdout/stderr to Tauri logs
+                // Forward sidecar stdout/stderr to Tauri logs & parse auth handshake
                 let ah2 = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     while let Some(event) = rx.recv().await {
                         match event {
                             CommandEvent::Stdout(line) => {
-                                println!("[Node] {}", String::from_utf8_lossy(&line));
+                                let s = String::from_utf8_lossy(&line);
+                                println!("[Node] {}", s);
+                                if s.contains("[INSTANCE_AUTH]") {
+                                    if let Some(port_str) = s.split("PORT=").nth(1).and_then(|p| p.split_whitespace().next()) {
+                                        if let Ok(port) = port_str.parse::<u16>() {
+                                            let token = s.split("TOKEN=").nth(1).map(|t| t.trim().to_string()).unwrap_or_default();
+                                            let _ = auth_tx.send((port, token)).await;
+                                        }
+                                    }
+                                }
                             }
                             CommandEvent::Stderr(line) => {
                                 eprintln!("[Node] {}", String::from_utf8_lossy(&line));
@@ -245,7 +265,6 @@ pub fn run() {
                             }
                             CommandEvent::Terminated(status) => {
                                 eprintln!("[Node] Sidecar terminated: {:?}", status);
-                                // Quit the app if the server dies
                                 ah2.exit(1);
                             }
                             _ => {}
@@ -253,9 +272,14 @@ pub fn run() {
                     }
                 });
 
-                // Poll until the embedded Express server is ready
-                const PREFERRED_PORT: u16 = 2907;
-                let port = resolve_server_port(PREFERRED_PORT).await;
+                // Wait for INSTANCE_AUTH handshake or fallback port resolution
+                let (port, token) = tokio::select! {
+                    Some(auth) = auth_rx.recv() => auth,
+                    _ = tokio::time::sleep(Duration::from_secs(3)) => {
+                        let fallback_port = resolve_server_port(2907).await;
+                        (fallback_port, session_token)
+                    }
+                };
 
                 // Store resolved port in shared state
                 state_clone.lock().unwrap().server_port = Some(port);
@@ -264,13 +288,12 @@ pub fn run() {
                 build_tray(&app_handle, port).expect("Failed to build tray");
 
                 let should_start_minimized = check_start_minimized(port).await;
+                let target_url = format!("http://127.0.0.1:{port}/app?token={token}");
 
                 // Create or navigate the main window
                 let _win = if let Some(existing_win) = app_handle.get_webview_window("main") {
                     let _ = existing_win.navigate(
-                        format!("http://127.0.0.1:{port}/app")
-                            .parse()
-                            .unwrap(),
+                        target_url.parse().unwrap(),
                     );
                     if !should_start_minimized {
                         let _ = existing_win.show();
@@ -282,9 +305,7 @@ pub fn run() {
                         &app_handle,
                         "main",
                         tauri::WebviewUrl::External(
-                            format!("http://127.0.0.1:{port}/app")
-                                .parse()
-                                .unwrap(),
+                            target_url.parse().unwrap(),
                         ),
                     )
                     .title("StreamPe")

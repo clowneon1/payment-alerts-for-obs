@@ -292,7 +292,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, PermissionsActivity::class.java))
         }
 
-        etServerUrl.setText(prefs.serverUrl.ifBlank { "http://192.168.1.100:2907" })
+        etServerUrl.setText(prefs.serverUrl.ifBlank { AppConstants.DEFAULT_FALLBACK_URL })
     }
 
     private fun requestPostNotificationPermissionSilently() {
