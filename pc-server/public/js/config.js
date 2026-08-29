@@ -1123,12 +1123,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const releaseTitle = el('tab-update-release-title');
     const releaseNotes = el('tab-update-release-notes');
     const publishedDate = el('tab-update-published-date');
-    const installBtn = el('btn-tab-install-now');
     const zipBtn = el('btn-tab-download-zip');
     const ghBtn = el('btn-tab-view-github');
 
-    if (currentVer) currentVer.textContent = `v${data.currentVersion || '2.0.0'}`;
-    if (latestVer) latestVer.textContent = `v${data.latestVersion || '2.1.0'}`;
+    if (currentVer) currentVer.textContent = `v${data.currentVersion || '2.1.0'}`;
+    if (latestVer) latestVer.textContent = `v${data.latestVersion || '2.2.0'}`;
     if (releaseTitle) releaseTitle.textContent = data.releaseName || 'What’s New in this Release';
     if (releaseNotes) {
       releaseNotes.innerHTML = formatReleaseNotesMarkdown(data.releaseNotes);
@@ -1144,7 +1143,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (zipBtn && data.assets && data.assets.portableZip) {
       zipBtn.href = data.assets.portableZip.downloadUrl;
-      zipBtn.style.display = 'inline-flex';
     } else if (zipBtn) {
       zipBtn.href = data.releaseUrl || 'https://github.com/clowneon1/streampe/releases/latest';
     }
@@ -1154,9 +1152,8 @@ document.addEventListener('DOMContentLoaded', () => {
         headline.innerHTML = `⚡ StreamPe <span style="color: var(--accent);">v${data.latestVersion}</span> is Available!`;
       }
       if (subtext) {
-        subtext.textContent = 'A new release is ready with performance improvements, fixes, and new features.';
+        subtext.textContent = 'A new release is available with performance improvements, fixes, and new features.';
       }
-      if (installBtn) installBtn.style.display = 'inline-flex';
     } else {
       if (headline) {
         headline.innerHTML = `✅ StreamPe is Up to Date`;
@@ -1164,96 +1161,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (subtext) {
         subtext.textContent = `You are running the latest version of StreamPe (v${data.currentVersion}).`;
       }
-      if (installBtn) installBtn.style.display = 'none';
     }
 
     if (window.lucide) lucide.createIcons();
   }
 
-  async function startTabOneClickUpdate() {
-    const installBtn = el('btn-tab-install-now');
-    const progressContainer = el('tab-update-progress-container');
-    const progressBar = el('tab-update-progress-bar');
-    const progressPercent = el('tab-update-progress-percent');
-    const progressLabel = el('tab-update-progress-label');
-
-    if (!latestUpdateInfo || !latestUpdateInfo.assets || !latestUpdateInfo.assets.portableZip) {
-      showToast('<i data-lucide="alert-triangle"></i> No desktop portable zip found for this release.');
-      return;
-    }
-
-    if (installBtn) {
-      installBtn.disabled = true;
-      installBtn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Preparing Update...';
-    }
-    if (progressContainer) progressContainer.style.display = 'block';
-    if (progressBar) progressBar.style.width = '0%';
-    if (progressPercent) progressPercent.textContent = '0%';
-    if (progressLabel) progressLabel.textContent = 'Starting background download...';
-
-    try {
-      const downloadUrl = latestUpdateInfo.assets.portableZip.downloadUrl;
-      const res = await fetch('/api/updates/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: downloadUrl })
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Failed to start download');
-
-      if (updatePollTimer) clearInterval(updatePollTimer);
-      updatePollTimer = setInterval(async () => {
-        try {
-          const statusRes = await fetch('/api/updates/status');
-          const statusData = await statusRes.json();
-
-          if (statusData.status === 'downloading') {
-            if (progressBar) progressBar.style.width = `${statusData.progress}%`;
-            if (progressPercent) progressPercent.textContent = `${statusData.progress}%`;
-            const mbDownloaded = (statusData.downloadedBytes / (1024 * 1024)).toFixed(1);
-            const mbTotal = (statusData.totalBytes / (1024 * 1024)).toFixed(1);
-            if (progressLabel) progressLabel.textContent = `Downloading update bundle (${mbDownloaded} / ${mbTotal} MB)...`;
-          } else if (statusData.status === 'extracting') {
-            if (progressBar) progressBar.style.width = '100%';
-            if (progressPercent) progressPercent.textContent = '100%';
-            if (progressLabel) progressLabel.textContent = '📦 Extracting and verifying update files...';
-          } else if (statusData.status === 'ready') {
-            clearInterval(updatePollTimer);
-            updatePollTimer = null;
-            if (progressLabel) progressLabel.textContent = '✅ Update ready! Restarting StreamPe...';
-            if (installBtn) {
-              installBtn.innerHTML = '<i data-lucide="refresh-cw" class="spin"></i> Restarting...';
-            }
-            showToast('<i data-lucide="check-circle"></i> Applying update and restarting StreamPe...');
-
-            setTimeout(async () => {
-              try {
-                await fetch('/api/updates/apply', { method: 'POST' });
-              } catch (_) { }
-            }, 600);
-          } else if (statusData.status === 'error') {
-            clearInterval(updatePollTimer);
-            updatePollTimer = null;
-            if (progressLabel) progressLabel.textContent = '❌ Update failed: ' + (statusData.error || 'Error');
-            if (installBtn) {
-              installBtn.disabled = false;
-              installBtn.innerHTML = '<i data-lucide="zap"></i> Retry 1-Click Update';
-            }
-          }
-        } catch (_) { }
-      }, 300);
-
-    } catch (err) {
-      if (progressLabel) progressLabel.textContent = '❌ Error: ' + err.message;
-      if (installBtn) {
-        installBtn.disabled = false;
-        installBtn.innerHTML = '<i data-lucide="zap"></i> 1-Click Update & Restart';
-      }
-    }
-  }
-
   function setupUpdateListeners() {
-    on('btn-tab-install-now', 'click', startTabOneClickUpdate);
     on('btn-tab-check-updates', 'click', () => {
       showToast('<i data-lucide="refresh-cw"></i> Checking for updates...');
       checkAppUpdates(false, true).then(() => {

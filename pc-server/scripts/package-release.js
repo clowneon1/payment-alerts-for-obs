@@ -56,10 +56,10 @@ for (const cand of mainExeCandidates) {
   }
 }
 
-// Copy sidecar binary
+// Copy Tauri sidecar binary
 const serverSidecar = path.join(pcServerDir, 'src-tauri', 'sidecars', 'server-x86_64-pc-windows-msvc.exe');
 if (fs.existsSync(serverSidecar)) {
-  fs.copyFileSync(serverSidecar, path.join(portableDir, 'server.exe'));
+  fs.copyFileSync(serverSidecar, path.join(portableDir, 'server-x86_64-pc-windows-msvc.exe'));
 }
 
 // Copy public web resources & widget config

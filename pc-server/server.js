@@ -99,7 +99,7 @@ const wss = new WebSocketServer({ server });
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'icon.png'));
@@ -107,6 +107,14 @@ app.get('/favicon.ico', (req, res) => {
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
+});
+
+app.get('/config', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
+});
+
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'app.html'));
 });
 
 // ── Path Config Bootstrapping ──
@@ -2277,6 +2285,27 @@ app.get('/api/logs/live', (req, res) => {
     res.json({ ok: true, date: targetDate, availableDates, totalLines: allLines.length, lines: recent });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── In-App Update Checker ──────────────────────────────────────────
+app.get('/api/updates/check', async (req, res) => {
+  try {
+    const force = req.query.force === 'true' || req.query.force === '1';
+    const result = await updateManager.checkForUpdates(APP_VERSION, force);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/version/check', async (req, res) => {
+  try {
+    const force = req.query.force === 'true' || req.query.force === '1';
+    const result = await updateManager.checkForUpdates(APP_VERSION, force);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

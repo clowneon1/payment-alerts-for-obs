@@ -227,11 +227,17 @@ pub fn run() {
                 let (auth_tx, mut auth_rx) = tokio::sync::mpsc::channel::<(u16, String)>(1);
 
                 // Launch the bun-compiled server sidecar passing session token env
-                let sidecar_cmd = app_handle
+                let mut sidecar_cmd = app_handle
                     .shell()
                     .sidecar("server")
                     .expect("server sidecar not found")
                     .env("STREAMPE_SESSION_TOKEN", &session_token);
+
+                if let Ok(exe_path) = std::env::current_exe() {
+                    if let Some(exe_dir) = exe_path.parent() {
+                        sidecar_cmd = sidecar_cmd.current_dir(exe_dir);
+                    }
+                }
 
                 let (mut rx, child) = sidecar_cmd
                     .spawn()

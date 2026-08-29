@@ -2438,7 +2438,7 @@
                 <i data-lucide="sparkles" style="color: var(--accent); width: 22px; height: 22px;"></i> Software Updates
               </h2>
               <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">
-                Check, download, and install StreamPe software updates in 1-click.
+                Stay up to date with the latest features, improvements, and fixes for StreamPe.
               </p>
             </div>
             <button type="button" class="btn btn-outline" id="btn-tab-check-updates" style="font-size: 13px; padding: 8px 14px; display: flex; align-items: center; gap: 6px;">
@@ -2461,35 +2461,46 @@
 
               <!-- Version Badges -->
               <div style="display: flex; align-items: center; gap: 12px; background: rgba(0, 0, 0, 0.3); padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border);">
-                <div style="font-size: 13px; color: var(--text-muted);">Current: <strong id="tab-update-current-ver" style="color: var(--text);">v2.0.0</strong></div>
+                <div style="font-size: 13px; color: var(--text-muted);">Current: <strong id="tab-update-current-ver" style="color: var(--text);">v2.1.0</strong></div>
                 <i data-lucide="arrow-right" style="width: 14px; height: 14px; color: var(--accent);"></i>
-                <div style="font-size: 13px; color: var(--accent);">Latest: <strong id="tab-update-latest-ver">v2.1.0</strong></div>
+                <div style="font-size: 13px; color: var(--accent);">Latest: <strong id="tab-update-latest-ver">v2.2.0</strong></div>
               </div>
             </div>
 
-            <!-- 1-Click Update Actions & Progress Section -->
+            <!-- Download Action Buttons -->
             <div id="tab-update-actions-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <button type="button" id="btn-tab-install-now" class="btn btn-primary" style="font-size: 13px; padding: 9px 18px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                  <i data-lucide="zap" style="width: 15px; height: 15px;"></i> 1-Click Update &amp; Restart
-                </button>
-                <a id="btn-tab-download-zip" href="#" target="_blank" class="btn btn-secondary" style="font-size: 13px; padding: 9px 14px; display: flex; align-items: center; gap: 6px;">
-                  <i data-lucide="download" style="width: 14px; height: 14px;"></i> Manual .zip
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <a id="btn-tab-download-zip" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-primary" style="font-size: 13px; padding: 10px 20px; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+                  <i data-lucide="download" style="width: 16px; height: 16px;"></i> Download Latest Release (.zip)
                 </a>
               </div>
-              <a id="btn-tab-view-github" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-outline" style="font-size: 12px; padding: 7px 12px; display: flex; align-items: center; gap: 6px;">
-                <i data-lucide="external-link" style="width: 13px; height: 13px;"></i> View on GitHub
+              <a id="btn-tab-view-github" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-outline" style="font-size: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="external-link" style="width: 14px; height: 14px;"></i> View on GitHub
               </a>
             </div>
+          </div>
 
-            <!-- Animated Progress Bar -->
-            <div id="tab-update-progress-container" style="display: none; margin-top: 18px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px;">
-                <span id="tab-update-progress-label" style="font-weight: 600; color: var(--accent);">Downloading update bundle...</span>
-                <span id="tab-update-progress-percent" style="font-weight: 700; color: var(--text);">0%</span>
+          <!-- Step-by-Step Update Guide -->
+          <div style="background: rgba(0, 229, 255, 0.03); border: 1px solid rgba(0, 229, 255, 0.15); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;">
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="help-circle" style="width: 16px; height: 16px;"></i> How to update your StreamPe installation:
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5;">
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">1</span>
+                <span>Click <strong>Download Latest Release (.zip)</strong> above.</span>
               </div>
-              <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
-                <div id="tab-update-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), #7c4dff); transition: width 0.2s ease;"></div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">2</span>
+                <span>Close StreamPe on your PC.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">3</span>
+                <span>Extract &amp; replace all files in your StreamPe folder.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">4</span>
+                <span>Launch <strong>StreamPe.exe</strong>. All your settings &amp; history remain safe!</span>
               </div>
             </div>
           </div>
