@@ -623,6 +623,23 @@ const PaymentsCsv = require('./public/js/lib/payments-csv');
 
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 const LEGACY_CONFIG_FILE = fs.existsSync(path.join(baseDir, 'widget-config.json')) ? path.join(baseDir, 'widget-config.json') : path.join(__dirname, 'widget-config.json');
+const SHIPPED_DEFAULT_PROFILE_FILE = fs.existsSync(path.join(baseDir, 'templates', 'default-profile.json'))
+  ? path.join(baseDir, 'templates', 'default-profile.json')
+  : path.join(__dirname, 'templates', 'default-profile.json');
+
+function getShippedDefaultProfile() {
+  try {
+    if (fs.existsSync(SHIPPED_DEFAULT_PROFILE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SHIPPED_DEFAULT_PROFILE_FILE, 'utf8'));
+      if (parsed && typeof parsed === 'object') {
+        return ConfigMigration.migrate(parsed);
+      }
+    }
+  } catch (e) {
+    log.error('Settings', 'Failed to read default-profile.json: ' + e.message);
+  }
+  return ConfigSchema.createDefaultConfig();
+}
 
 function loadSettings() {
   try {
@@ -637,8 +654,10 @@ function loadSettings() {
       return migrated;
     }
   } catch (e) { log.error('Settings', 'Load error: ' + e.message); }
-  log.info('Settings', 'No config found, using defaults');
-  return ConfigSchema.createDefaultConfig();
+  log.info('Settings', 'No config found, loading shipped default profile');
+  const initial = getShippedDefaultProfile();
+  saveSettings(initial);
+  return initial;
 }
 
 function applySettingsPatch(current, patch) {
@@ -716,25 +735,24 @@ function getTodayYearMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function getDonationsCsvPath(profileName, yearMonth) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ym = yearMonth || getTodayYearMonth();
+function getDonationsCsvPath(profileNameOrYm, yearMonth) {
+  let ym = yearMonth;
+  if (!ym && profileNameOrYm && /^\d{4}-\d{2}$/.test(profileNameOrYm)) {
+    ym = profileNameOrYm;
+  }
+  if (!ym) ym = getTodayYearMonth();
   const [year, month] = ym.split('-');
-  return path.join(DATA_DIR, profile, year, `${month}.csv`);
+  return path.join(DATA_DIR, year, `${month}.csv`);
 }
 
 function getAvailableProfileMonths(profileName) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  const profileDir = path.join(DATA_DIR, profile);
-  if (!fs.existsSync(profileDir)) return [];
+  if (!fs.existsSync(DATA_DIR)) return [];
 
   const months = [];
   try {
-    const years = fs.readdirSync(profileDir).filter(y => /^\d{4}$/.test(y));
+    const years = fs.readdirSync(DATA_DIR).filter(y => /^\d{4}$/.test(y));
     for (const yr of years) {
-      const yearDir = path.join(profileDir, yr);
+      const yearDir = path.join(DATA_DIR, yr);
       const files = fs.readdirSync(yearDir).filter(f => /^\d{2}\.csv$/.test(f));
       for (const f of files) {
         const mo = f.replace('.csv', '');
@@ -742,7 +760,7 @@ function getAvailableProfileMonths(profileName) {
       }
     }
   } catch (e) {
-    log.error('Database', 'Error scanning profile months: ' + e.message);
+    log.error('Database', 'Error scanning data months: ' + e.message);
   }
   return months.sort().reverse();
 }
@@ -771,7 +789,7 @@ function touchHistoricalCache(cacheKey) {
  * Returns sorted list of candidate months (YYYY-MM, descending) that intersect with the provided date filters.
  */
 function getFilteredProfileMonths(profileName, filters = {}) {
-  const allMonths = getAvailableProfileMonths(profileName);
+  const allMonths = getAvailableProfileMonths();
   if (!allMonths.length) return [];
 
   const { month, specificDate, startDate, endDate } = filters;
@@ -806,8 +824,7 @@ function getFilteredProfileMonths(profileName, filters = {}) {
  * Fast stream line-counter to compute record counts in monthly CSV files without holding full JS objects in RAM.
  */
 function countMonthlyTransactionsFast(profileName, monthKey) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
-  const filePath = getDonationsCsvPath(profile, monthKey);
+  const filePath = getDonationsCsvPath(monthKey);
   try {
     if (!fs.existsSync(filePath)) return 0;
     const content = fs.readFileSync(filePath, 'utf8');
@@ -823,38 +840,38 @@ function countMonthlyTransactionsFast(profileName, monthKey) {
 }
 
 function loadDonations(profileName, monthKey, options = {}) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
   const currentActiveYm = getTodayYearMonth();
+  const ymKey = (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) ? monthKey : (options.filters && options.filters.month);
 
   // If specific month is requested
-  if (monthKey && monthKey !== 'all') {
-    const cacheKey = `${profile}_${monthKey}`;
+  if (ymKey && ymKey !== 'all') {
+    const cacheKey = `ledger_${ymKey}`;
     if (donationsCache[cacheKey]) {
-      if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
+      if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
       return donationsCache[cacheKey];
     }
-    const filePath = getDonationsCsvPath(profile, monthKey);
+    const filePath = getDonationsCsvPath(ymKey);
     try {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
         const txs = PaymentsCsv.parseCsv(content);
         donationsCache[cacheKey] = txs;
-        if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
+        if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
         return txs;
       }
     } catch (e) {
       log.error('DonationsCSV', `Failed to load donations CSV (${filePath}): ` + e.message);
     }
     donationsCache[cacheKey] = [];
-    if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
+    if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
     return [];
   }
 
   // If filtered months or all history is requested
-  const targetMonths = options.filters ? getFilteredProfileMonths(profile, options.filters) : getAvailableProfileMonths(profile);
+  const targetMonths = options.filters ? getFilteredProfileMonths(null, options.filters) : getAvailableProfileMonths();
   let allTxs = [];
   for (const ym of targetMonths) {
-    const monthTxs = loadDonations(profile, ym);
+    const monthTxs = loadDonations(null, ym);
     allTxs = allTxs.concat(monthTxs);
   }
   allTxs.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
@@ -862,7 +879,6 @@ function loadDonations(profileName, monthKey, options = {}) {
 }
 
 function saveDonations(profileName, transactions) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
   try {
     const groups = {};
     const realTransactions = (transactions || []).filter(t => !t.simulated);
@@ -880,13 +896,13 @@ function saveDonations(profileName, transactions) {
       groups[ym].push(rawTx);
     });
 
-    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
+    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith('ledger_'));
     cacheKeys.forEach(k => delete donationsCache[k]);
 
-    const existingMonths = getAvailableProfileMonths(profile);
+    const existingMonths = getAvailableProfileMonths();
     existingMonths.forEach(ym => {
       if (!groups[ym]) {
-        const filePath = getDonationsCsvPath(profile, ym);
+        const filePath = getDonationsCsvPath(ym);
         if (fs.existsSync(filePath)) {
           try { fs.unlinkSync(filePath); } catch (_) { }
         }
@@ -894,30 +910,29 @@ function saveDonations(profileName, transactions) {
     });
 
     for (const [ym, txs] of Object.entries(groups)) {
-      const filePath = getDonationsCsvPath(profile, ym);
+      const filePath = getDonationsCsvPath(ym);
       const fileDir = path.dirname(filePath);
       if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
       const content = PaymentsCsv.serializeCsv(txs);
       fs.writeFileSync(filePath, content, 'utf8');
-      donationsCache[`${profile}_${ym}`] = txs;
+      donationsCache[`ledger_${ym}`] = txs;
     }
 
     return true;
   } catch (e) {
-    log.error('DonationsCSV', `Failed to save donations CSV for ${profile}: ` + e.message);
+    log.error('DonationsCSV', `Failed to save donations CSV: ` + e.message);
     return false;
   }
 }
 
 function appendDonation(profileName, tx) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
   if (tx.simulated) return;
 
   let ym = PaymentsCsv.getMonthKey(tx.timestamp || tx.date);
   if (!ym) ym = getTodayYearMonth();
 
-  const filePath = getDonationsCsvPath(profile, ym);
-  const cacheKey = `${profile}_${ym}`;
+  const filePath = getDonationsCsvPath(ym);
+  const cacheKey = `ledger_${ym}`;
 
   try {
     const fileDir = path.dirname(filePath);
@@ -928,13 +943,13 @@ function appendDonation(profileName, tx) {
     const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
 
     if (!fs.existsSync(filePath)) {
-      saveDonations(profile, [tx]);
+      saveDonations(null, [tx]);
     } else {
       fs.appendFileSync(filePath, row, 'utf8');
       if (donationsCache[cacheKey]) {
         donationsCache[cacheKey].unshift(tx);
       } else {
-        loadDonations(profile, ym);
+        loadDonations(null, ym);
       }
     }
     return true;
@@ -947,24 +962,48 @@ function appendDonation(profileName, tx) {
 function migrateLegacyCsvDatabases() {
   try {
     if (!fs.existsSync(DATA_DIR)) return;
-    const files = fs.readdirSync(DATA_DIR);
-    for (const file of files) {
-      const match = file.match(/^donations_(.+?)\.csv$/);
-      if (match) {
-        const profile = match[1];
-        const filePath = path.join(DATA_DIR, file);
-        log.info('Migration', `Found legacy CSV database for profile "${profile}": ${file}`);
-        try {
-          const content = fs.readFileSync(filePath, 'utf8');
-          const txs = PaymentsCsv.parseCsv(content);
-          if (txs.length > 0) {
-            log.info('Migration', `Migrating ${txs.length} legacy transactions to month-sharded structure...`);
-            saveDonations(profile, txs);
+    const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const match = entry.name.match(/^donations_(.+?)\.csv$/);
+        if (match) {
+          const filePath = path.join(DATA_DIR, entry.name);
+          log.info('Migration', `Found legacy flat CSV database: ${entry.name}`);
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const txs = PaymentsCsv.parseCsv(content);
+            if (txs.length > 0) {
+              log.info('Migration', `Consolidating ${txs.length} legacy transactions to unified ledger...`);
+              saveDonations(null, txs);
+            }
+            fs.renameSync(filePath, filePath + '.bak');
+          } catch (err) {
+            log.error('Migration', `Failed to migrate legacy CSV ${entry.name}: ` + err.message);
           }
-          fs.renameSync(filePath, filePath + '.bak');
-          log.info('Migration', `Legacy file renamed to ${file}.bak`);
+        }
+      } else if (entry.isDirectory() && !/^\d{4}$/.test(entry.name)) {
+        // Consolidate legacy profile subfolders (e.g. DATA_DIR/Default, DATA_DIR/Gaming)
+        const profileSubdir = path.join(DATA_DIR, entry.name);
+        try {
+          const subYears = fs.readdirSync(profileSubdir).filter(y => /^\d{4}$/.test(y));
+          for (const yr of subYears) {
+            const subYearDir = path.join(profileSubdir, yr);
+            const subFiles = fs.readdirSync(subYearDir).filter(f => /^\d{2}\.csv$/.test(f));
+            for (const f of subFiles) {
+              const srcFile = path.join(subYearDir, f);
+              const content = fs.readFileSync(srcFile, 'utf8');
+              const txs = PaymentsCsv.parseCsv(content);
+              if (txs.length > 0) {
+                log.info('Migration', `Consolidating ${txs.length} transactions from legacy folder ${entry.name}/${yr}/${f}...`);
+                for (const t of txs) {
+                  appendDonation(null, t);
+                }
+              }
+            }
+          }
         } catch (err) {
-          log.error('Migration', `Failed to migrate legacy CSV ${file}: ` + err.message);
+          log.warn('Migration', `Consolidation notice for legacy subfolder ${entry.name}: ` + err.message);
         }
       }
     }
@@ -975,15 +1014,13 @@ function migrateLegacyCsvDatabases() {
 
 migrateLegacyCsvDatabases();
 
-// ── Metadata Cache Helpers (data/[profile]/metadata.json) ──────────
-function getMetadataPath(profileName) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(DATA_DIR, profile, 'metadata.json');
+// ── Unified Metadata Cache Helpers (data/metadata.json) ──────────
+function getMetadataPath() {
+  return path.join(DATA_DIR, 'metadata.json');
 }
 
 function loadProfileMetadata(profileName) {
-  const filePath = getMetadataPath(profileName);
+  const filePath = getMetadataPath();
   try {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -999,7 +1036,7 @@ function loadProfileMetadata(profileName) {
 }
 
 function saveProfileMetadata(profileName, metadata) {
-  const filePath = getMetadataPath(profileName);
+  const filePath = getMetadataPath();
   try {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
@@ -1164,7 +1201,17 @@ autoMigrateInitialDonations();
 const processedAlertIds = new Set();
 
 function broadcastSettings(settings) {
-  const payload = JSON.stringify({ type: 'SETTINGS_UPDATED', payload: settings, activeProfile: profilesStore.activeProfile });
+  const target = settings || alertSettings;
+  const metadata = loadProfileMetadata();
+  if (target && target.widgets) {
+    if (!target.widgets.goal) target.widgets.goal = {};
+    if (!target.widgets.leaderboard) target.widgets.leaderboard = {};
+    if (!target.widgets.recent) target.widgets.recent = {};
+    if (metadata.goal) target.widgets.goal.currentAmount = metadata.goal.currentAmount || 0;
+    if (metadata.leaderboard) target.widgets.leaderboard.supporters = metadata.leaderboard.supporters || {};
+    if (metadata.recent) target.widgets.recent.recentDonations = metadata.recent.recentDonations || [];
+  }
+  const payload = JSON.stringify({ type: 'SETTINGS_UPDATED', payload: target, activeProfile: profilesStore.activeProfile });
   obsClients.forEach(c => { if (c.readyState === 1) c.send(payload); });
 }
 
@@ -1569,7 +1616,7 @@ app.get('/api/donations/csv', (req, res) => {
   filtered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
   const csvContent = PaymentsCsv.serializeCsv(filtered);
   const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
-  const filename = `donations_${profile}_filtered_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
+  const filename = `earnings_${profile}_filtered_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(csvContent);
@@ -1770,12 +1817,12 @@ app.get('/api/donations/export-zip', (req, res) => {
   }
 
   const zip = new ZipBuilder();
-  zip.addFile('donations_ledger.csv', csvLedger);
+  zip.addFile('earnings_ledger.csv', csvLedger);
   zip.addFile('aliases.csv', csvAliases);
 
   const zipBuf = zip.toBuffer();
   const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
-  const filename = `streampe_backup_${profile}_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.zip`;
+  const filename = `streampe_earnings_backup_${profile}_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.zip`;
 
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -2027,11 +2074,13 @@ app.post('/api/donations/clear', (req, res) => {
 });
 
 app.get('/api/settings', (req, res) => {
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   res.json({ activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles), settings: alertSettings });
 });
 
 app.post('/api/settings', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;
   saveProfilesStore(profilesStore);
@@ -2041,6 +2090,20 @@ app.post('/api/settings', (req, res) => {
 
 app.get('/api/profiles', (req, res) => {
   res.json({ activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles), profilesMap: profilesStore.profiles });
+});
+
+app.get('/api/profiles/default-template', (req, res) => {
+  const tpl = getShippedDefaultProfile();
+  const metadata = loadProfileMetadata();
+  if (tpl && tpl.widgets) {
+    if (!tpl.widgets.goal) tpl.widgets.goal = {};
+    if (!tpl.widgets.leaderboard) tpl.widgets.leaderboard = {};
+    if (!tpl.widgets.recent) tpl.widgets.recent = {};
+    tpl.widgets.goal.currentAmount = metadata.goal?.currentAmount || 0;
+    tpl.widgets.leaderboard.supporters = metadata.leaderboard?.supporters || {};
+    tpl.widgets.recent.recentDonations = metadata.recent?.recentDonations || [];
+  }
+  res.json({ ok: true, template: tpl });
 });
 
 app.post('/api/profiles/switch', (req, res) => {
@@ -2072,15 +2135,20 @@ app.post('/api/profiles/delete', (req, res) => {
     if (!profilesStore.profiles['Default']) profilesStore.profiles['Default'] = ConfigSchema.createDefaultConfig();
     profilesStore.activeProfile = 'Default';
     alertSettings = profilesStore.profiles['Default'];
+    syncDerivedMetricsToSettings('Default', false);
     saveSettings(alertSettings);
   }
   saveProfilesStore(profilesStore); broadcastSettings(alertSettings);
   res.json({ ok: true, activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles) });
 });
 
-app.get('/api/config', (req, res) => res.json(alertSettings));
+app.get('/api/config', (req, res) => {
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
+  res.json(alertSettings);
+});
 app.post('/api/config', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;
   saveProfilesStore(profilesStore);

@@ -1,8 +1,8 @@
 :root {
-  --list-accent-color: #00e5ff;
-  --list-row-bg-color: #1a1e2b;
-  --list-border-radius: 16px;
-  --list-padding: 18px;
+  --list-accent-color: #9146ff;
+  --list-row-bg-color: #18181b;
+  --list-border-radius: 8px;
+  --list-padding: 16px;
   --list-width: 450px;
   --list-position-x: 50;
   --list-position-y: 50;
@@ -53,11 +53,11 @@ body, html {
 .lb-card {
   width: 100%;
   max-width: var(--list-width, 450px);
-  background: var(--list-bg-color, rgba(10, 14, 23, 0.88));
+  background: var(--list-bg-color, rgba(19, 19, 21, 0.88));
   border: var(--list-border-width, 1px) solid var(--list-border-color, rgba(255, 255, 255, 0.12));
-  border-radius: var(--list-border-radius, 16px);
-  padding: var(--list-padding, 18px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, var(--list-bg-opacity, 0.88)), 0 0 20px rgba(0, 229, 255, calc(var(--list-bg-opacity, 0.88) * 0.15));
+  border-radius: var(--list-border-radius, 8px);
+  padding: var(--list-padding, 16px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, var(--list-bg-opacity, 0.88)), 0 0 20px rgba(145, 70, 255, calc(var(--list-bg-opacity, 0.88) * 0.15));
   backdrop-filter: blur(calc(var(--list-bg-opacity, 0.88) * 12px));
   -webkit-backdrop-filter: blur(calc(var(--list-bg-opacity, 0.88) * 12px));
   pointer-events: auto;
@@ -93,51 +93,84 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--list-row-bg-color, rgba(255, 255, 255, 0.04));
+  background: var(--list-row-bg-color, #18181b);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 8px 14px;
-  transition: all 0.3s ease;
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
 }
 
 .lb-row.rank-1 {
-  background: rgba(255, 215, 0, 0.12);
-  border-color: rgba(255, 215, 0, 0.4);
+  background: rgba(255, 183, 3, 0.08);
+  border-color: rgba(255, 183, 3, 0.45);
+  box-shadow: 0 0 14px rgba(255, 183, 3, 0.12);
 }
 
 .lb-row.rank-2 {
-  background: rgba(192, 192, 192, 0.1);
-  border-color: rgba(192, 192, 192, 0.3);
+  background: rgba(213, 186, 255, 0.08);
+  border-color: rgba(213, 186, 255, 0.45);
 }
 
 .lb-row.rank-3 {
-  background: rgba(205, 127, 50, 0.1);
-  border-color: rgba(205, 127, 50, 0.3);
+  background: rgba(145, 70, 255, 0.06);
+  border-color: rgba(145, 70, 255, 0.35);
 }
 
 .lb-user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .lb-badge {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  font-family: 'Fira Code', monospace;
 }
 
-.rank-1 .lb-badge { background: #ffd700; color: #000; box-shadow: 0 0 10px #ffd700; }
-.rank-2 .lb-badge { background: #c0c0c0; color: #000; }
-.rank-3 .lb-badge { background: #cd7f32; color: #fff; }
+.rank-1 .lb-badge {
+  background: #ffb703;
+  color: #131315;
+  font-weight: 900;
+  box-shadow: 0 0 10px rgba(255, 183, 3, 0.6);
+}
+
+.rank-1 .lb-amount {
+  color: #ffb703;
+  font-weight: 800;
+}
+
+.rank-2 .lb-badge {
+  background: rgba(213, 186, 255, 0.22);
+  color: #d5baff;
+  border: 1px solid rgba(213, 186, 255, 0.5);
+}
+
+.rank-2 .lb-amount {
+  color: #d5baff;
+  font-weight: 750;
+}
+
+.rank-3 .lb-badge {
+  background: rgba(145, 70, 255, 0.2);
+  color: #c499ff;
+  border: 1px solid rgba(145, 70, 255, 0.5);
+}
+
+.rank-3 .lb-amount {
+  color: #c499ff;
+  font-weight: 750;
+}
 
 .lb-name {
   font-size: var(--list-font-size, 15px);

@@ -78,6 +78,7 @@ function copyDirRecursive(src, dest) {
 }
 
 copyDirRecursive(path.join(pcServerDir, 'public'), path.join(portableDir, 'public'));
+copyDirRecursive(path.join(pcServerDir, 'templates'), path.join(portableDir, 'templates'));
 const widgetConfig = path.join(pcServerDir, 'widget-config.json');
 if (fs.existsSync(widgetConfig)) {
   fs.copyFileSync(widgetConfig, path.join(portableDir, 'widget-config.json'));

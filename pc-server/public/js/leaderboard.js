@@ -21,6 +21,15 @@
   }
 
   function applyLeaderboardSettings(newSettings) {
+    if (newSettings && config && config.widgets && config.widgets.leaderboard) {
+      if (!newSettings.widgets) newSettings.widgets = {};
+      if (config.widgets.leaderboard.supporters && Object.keys(config.widgets.leaderboard.supporters).length) {
+        if (!newSettings.widgets.leaderboard || !newSettings.widgets.leaderboard.supporters || !Object.keys(newSettings.widgets.leaderboard.supporters).length) {
+          if (!newSettings.widgets.leaderboard) newSettings.widgets.leaderboard = {};
+          newSettings.widgets.leaderboard.supporters = config.widgets.leaderboard.supporters;
+        }
+      }
+    }
     config = StorageHelper.mergeWithDefaults(newSettings);
     const lb = config.widgets.leaderboard;
     const root = document.documentElement;
@@ -92,7 +101,7 @@
       container.innerHTML = `
         <div class="lb-card">
           <div class="lb-header">
-            <span style="font-size: 22px;">🏆</span>
+            <svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffb703" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
             <div class="lb-title">${TemplateEngine.escapeHtml(lbTitle)}</div>
           </div>
           <div class="lb-empty">No payments received yet</div>
@@ -104,7 +113,7 @@
     container.innerHTML = `
       <div class="lb-card">
         <div class="lb-header">
-          <span style="font-size: 22px;">🏆</span>
+          <svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffb703" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
           <div class="lb-title">${TemplateEngine.escapeHtml(lbTitle)}</div>
         </div>
         <div class="lb-list">
@@ -117,7 +126,7 @@
   function rowsHtml(supporters, lb) {
     return supporters.map((supporter, idx) => {
       const rank = idx + 1;
-      const badgeIcon = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : `#${rank}`));
+      const badgeIcon = `#${rank}`;
       const formattedAmount = `₹${supporter.amount.toLocaleString('en-IN')}`;
       return `
         <div class="lb-row rank-${rank}">

@@ -251,16 +251,68 @@
     };
   }
 
+  function upgradeLegacyTokens(config) {
+    if (!isObject(config)) return config;
+    const jsonStr = JSON.stringify(config);
+    let upgraded = jsonStr
+      .replace(/#00e5ff/gi, '#9146ff')
+      .replace(/#00f4fe/gi, '#9146ff')
+      .replace(/#0a0e17/gi, '#131315')
+      .replace(/#1e2433/gi, '#18181b')
+      .replace(/#1a1e2b/gi, '#18181b')
+      .replace(/rgba\(10,\s*14,\s*23/gi, 'rgba(19, 19, 21')
+      .replace(/rgba\(0,\s*229,\s*255/gi, 'rgba(145, 70, 255')
+      .replace(/rgba\(0,\s*244,\s*254/gi, 'rgba(145, 70, 255');
+
+    const parsed = JSON.parse(upgraded);
+    if (parsed.widgets) {
+      if (parsed.widgets.goal && parsed.widgets.goal.style) {
+        if (parsed.widgets.goal.style.barRoundness === 40) parsed.widgets.goal.style.barRoundness = 6;
+        if (parsed.widgets.goal.style.borderRadius === 14) parsed.widgets.goal.style.borderRadius = 8;
+        if (parsed.widgets.goal.style.fillColor2 === '#7ce3ff' || parsed.widgets.goal.style.fillColor2 === '#00f4fe') parsed.widgets.goal.style.fillColor2 = '#d5baff';
+        if (parsed.widgets.goal.style.fillColor === '#00f4fe') parsed.widgets.goal.style.fillColor = '#9146ff';
+      }
+      if (parsed.widgets.alert && parsed.widgets.alert.style) {
+        if (parsed.widgets.alert.style.borderRadius === 14) parsed.widgets.alert.style.borderRadius = 8;
+      }
+      if (parsed.widgets.leaderboard && parsed.widgets.leaderboard.style) {
+        if (parsed.widgets.leaderboard.style.borderRadius === 16) parsed.widgets.leaderboard.style.borderRadius = 8;
+      }
+      if (parsed.widgets.recent && parsed.widgets.recent.style) {
+        if (parsed.widgets.recent.style.borderRadius === 16) parsed.widgets.recent.style.borderRadius = 8;
+      }
+      if (parsed.widgets.cycling && parsed.widgets.cycling.style) {
+        if (parsed.widgets.cycling.style.borderRadius === 14) parsed.widgets.cycling.style.borderRadius = 8;
+      }
+    }
+
+    if (Array.isArray(parsed.alertTemplates)) {
+      parsed.alertTemplates.forEach(t => {
+        if (t && t.style && t.style.borderRadius === 14) t.style.borderRadius = 8;
+        if (t && t.image && !t.image.gifUrl && !t.image.imageUrl && t.isDefault) {
+          t.image.gifUrl = '/media/alert-diamond.gif';
+        }
+        if (t && t.sound && !t.sound.soundUrl && t.isDefault) {
+          t.sound.soundUrl = '/sounds/notification.wav';
+        }
+      });
+    }
+
+    return parsed;
+  }
+
   const ConfigMigration = {
     isVersion2,
     isWidgetConfigJson,
     widgetConfigToV1,
+    upgradeLegacyTokens,
 
     /** Any generation of config in, normalized v2 config out. */
     migrate(raw) {
       if (!isObject(raw)) return ConfigSchema.createDefaultConfig();
-      if (isVersion2(raw)) return ConfigSchema.normalizeConfig(raw);
-      const v1 = isWidgetConfigJson(raw) ? widgetConfigToV1(raw) : raw;
+      const upgraded = upgradeLegacyTokens(raw);
+      if (isVersion2(upgraded)) return ConfigSchema.normalizeConfig(upgraded);
+      const v1 = isWidgetConfigJson(upgraded) ? widgetConfigToV1(upgraded) : upgraded;
       return ConfigSchema.normalizeConfig(v1ToV2(v1));
     },
 
