@@ -2606,33 +2606,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentVal = analyticsState.month;
             let optionsHtml = '<option value="all">📅 All Time (Full History)</option>';
 
-            const activeOpts = [];
-            const archiveOpts = [];
-
-            const now = new Date();
-            const twelveMonthsAgo = new Date();
-            twelveMonthsAgo.setMonth(now.getMonth() - 11);
-            twelveMonthsAgo.setDate(1); // Boundary starts at the 1st of that month
-
             mData.months.forEach(m => {
               const [yr, mo] = m.split('-').map(Number);
               const optDate = new Date(yr, mo - 1, 1);
               const label = optDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-              const optionHtml = `<option value="${m}"${m === currentVal ? ' selected' : ''}>${label}</option>`;
-
-              if (optDate >= twelveMonthsAgo) {
-                activeOpts.push(optionHtml);
-              } else {
-                archiveOpts.push(optionHtml);
-              }
+              optionsHtml += `<option value="${m}"${m === currentVal ? ' selected' : ''}>${label}</option>`;
             });
-
-            if (activeOpts.length > 0) {
-              optionsHtml += `<optgroup label="📅 Active Months (Last 12 Months)">${activeOpts.join('')}</optgroup>`;
-            }
-            if (archiveOpts.length > 0) {
-              optionsHtml += `<optgroup label="🗄️ Historical Archives (Older)">${archiveOpts.join('')}</optgroup>`;
-            }
 
             monthSelect.innerHTML = optionsHtml;
           }
