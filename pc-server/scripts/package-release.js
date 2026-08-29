@@ -41,9 +41,9 @@ function safeCleanDir(dir) {
         } else {
           fs.unlinkSync(p);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 const pcServerDist = path.join(pcServerDir, 'dist');
@@ -108,15 +108,15 @@ try {
   execSync(`powershell -Command "Compress-Archive -Path '${portableDir}\\*' -DestinationPath '${zipDst}' -Force"`, {
     stdio: 'inherit'
   });
-  try { fs.rmSync(portableDir, { recursive: true, force: true }); } catch (_) {}
+  try { fs.rmSync(portableDir, { recursive: true, force: true }); } catch (_) { }
 } catch (e) {
   console.warn('Zip creation warning:', e.message);
 }
 
 // Mirror portable zip to root dist/ and artifacts/
 if (fs.existsSync(zipDst)) {
-  try { fs.copyFileSync(zipDst, path.join(rootDist, zipDstName)); } catch (_) {}
-  try { fs.copyFileSync(zipDst, path.join(artifactsDir, zipDstName)); } catch (_) {}
+  try { fs.copyFileSync(zipDst, path.join(rootDist, zipDstName)); } catch (_) { }
+  try { fs.copyFileSync(zipDst, path.join(artifactsDir, zipDstName)); } catch (_) { }
 }
 
 // Print Summary

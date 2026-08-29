@@ -1,6 +1,6 @@
 {
   "name": "streampe-server",
-  "version": "2.2.0",
+  "version": "2.2.2",
   "description": "StreamPe - PC Server App",
   "author": "clowneon1",
   "main": "server.js",

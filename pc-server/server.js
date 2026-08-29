@@ -148,19 +148,21 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
 }
 
 // Consolidate legacy per-profile folders (data/<profile>/YYYY/MM.csv) into unified data/YYYY/MM.csv
+// Safely archives original legacy files into data/data.old/<profile>/YYYY/MM.csv (like Windows.old)
 function consolidateLegacyProfileData(dataDir) {
   if (!fs.existsSync(dataDir)) return;
+  const oldArchiveDir = path.join(dataDir, 'data.old');
   try {
     const entries = fs.readdirSync(dataDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory() && !/^\d{4}$/.test(entry.name)) {
+      if (entry.isDirectory() && !/^\d{4}$/.test(entry.name) && entry.name !== 'data.old' && !entry.name.startsWith('.')) {
         const profileDir = path.join(dataDir, entry.name);
         const subEntries = fs.readdirSync(profileDir, { withFileTypes: true });
         for (const sub of subEntries) {
           if (sub.isDirectory() && /^\d{4}$/.test(sub.name)) {
             const yr = sub.name;
             const yearDir = path.join(profileDir, yr);
-            const csvFiles = fs.readdirSync(yearDir).filter(f => f.endsWith('.csv'));
+            const csvFiles = fs.readdirSync(yearDir).filter(f => f.endsWith('.csv') && !f.endsWith('.bak') && !f.endsWith('.migrated'));
             for (const file of csvFiles) {
               const srcCsv = path.join(yearDir, file);
               const targetYearDir = path.join(dataDir, yr);
@@ -184,7 +186,24 @@ function consolidateLegacyProfileData(dataDir) {
                   fs.writeFileSync(targetCsv, PaymentsCsv.serializeCsv(targetTxs), 'utf8');
                 }
               }
+              // Safely relocate legacy source file to data/data.old/<profile>/<year>/<file>
+              const archiveProfileYearDir = path.join(oldArchiveDir, entry.name, yr);
+              if (!fs.existsSync(archiveProfileYearDir)) fs.mkdirSync(archiveProfileYearDir, { recursive: true });
+              const archiveDst = path.join(archiveProfileYearDir, file);
+              try {
+                fs.renameSync(srcCsv, archiveDst);
+              } catch (_) {
+                try {
+                  fs.copyFileSync(srcCsv, archiveDst);
+                  fs.unlinkSync(srcCsv);
+                } catch (__) {}
+              }
             }
+            try {
+              if (fs.readdirSync(yearDir).length === 0) {
+                fs.rmdirSync(yearDir);
+              }
+            } catch (_) {}
           }
         }
       }
@@ -194,7 +213,44 @@ function consolidateLegacyProfileData(dataDir) {
   }
 }
 
+function sanitizeAllLedgerFiles(dataDir) {
+  if (!fs.existsSync(dataDir)) return;
+  try {
+    const years = fs.readdirSync(dataDir).filter(f => /^\d{4}$/.test(f));
+    let cleanedCount = 0;
+    for (const yr of years) {
+      const yrPath = path.join(dataDir, yr);
+      const months = fs.readdirSync(yrPath).filter(f => /^\d{2}\.csv$/.test(f));
+      for (const m of months) {
+        const filePath = path.join(yrPath, m);
+        const rawContent = fs.readFileSync(filePath, 'utf8');
+        const rawTxs = PaymentsCsv.parseCsv(rawContent);
+        const seen = new Set();
+        const cleanTxs = [];
+        for (const t of rawTxs) {
+          const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            cleanTxs.push(t);
+          }
+        }
+        if (rawTxs.length > cleanTxs.length) {
+          fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(cleanTxs), 'utf8');
+          cleanedCount += (rawTxs.length - cleanTxs.length);
+          console.log(`[Storage] 🧹 Sanitized ${rawTxs.length - cleanTxs.length} duplicate(s) in ${yr}/${m}`);
+        }
+      }
+    }
+    if (cleanedCount > 0) {
+      console.log(`[Storage] ✅ Startup Ledger Sanity Check: cleaned ${cleanedCount} duplicate transaction(s).`);
+    }
+  } catch (err) {
+    console.warn('[Storage] Ledger sanitization notice:', err.message);
+  }
+}
+
 consolidateLegacyProfileData(DATA_DIR);
+sanitizeAllLedgerFiles(DATA_DIR);
 
 aliasesStore.initAliasesStore(DATA_DIR);
 
@@ -905,7 +961,22 @@ function loadDonations(profileName, monthKey, options = {}) {
     try {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
-        const txs = PaymentsCsv.parseCsv(content);
+        const rawTxs = PaymentsCsv.parseCsv(content);
+        const seen = new Set();
+        const txs = [];
+        for (const t of rawTxs) {
+          const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            txs.push(t);
+          }
+        }
+        if (rawTxs.length > txs.length) {
+          try {
+            fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(txs), 'utf8');
+            log.info('DonationsCSV', `🧹 Auto-sanitized ${rawTxs.length - txs.length} duplicate row(s) in ${filePath}`);
+          } catch (_) {}
+        }
         donationsCache[cacheKey] = txs;
         if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
         return txs;
@@ -933,8 +1004,18 @@ function saveDonations(profileName, transactions) {
   try {
     const groups = {};
     const realTransactions = (transactions || []).filter(t => !t.simulated);
+    const seen = new Set();
+    const uniqueTxs = [];
 
-    realTransactions.forEach(t => {
+    for (const t of realTransactions) {
+      const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        uniqueTxs.push(t);
+      }
+    }
+
+    uniqueTxs.forEach(t => {
       const rawTx = {
         ...t,
         sender: t.rawSender || t.sender
@@ -989,6 +1070,13 @@ function appendDonation(profileName, tx) {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
 
+    // Deduplication check: prevent appending duplicate transactions
+    const existing = donationsCache[cacheKey] || (fs.existsSync(filePath) ? loadDonations(null, ym) : []);
+    const txKey = tx.id || `${tx.timestamp}_${tx.sender}_${tx.amount}`;
+    if (existing.some(t => (t.id || `${t.timestamp}_${t.sender}_${t.amount}`) === txKey)) {
+      return true; // Already recorded, prevent duplicate insertion
+    }
+
     const rawTx = { ...tx, sender: tx.rawSender || tx.sender };
     delete rawTx.rawSender;
     const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
@@ -1032,29 +1120,6 @@ function migrateLegacyCsvDatabases() {
           } catch (err) {
             log.error('Migration', `Failed to migrate legacy CSV ${entry.name}: ` + err.message);
           }
-        }
-      } else if (entry.isDirectory() && !/^\d{4}$/.test(entry.name)) {
-        // Consolidate legacy profile subfolders (e.g. DATA_DIR/Default, DATA_DIR/Gaming)
-        const profileSubdir = path.join(DATA_DIR, entry.name);
-        try {
-          const subYears = fs.readdirSync(profileSubdir).filter(y => /^\d{4}$/.test(y));
-          for (const yr of subYears) {
-            const subYearDir = path.join(profileSubdir, yr);
-            const subFiles = fs.readdirSync(subYearDir).filter(f => /^\d{2}\.csv$/.test(f));
-            for (const f of subFiles) {
-              const srcFile = path.join(subYearDir, f);
-              const content = fs.readFileSync(srcFile, 'utf8');
-              const txs = PaymentsCsv.parseCsv(content);
-              if (txs.length > 0) {
-                log.info('Migration', `Consolidating ${txs.length} transactions from legacy folder ${entry.name}/${yr}/${f}...`);
-                for (const t of txs) {
-                  appendDonation(null, t);
-                }
-              }
-            }
-          }
-        } catch (err) {
-          log.warn('Migration', `Consolidation notice for legacy subfolder ${entry.name}: ` + err.message);
         }
       }
     }
