@@ -11,4 +11,7 @@ object AppConstants {
     val FALLBACK_PORTS = listOf(DEFAULT_PORT, 8876, 2708, 9091, 1001)
 
     const val DEFAULT_FALLBACK_URL = "http://192.168.1.100:2907"
+    const val DISCORD_URL = "https://partially-practical.codepenguin.in"
+    const val WEBSITE_URL = "https://partially-practical.codepenguin.in"
+    const val GITHUB_REPO_URL = "https://github.com/clowneon1/streampe"
 }
