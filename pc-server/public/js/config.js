@@ -1033,6 +1033,183 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── In-App Update Engine & Updates Tab ───────────────────────────
+  let latestUpdateInfo = null;
+  let updatePollTimer = null;
+
+  function formatReleaseNotesMarkdown(md) {
+    if (!md) return '<span style="color: var(--text-muted);">No changelog or release notes provided.</span>';
+
+    let html = md
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Headers ###, ##, #
+    html = html.replace(/^### (.*$)/gim, '<h5 style="color: var(--accent); margin: 14px 0 6px 0; font-size: 13.5px; font-weight: 700;">$1</h5>');
+    html = html.replace(/^## (.*$)/gim, '<h4 style="color: #f1f5f9; margin: 16px 0 8px 0; font-size: 14.5px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px;">$1</h4>');
+    html = html.replace(/^# (.*$)/gim, '<h3 style="color: var(--accent); margin: 18px 0 10px 0; font-size: 15.5px; font-weight: 800;">$1</h3>');
+
+    // Bold & Italic
+    html = html.replace(/\*\*(.*?)\*\*/gim, '<strong style="color: #f8fafc;">$1</strong>');
+    html = html.replace(/\*(.*?)\*/gim, '<em style="color: #cbd5e1;">$1</em>');
+
+    // Inline code `code`
+    html = html.replace(/`([^`]+)`/gim, '<code style="background: rgba(0, 229, 255, 0.08); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-family: monospace;">$1</code>');
+
+    // Markdown links [text](url)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" style="color: var(--accent); text-decoration: underline;">$1</a>');
+
+    // Bullet points
+    html = html.replace(/^\* (.*$)/gim, '<div style="display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.5;"><span style="color: var(--accent); font-weight: bold;">•</span><span>$1</span></div>');
+    html = html.replace(/^- (.*$)/gim, '<div style="display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.5;"><span style="color: var(--accent); font-weight: bold;">•</span><span>$1</span></div>');
+
+    // Raw URLs
+    html = html.replace(/(^|[^">])(https?:\/\/[^\s<"']+)/gim, '$1<a href="$2" target="_blank" style="color: var(--accent); text-decoration: underline;">$2</a>');
+
+    // Double newlines
+    html = html.replace(/\n\n/g, '<div style="height: 8px;"></div>');
+
+    return html;
+  }
+
+  async function checkAppUpdates(silent = true, force = false) {
+    try {
+      const url = force ? '/api/updates/check?force=true' : '/api/updates/check';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data || !data.ok) {
+        if (!silent) showToast('<i data-lucide="alert-circle"></i> Failed to check updates: ' + (data?.error || 'Network error'));
+        return;
+      }
+
+      latestUpdateInfo = data;
+      const navPill = el('nav-update-pill');
+
+      if (data.updateAvailable) {
+        if (navPill) navPill.style.display = 'inline-block';
+      } else {
+        if (navPill) navPill.style.display = 'none';
+        if (!silent) {
+          showToast(`<i data-lucide="check-circle"></i> StreamPe is up to date (v${data.currentVersion})`);
+        }
+      }
+
+      renderUpdatesTabUI(data);
+    } catch (err) {
+      if (!silent) showToast('<i data-lucide="alert-circle"></i> Update check error: ' + err.message);
+    }
+  }
+
+  async function refreshUpdatesTab() {
+    const releaseNotes = el('tab-update-release-notes');
+    if (!latestUpdateInfo) {
+      if (releaseNotes) {
+        releaseNotes.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted);"><div class="rotation-spinner spinner-sm" style="border-top-color: var(--accent);"></div> Fetching latest release notes from GitHub...</div>';
+      }
+      await checkAppUpdates(true);
+    } else {
+      renderUpdatesTabUI(latestUpdateInfo);
+    }
+  }
+
+  function renderUpdatesTabUI(data) {
+    if (!data) return;
+
+    const currentVer = el('tab-update-current-ver');
+    const latestVer = el('tab-update-latest-ver');
+    const headline = el('updates-status-headline');
+    const subtext = el('updates-status-subtext');
+    const releaseTitle = el('tab-update-release-title');
+    const releaseNotes = el('tab-update-release-notes');
+    const publishedDate = el('tab-update-published-date');
+    const zipBtn = el('btn-tab-download-zip');
+    const ghBtn = el('btn-tab-view-github');
+
+    if (currentVer) currentVer.textContent = `v${data.currentVersion || '2.1.0'}`;
+    if (latestVer) latestVer.textContent = `v${data.latestVersion || '2.2.0'}`;
+    if (releaseTitle) releaseTitle.textContent = data.releaseName || 'What’s New in this Release';
+    if (releaseNotes) {
+      releaseNotes.innerHTML = formatReleaseNotesMarkdown(data.releaseNotes);
+    }
+
+    if (publishedDate && data.publishedAt) {
+      const d = new Date(data.publishedAt);
+      publishedDate.textContent = `Released on ${d.toLocaleDateString()}`;
+    }
+
+    if (ghBtn && data.releaseUrl) {
+      ghBtn.href = data.releaseUrl;
+    }
+    if (zipBtn && data.assets && data.assets.portableZip) {
+      zipBtn.href = data.assets.portableZip.downloadUrl;
+    } else if (zipBtn) {
+      zipBtn.href = data.releaseUrl || 'https://github.com/clowneon1/streampe/releases/latest';
+    }
+
+    if (data.updateAvailable) {
+      if (headline) {
+        headline.innerHTML = `⚡ StreamPe <span style="color: var(--accent);">v${data.latestVersion}</span> is Available!`;
+      }
+      if (subtext) {
+        subtext.textContent = 'A new release is available with performance improvements, fixes, and new features.';
+      }
+    } else {
+      if (headline) {
+        headline.innerHTML = `✅ StreamPe is Up to Date`;
+      }
+      if (subtext) {
+        subtext.textContent = `You are running the latest version of StreamPe (v${data.currentVersion}).`;
+      }
+    }
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function setupUpdateListeners() {
+    on('btn-tab-check-updates', 'click', () => {
+      showToast('<i data-lucide="refresh-cw"></i> Checking for updates...');
+      checkAppUpdates(false, true).then(() => {
+        if (latestUpdateInfo) renderUpdatesTabUI(latestUpdateInfo);
+      });
+    });
+
+    // ── Release Notes Box Extender ──
+    const UPDATE_NOTES_HEIGHTS = { sm: 260, md: 460, lg: 760 };
+    const UPDATE_NOTES_KEY = 'streampe_update_notes_height';
+    const notesContainer = el('tab-update-release-notes');
+
+    function setNotesHeight(h) {
+      if (!notesContainer) return;
+      notesContainer.style.height = `${h}px`;
+      try { localStorage.setItem(UPDATE_NOTES_KEY, String(h)); } catch (_) { }
+      const smBtn = el('btn-update-notes-height-sm');
+      const mdBtn = el('btn-update-notes-height-md');
+      const lgBtn = el('btn-update-notes-height-lg');
+      if (smBtn) smBtn.style.color = h === UPDATE_NOTES_HEIGHTS.sm ? 'var(--accent)' : '';
+      if (mdBtn) mdBtn.style.color = h === UPDATE_NOTES_HEIGHTS.md ? 'var(--accent)' : '';
+      if (lgBtn) lgBtn.style.color = h === UPDATE_NOTES_HEIGHTS.lg ? 'var(--accent)' : '';
+    }
+
+    try {
+      const saved = parseInt(localStorage.getItem(UPDATE_NOTES_KEY), 10);
+      if (saved && saved >= 200) setNotesHeight(saved);
+      else setNotesHeight(UPDATE_NOTES_HEIGHTS.md);
+    } catch (_) { setNotesHeight(UPDATE_NOTES_HEIGHTS.md); }
+
+    on('btn-update-notes-height-sm', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.sm));
+    on('btn-update-notes-height-md', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.md));
+    on('btn-update-notes-height-lg', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.lg));
+
+    on('btn-update-notes-expand', 'click', () => {
+      const current = parseInt(notesContainer?.style?.height, 10) || UPDATE_NOTES_HEIGHTS.md;
+      const next = current <= UPDATE_NOTES_HEIGHTS.sm ? UPDATE_NOTES_HEIGHTS.md
+        : current <= UPDATE_NOTES_HEIGHTS.md ? UPDATE_NOTES_HEIGHTS.lg
+          : UPDATE_NOTES_HEIGHTS.sm;
+      setNotesHeight(next);
+    });
+  }
+
   // ── Wiring ───────────────────────────────────────────────────
   const TAB_PREVIEW_URLS = {
     goal: '/overlay/goal',
@@ -1063,9 +1240,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const resizer = el('panel-resizer');
         const actionBar = document.querySelector('.action-bar');
 
-        if (tab === 'earnings' || tab === 'server-logs') {
+        if (tab === 'earnings' || tab === 'server-logs' || tab === 'updates') {
           if (tab === 'earnings') refreshEarningsAnalytics();
           if (tab === 'server-logs') fetchLiveLogs();
+          if (tab === 'updates') refreshUpdatesTab();
           if (previewPanel) previewPanel.style.display = 'none';
           if (resizer) resizer.style.display = 'none';
           if (actionBar) actionBar.style.display = 'none';
@@ -3738,6 +3916,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEarningsAnalytics();
     setupPanelResizer();
     attachInputListeners();
+    setupUpdateListeners();
     connectDashboardWebSocket();
 
     let activeProf = 'Default';
@@ -3776,6 +3955,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }, 500);
+
+    // Trigger silent background update check
+    setTimeout(() => { checkAppUpdates(true); }, 1200);
   }
 
   initDashboard();

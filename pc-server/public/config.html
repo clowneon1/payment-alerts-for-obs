@@ -107,6 +107,11 @@
         <button class="tab-btn" data-tab="server-logs">
           <span class="icon"><i data-lucide="clipboard-list"></i></span> Logs
         </button>
+        <button class="tab-btn" data-tab="updates" id="btn-sidebar-nav-updates" type="button" style="display: flex; align-items: center; justify-content: flex-start; width: 100%;">
+          <span class="icon"><i data-lucide="sparkles" style="color: var(--accent);"></i></span>
+          <span>Updates</span>
+          <span id="nav-update-pill" style="display: none; margin-left: auto; background: var(--accent); color: #050811; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;">NEW</span>
+        </button>
       </nav>
 
       <!-- Profile Switcher Card -->
@@ -2422,6 +2427,106 @@
           <div id="live-logs-terminal" class="box-expandable"
             style="background: #030712; color: #f1f5f9; font-family: 'Fira Code', 'Consolas', monospace; font-size: 11.5px; padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); overflow-y: auto; white-space: pre-wrap; margin: 0; line-height: 1.5; min-height: 480px; height: calc(100vh - 280px); max-height: 1200px;">
             <div style="color: #64748b;">Loading server logs...</div>
+          </div>
+        </div>
+
+        <!-- ── TAB: In-App Updates ──────────────────────────────────────── -->
+        <div class="tab-content" id="tab-updates">
+          <div class="section-title" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+            <div>
+              <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 10px;">
+                <i data-lucide="sparkles" style="color: var(--accent); width: 22px; height: 22px;"></i> Software Updates
+              </h2>
+              <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">
+                Stay up to date with the latest features, improvements, and fixes for StreamPe.
+              </p>
+            </div>
+            <button type="button" class="btn btn-outline" id="btn-tab-check-updates" style="font-size: 13px; padding: 8px 14px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Check for Updates
+            </button>
+          </div>
+
+          <!-- Version Comparison & Status Hero Card -->
+          <div id="updates-hero-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(0, 229, 255, 0.1); border: 1px solid rgba(0, 229, 255, 0.3); display: flex; align-items: center; justify-content: center;">
+                  <i data-lucide="shield-check" id="updates-status-icon" style="width: 26px; height: 26px; color: var(--accent);"></i>
+                </div>
+                <div>
+                  <div id="updates-status-headline" style="font-size: 17px; font-weight: 700; color: #f1f5f9;">Checking for updates...</div>
+                  <div id="updates-status-subtext" style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Comparing current version with GitHub releases</div>
+                </div>
+              </div>
+
+              <!-- Version Badges -->
+              <div style="display: flex; align-items: center; gap: 12px; background: rgba(0, 0, 0, 0.3); padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border);">
+                <div style="font-size: 13px; color: var(--text-muted);">Current: <strong id="tab-update-current-ver" style="color: var(--text);">v2.1.0</strong></div>
+                <i data-lucide="arrow-right" style="width: 14px; height: 14px; color: var(--accent);"></i>
+                <div style="font-size: 13px; color: var(--accent);">Latest: <strong id="tab-update-latest-ver">v2.2.0</strong></div>
+              </div>
+            </div>
+
+            <!-- Download Action Buttons -->
+            <div id="tab-update-actions-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <a id="btn-tab-download-zip" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-primary" style="font-size: 13px; padding: 10px 20px; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+                  <i data-lucide="download" style="width: 16px; height: 16px;"></i> Download Latest Release (.zip)
+                </a>
+              </div>
+              <a id="btn-tab-view-github" href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-outline" style="font-size: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="external-link" style="width: 14px; height: 14px;"></i> View on GitHub
+              </a>
+            </div>
+          </div>
+
+          <!-- Step-by-Step Update Guide -->
+          <div style="background: rgba(0, 229, 255, 0.03); border: 1px solid rgba(0, 229, 255, 0.15); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;">
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="help-circle" style="width: 16px; height: 16px;"></i> How to update your StreamPe installation:
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5;">
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">1</span>
+                <span>Click <strong>Download Latest Release (.zip)</strong> above.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">2</span>
+                <span>Close StreamPe on your PC.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">3</span>
+                <span>Extract &amp; replace all files in your StreamPe folder.</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); flex-shrink: 0;">4</span>
+                <span>Launch <strong>StreamPe.exe</strong>. All your settings &amp; history remain safe!</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Release Notes & Changelog Card -->
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="file-text" style="width: 16px; height: 16px; color: var(--accent);"></i>
+                <span id="tab-update-release-title">What's New in this Release</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="tab-update-published-date" style="font-size: 12px; color: var(--text-muted);"></span>
+                <div style="display: flex; gap: 2px; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 2px 4px;" title="Changelog box height preset">
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-sm" title="Compact view (260px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px;">S</button>
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-md" title="Default view (460px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px; color: var(--accent);">M</button>
+                  <button type="button" class="btn-box-toggle" id="btn-update-notes-height-lg" title="Expanded view (760px)" style="font-size: 10px; padding: 3px 6px; border-radius: 4px;">L</button>
+                </div>
+                <button type="button" class="btn-box-toggle" id="btn-update-notes-expand" title="Expand / Collapse height" style="padding: 5px;">
+                  <i data-lucide="chevrons-up-down" style="width:14px; height:14px;"></i>
+                </button>
+              </div>
+            </div>
+            <div id="tab-update-release-notes" class="box-expandable" style="background: #030712; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 12.5px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; font-family: 'Fira Code', 'Consolas', monospace; height: 460px; overflow-y: auto; transition: height 0.2s ease;">
+              Loading release notes from GitHub...
+            </div>
           </div>
         </div>
 

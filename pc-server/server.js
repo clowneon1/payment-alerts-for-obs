@@ -12,6 +12,7 @@ const winston = require('winston');
 require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
 const aliasesStore = require('./aliases-store');
+const updateManager = require('./update-manager');
 const {
   APP_NAME,
   APP_VERSION,
@@ -26,6 +27,7 @@ const {
   getDefaultAppDataDir
 } = require('./constants');
 
+// App Configuration and Constants
 const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('node.exe') &&
   !process.execPath.endsWith('bun') &&
@@ -97,7 +99,7 @@ const wss = new WebSocketServer({ server });
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'icon.png'));
@@ -105,6 +107,14 @@ app.get('/favicon.ico', (req, res) => {
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
+});
+
+app.get('/config', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
+});
+
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'app.html'));
 });
 
 // ── Path Config Bootstrapping ──
@@ -1728,6 +1738,51 @@ app.post('/api/donations/import', (req, res) => {
   }
 });
 
+// ── In-App Auto-Update & Version Check API ───────────────────────
+app.get(['/api/updates/check', '/api/version/check'], async (req, res) => {
+  try {
+    const forceRefresh = req.query.force === 'true' || req.query.refresh === '1';
+    const currentVer = req.query.currentVersion || req.query.version || APP_VERSION || '2.1.0';
+    const result = await updateManager.checkForUpdates(currentVer, forceRefresh);
+    res.json(result);
+  } catch (err) {
+    log.error('UpdateManager', 'Check updates error: ' + err.message);
+    res.status(500).json({ ok: false, error: err.message, currentVersion: APP_VERSION || '2.1.0' });
+  }
+});
+
+app.post('/api/updates/download', async (req, res) => {
+  try {
+    const customUrl = req.body && req.body.url ? req.body.url : null;
+    log.info('UpdateManager', 'Starting background update download...');
+    // Start asynchronous download
+    updateManager.downloadAndStageUpdate(customUrl).then(info => {
+      log.info('UpdateManager', `Update staged successfully at: ${info.stagedDir}`);
+    }).catch(err => {
+      log.error('UpdateManager', `Update download error: ${err.message}`);
+    });
+    res.json({ ok: true, message: 'Update download started' });
+  } catch (err) {
+    log.error('UpdateManager', 'Download initiation error: ' + err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/updates/status', (req, res) => {
+  res.json(updateManager.getUpdateProgress());
+});
+
+app.post('/api/updates/apply', (req, res) => {
+  try {
+    log.info('UpdateManager', 'Applying staged update and restarting StreamPe...');
+    const result = updateManager.applyUpdateAndRestart();
+    res.json(result);
+  } catch (err) {
+    log.error('UpdateManager', 'Apply update error: ' + err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/donations/record', (req, res) => {
   try {
     const body = req.body || {};
@@ -2230,6 +2285,27 @@ app.get('/api/logs/live', (req, res) => {
     res.json({ ok: true, date: targetDate, availableDates, totalLines: allLines.length, lines: recent });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── In-App Update Checker ──────────────────────────────────────────
+app.get('/api/updates/check', async (req, res) => {
+  try {
+    const force = req.query.force === 'true' || req.query.force === '1';
+    const result = await updateManager.checkForUpdates(APP_VERSION, force);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/version/check', async (req, res) => {
+  try {
+    const force = req.query.force === 'true' || req.query.force === '1';
+    const result = await updateManager.checkForUpdates(APP_VERSION, force);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
