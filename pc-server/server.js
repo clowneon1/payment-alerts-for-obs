@@ -747,13 +747,90 @@ function getAvailableProfileMonths(profileName) {
   return months.sort().reverse();
 }
 
-function loadDonations(profileName, monthKey) {
+// ── LRU Historical Cache Manager (< 15 MB RAM Target) ──────────────
+const MAX_HISTORICAL_CACHED_MONTHS = 2;
+const historicalCacheKeys = [];
+
+function touchHistoricalCache(cacheKey) {
+  const idx = historicalCacheKeys.indexOf(cacheKey);
+  if (idx !== -1) {
+    historicalCacheKeys.splice(idx, 1);
+  }
+  historicalCacheKeys.push(cacheKey);
+
+  // Evict oldest historical month if over limit
+  while (historicalCacheKeys.length > MAX_HISTORICAL_CACHED_MONTHS) {
+    const oldestKey = historicalCacheKeys.shift();
+    if (oldestKey && donationsCache[oldestKey]) {
+      delete donationsCache[oldestKey];
+    }
+  }
+}
+
+/**
+ * Returns sorted list of candidate months (YYYY-MM, descending) that intersect with the provided date filters.
+ */
+function getFilteredProfileMonths(profileName, filters = {}) {
+  const allMonths = getAvailableProfileMonths(profileName);
+  if (!allMonths.length) return [];
+
+  const { month, specificDate, startDate, endDate } = filters;
+
+  // 1. Direct month filter (e.g. '2026-05')
+  if (month && month !== 'all' && /^\d{4}-\d{2}$/.test(month)) {
+    return allMonths.includes(month) ? [month] : [];
+  }
+
+  // 2. Specific exact date filter (e.g. '2026-07-15')
+  if (specificDate && /^\d{4}-\d{2}-\d{2}$/.test(specificDate)) {
+    const targetYm = specificDate.substring(0, 7);
+    return allMonths.includes(targetYm) ? [targetYm] : [];
+  }
+
+  // 3. Start/End date bounds (e.g. startDate: '2026-03-10', endDate: '2026-05-20')
+  const startYm = startDate && /^\d{4}-\d{2}/.test(startDate) ? startDate.substring(0, 7) : null;
+  const endYm = endDate && /^\d{4}-\d{2}/.test(endDate) ? endDate.substring(0, 7) : null;
+
+  if (startYm || endYm) {
+    return allMonths.filter(ym => {
+      if (startYm && ym < startYm) return false;
+      if (endYm && ym > endYm) return false;
+      return true;
+    });
+  }
+
+  return allMonths;
+}
+
+/**
+ * Fast stream line-counter to compute record counts in monthly CSV files without holding full JS objects in RAM.
+ */
+function countMonthlyTransactionsFast(profileName, monthKey) {
   const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
+  const filePath = getDonationsCsvPath(profile, monthKey);
+  try {
+    if (!fs.existsSync(filePath)) return 0;
+    const content = fs.readFileSync(filePath, 'utf8');
+    let lines = 0;
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10) lines++; // '\n'
+    }
+    if (content.length > 0 && content.charCodeAt(content.length - 1) !== 10) lines++;
+    return Math.max(0, lines - 1);
+  } catch (_) {
+    return 0;
+  }
+}
+
+function loadDonations(profileName, monthKey, options = {}) {
+  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
+  const currentActiveYm = getTodayYearMonth();
 
   // If specific month is requested
   if (monthKey && monthKey !== 'all') {
     const cacheKey = `${profile}_${monthKey}`;
     if (donationsCache[cacheKey]) {
+      if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
       return donationsCache[cacheKey];
     }
     const filePath = getDonationsCsvPath(profile, monthKey);
@@ -762,19 +839,21 @@ function loadDonations(profileName, monthKey) {
         const content = fs.readFileSync(filePath, 'utf8');
         const txs = PaymentsCsv.parseCsv(content);
         donationsCache[cacheKey] = txs;
+        if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
         return txs;
       }
     } catch (e) {
       log.error('DonationsCSV', `Failed to load donations CSV (${filePath}): ` + e.message);
     }
     donationsCache[cacheKey] = [];
+    if (monthKey !== currentActiveYm) touchHistoricalCache(cacheKey);
     return [];
   }
 
-  // If all history is requested
-  const allMonths = getAvailableProfileMonths(profile);
+  // If filtered months or all history is requested
+  const targetMonths = options.filters ? getFilteredProfileMonths(profile, options.filters) : getAvailableProfileMonths(profile);
   let allTxs = [];
-  for (const ym of allMonths) {
+  for (const ym of targetMonths) {
     const monthTxs = loadDonations(profile, ym);
     allTxs = allTxs.concat(monthTxs);
   }
@@ -1212,23 +1291,25 @@ app.get('/api/analytics', (req, res) => {
   const startDate = req.query.startDate || '';
   const endDate = req.query.endDate || '';
 
-  const transactions = loadDonations(profile, month);
+  const filterOptions = {
+    month,
+    provider,
+    search,
+    minAmount,
+    maxAmount,
+    specificDate,
+    startDate,
+    endDate
+  };
+
+  const transactions = loadDonations(profile, month, { filters: filterOptions });
   const targetSettings = profilesStore.profiles[profile] || alertSettings;
   const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
 
   const metrics = PaymentsCsv.computeMetrics(transactions, {
     startAmount,
     includeSimulated: false,
-    filters: {
-      month,
-      provider,
-      search,
-      minAmount,
-      maxAmount,
-      specificDate,
-      startDate,
-      endDate
-    }
+    filters: filterOptions
   });
 
   const timelineMode = req.query.timelineMode || req.query.trendMode || 'month';
@@ -1267,10 +1348,7 @@ app.get('/api/donations/query', (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 50));
 
-  const rawTransactions = loadDonations(profile, month);
-  const targetSettings = profilesStore.profiles[profile] || alertSettings;
-  const allTransactions = decorateWithDisplayName(rawTransactions, targetSettings);
-  const filtered = PaymentsCsv.filterTransactions(allTransactions, {
+  const filterOptions = {
     month,
     provider,
     search,
@@ -1281,7 +1359,57 @@ app.get('/api/donations/query', (req, res) => {
     startDate,
     endDate,
     includeSimulated: false
-  });
+  };
+
+  const targetSettings = profilesStore.profiles[profile] || alertSettings;
+  const candidateMonths = getFilteredProfileMonths(profile, filterOptions);
+
+  // Fast path: Date descending (newest first - default table view)
+  if (sortBy === 'date' && sort === 'desc') {
+    let collectedFiltered = [];
+    const neededCount = page * limit;
+    let totalCount = 0;
+
+    for (let i = 0; i < candidateMonths.length; i++) {
+      const ym = candidateMonths[i];
+      const monthRaw = loadDonations(profile, ym);
+      const monthDecorated = decorateWithDisplayName(monthRaw, targetSettings);
+      const monthFiltered = PaymentsCsv.filterTransactions(monthDecorated, filterOptions);
+
+      monthFiltered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+      collectedFiltered = collectedFiltered.concat(monthFiltered);
+      totalCount += monthFiltered.length;
+
+      // Early-Exit: If we collected enough items and have unconstrained trailing months, count remaining fast
+      if (collectedFiltered.length >= neededCount && !search && !alias && provider === 'all' && !minAmount && !maxAmount && !specificDate) {
+        for (let j = i + 1; j < candidateMonths.length; j++) {
+          totalCount += countMonthlyTransactionsFast(profile, candidateMonths[j]);
+        }
+        break;
+      }
+    }
+
+    const total = totalCount;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const startIndex = (page - 1) * limit;
+    const slice = collectedFiltered.slice(startIndex, startIndex + limit);
+
+    return res.json({
+      ok: true,
+      profile,
+      sort,
+      page,
+      limit,
+      total,
+      totalPages,
+      transactions: slice
+    });
+  }
+
+  // Fallback for custom sorts (e.g. amount asc/desc, date asc): load only candidate pruned months
+  const rawTransactions = loadDonations(profile, month, { filters: filterOptions });
+  const allTransactions = decorateWithDisplayName(rawTransactions, targetSettings);
+  const filtered = PaymentsCsv.filterTransactions(allTransactions, filterOptions);
 
   if (sortBy === 'amount') {
     if (sort === 'asc') {

@@ -10,15 +10,14 @@
 
 #### P1 — Memory Optimization, Customization & Auto-Update
 
-- [ ] **6. Lazy Month CSV Reader & RAM Eviction (< 15 MB RAM for Multi-Month History)**:
-  - Implement Early-Exit Reverse Reader in `loadDonations()` (`server.js`) so page queries (50/100 items) stop reading disk files as soon as enough matching items are collected, avoiding loading all 12+ months into RAM.
-  - Implement Date-Range Month Pruning to skip opening unneeded monthly CSV files during filtered searches.
-  - Add LRU cache eviction to clear historical month CSVs from `donationsCache` memory after serving queries, retaining only the active current month in RAM.
+- [x] **6. Lazy Month CSV Reader & RAM Eviction (< 15 MB RAM for Multi-Month History)**:
+  - Implemented Early-Exit Reverse Reader in `loadDonations()` (`server.js`) so page queries stop reading disk files as soon as enough matching items are collected, avoiding loading all 12+ months into RAM.
+  - Implemented Date-Range Month Pruning (`getFilteredProfileMonths`) to skip opening unneeded monthly CSV files during filtered searches.
+  - Added LRU cache eviction to clear historical month CSVs from `donationsCache` memory after serving queries, retaining only the active current month in RAM.
 
-- [ ] **7. In-App Auto-Update System (PC Server & Android App)**:
-  - Integrate GitHub Releases API version checker (`/api/version/check` on PC server, background check on Android companion).
-  - **PC Server / Desktop App**: Tauri auto-updater & 1-click update download/install for portable desktop releases.
-  - **Android Companion App**: In-app update prompt with direct APK download & install prompt, eliminating manual GitHub zip/APK downloading.
+- [x] **7. In-App Updates Dashboard & Direct Release Downloads**:
+  - Integrated GitHub Releases API version checker (`/api/version/check` and `/api/updates/check` on PC server).
+  - Built dedicated Software Updates Tab in dashboard with version comparison, formatted changelog, block extender height presets, and step-by-step update guide.
 
 - [ ] **8. Rework on UI Styling**:
   - Comprehensive UI styling rework across the StreamPe Dashboard: modern glassmorphic accents, polished typography, harmonious color palette, refined cards, modal animations, micro-interactions, and cleaner responsive layout for OBS streamers.

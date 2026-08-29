@@ -8,7 +8,8 @@ console.log('========================================\n');
 const tests = [
   { name: 'Database & CSV Storage Engine Tests', file: 'scripts/test-database.js' },
   { name: 'Profile Aliases & ZIP Backup Engine Tests', file: 'tests/test-alias-zip-workflow.js' },
-  { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' }
+  { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' },
+  { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' }
 ];
 
 let failed = false;
