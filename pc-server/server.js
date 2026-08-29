@@ -144,6 +144,55 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   }
 }
 
+// Consolidate legacy per-profile folders (data/<profile>/YYYY/MM.csv) into unified data/YYYY/MM.csv
+function consolidateLegacyProfileData(dataDir) {
+  if (!fs.existsSync(dataDir)) return;
+  try {
+    const entries = fs.readdirSync(dataDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !/^\d{4}$/.test(entry.name)) {
+        const profileDir = path.join(dataDir, entry.name);
+        const subEntries = fs.readdirSync(profileDir, { withFileTypes: true });
+        for (const sub of subEntries) {
+          if (sub.isDirectory() && /^\d{4}$/.test(sub.name)) {
+            const yr = sub.name;
+            const yearDir = path.join(profileDir, yr);
+            const csvFiles = fs.readdirSync(yearDir).filter(f => f.endsWith('.csv'));
+            for (const file of csvFiles) {
+              const srcCsv = path.join(yearDir, file);
+              const targetYearDir = path.join(dataDir, yr);
+              const targetCsv = path.join(targetYearDir, file);
+              if (!fs.existsSync(targetYearDir)) fs.mkdirSync(targetYearDir, { recursive: true });
+              if (!fs.existsSync(targetCsv)) {
+                fs.copyFileSync(srcCsv, targetCsv);
+              } else {
+                const srcTxs = PaymentsCsv.parseCsv(fs.readFileSync(srcCsv, 'utf8'));
+                const targetTxs = PaymentsCsv.parseCsv(fs.readFileSync(targetCsv, 'utf8'));
+                const existingIds = new Set(targetTxs.map(t => t.id).filter(Boolean));
+                let appended = 0;
+                for (const tx of srcTxs) {
+                  if (!tx.id || !existingIds.has(tx.id)) {
+                    targetTxs.push(tx);
+                    if (tx.id) existingIds.add(tx.id);
+                    appended++;
+                  }
+                }
+                if (appended > 0) {
+                  fs.writeFileSync(targetCsv, PaymentsCsv.serializeCsv(targetTxs), 'utf8');
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Storage] Legacy consolidation notice:', err.message);
+  }
+}
+
+consolidateLegacyProfileData(DATA_DIR);
+
 aliasesStore.initAliasesStore(DATA_DIR);
 
 function decorateWithDisplayName(transactions, settings = {}, profile = '') {
@@ -2174,8 +2223,18 @@ app.get('/api/system/paths', (req, res) => {
 app.post('/api/system/paths', (req, res) => {
   try {
     const body = req.body || {};
+    const newTargetRoot = (body.storageRootDir || '').trim();
+    const copyCurrentData = body.copyCurrentData === true;
+
+    const resolvedTarget = newTargetRoot ? path.resolve(newTargetRoot) : writableBaseDir;
+    const resolvedCurrent = storageRoot;
+
+    if (copyCurrentData && resolvedTarget !== resolvedCurrent) {
+      migrateLocalDataIfNeeded(resolvedCurrent, resolvedTarget);
+    }
+
     const newPaths = {
-      storageRootDir: (body.storageRootDir || '').trim()
+      storageRootDir: newTargetRoot
     };
 
     fs.writeFileSync(PATH_CONFIG_FILE, JSON.stringify(newPaths, null, 2), 'utf8');
