@@ -13,6 +13,7 @@ require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
 const aliasesStore = require('./aliases-store');
 const updateManager = require('./update-manager');
+const PaymentsCsv = require('./public/js/lib/payments-csv');
 const {
   APP_NAME,
   APP_VERSION,
@@ -88,9 +89,11 @@ function migrateLocalDataIfNeeded(localBase, targetBase) {
   }
 }
 
-migrateLocalDataIfNeeded(baseDir, writableBaseDir);
-if (baseDir !== __dirname) {
-  migrateLocalDataIfNeeded(__dirname, writableBaseDir);
+if (isCompiled) {
+  migrateLocalDataIfNeeded(baseDir, writableBaseDir);
+  if (baseDir !== __dirname) {
+    migrateLocalDataIfNeeded(__dirname, writableBaseDir);
+  }
 }
 
 const app = express();
@@ -668,7 +671,6 @@ function parsePayment(notification) {
 const ConfigSchema = require('./public/js/lib/config-schema');
 const ConfigMigration = require('./public/js/lib/config-migration');
 const TemplateMatcher = require('./public/js/lib/template-matcher');
-const PaymentsCsv = require('./public/js/lib/payments-csv');
 
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 const LEGACY_CONFIG_FILE = fs.existsSync(path.join(baseDir, 'widget-config.json')) ? path.join(baseDir, 'widget-config.json') : path.join(__dirname, 'widget-config.json');
@@ -1581,7 +1583,7 @@ app.post('/api/aliases', (req, res) => {
   if (!sender || !alias) {
     return res.status(400).json({ ok: false, error: 'Sender and alias are required' });
   }
-  aliasesStore.setAlias(sender, alias, note, profile);
+  aliasesStore.setAlias(sender, alias, profile);
   log.info('AliasesStore', `Set donor alias for "${sender}" -> "${alias}" [Profile: ${profile}]`);
   const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
   res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });

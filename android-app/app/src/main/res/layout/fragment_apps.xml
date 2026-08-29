@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- App Search Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="10dp"
+        android:background="@color/surface1">
+
+        <EditText
+            android:id="@+id/etSearchApps"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:hint="Search payment apps…"
+            android:inputType="text"
+            android:background="@color/surface2"
+            android:textColor="@color/textMain"
+            android:textColorHint="@color/textDim"
+            android:textSize="12.5sp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:singleLine="true" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/border" />
+
+    <!-- Apps List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerApps"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="8dp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/border" />
+
+    <!-- Save Selection Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:background="@color/surface1">
+
+        <Button
+            android:id="@+id/btnSaveAppSelection"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:text="Save Selection"
+            android:textSize="13.5sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="@color/accent"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+</LinearLayout>

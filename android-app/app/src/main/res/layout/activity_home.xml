@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- ══ STUDIO HEADER ════════════════════════════════════════════ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:background="@color/surface1">
+
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:src="@mipmap/ic_launcher"
+            android:scaleType="centerInside"
+            android:contentDescription="Logo" />
+
+        <!-- Title & Subtitle with Connection Light -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="8dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="StreamPe"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/textMain" />
+
+                <!-- Red/Green Connection Light Dot -->
+                <View
+                    android:id="@+id/dotStatus"
+                    android:layout_width="7dp"
+                    android:layout_height="7dp"
+                    android:background="@color/danger"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvHeaderSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Offline"
+                android:textSize="11sp"
+                android:textColor="@color/textDim"
+                android:singleLine="true"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Disconnect Button (Visible when connected) -->
+        <Button
+            android:id="@+id/btnHeaderDisconnect"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="Disconnect"
+            android:textSize="10.5sp"
+            android:textStyle="bold"
+            android:textColor="@color/danger"
+            android:backgroundTint="@color/surface2"
+            android:layout_marginEnd="6dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:stateListAnimator="@null"
+            android:visibility="gone" />
+
+        <!-- Top Bar Info/About Button (ⓘ) -->
+        <Button
+            android:id="@+id/btnHeaderInfo"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:text="ⓘ"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/accentLight"
+            android:backgroundTint="@color/surface2"
+            android:padding="0dp"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+    <!-- ══ MAIN VIEW CONTAINER ═══════════════════════════════════════ -->
+    <FrameLayout
+        android:id="@+id/containerContent"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- ══ 3 BOTTOM NAVIGATION TABS (Visible when Connected) ══ -->
+    <LinearLayout
+        android:id="@+id/layoutBottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:background="@color/surface1"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:elevation="8dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btnNavLogs"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Retrigger"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="@color/accent"
+            android:layout_margin="2dp"
+            android:stateListAnimator="@null" />
+
+        <Button
+            android:id="@+id/btnNavApps"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Apps"
+            android:textSize="12sp"
+            android:textColor="@color/textMuted"
+            android:backgroundTint="@color/surface2"
+            android:layout_margin="2dp"
+            android:stateListAnimator="@null" />
+
+        <Button
+            android:id="@+id/btnNavTest"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Test"
+            android:textSize="12sp"
+            android:textColor="@color/textMuted"
+            android:backgroundTint="@color/surface2"
+            android:layout_margin="2dp"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+</LinearLayout>

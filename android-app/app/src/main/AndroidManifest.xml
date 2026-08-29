@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -41,10 +42,13 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".SetupActivity" android:exported="false" />
+        <activity android:name=".HomeActivity" android:exported="false" />
         <activity android:name=".PermissionsActivity" android:exported="false" />
         <activity android:name=".AppSelectorActivity" android:exported="false" />
         <activity android:name=".NotificationTesterActivity" android:exported="false" />
         <activity android:name=".AlertLogActivity" android:exported="false" />
+        <activity android:name=".AboutActivity" android:exported="false" />
 
         <service
             android:name=".NotificationService"

@@ -15,6 +15,10 @@ class AppPrefs(context: Context) {
         get() = prefs.getBoolean("is_connected", false)
         set(value) = prefs.edit().putBoolean("is_connected", value).apply()
 
+    var isOnboardingComplete: Boolean
+        get() = prefs.getBoolean("onboarding_complete", false)
+        set(value) = prefs.edit().putBoolean("onboarding_complete", value).apply()
+
     var selectedPackages: Set<String>
         get() = prefs.getStringSet("selected_packages", emptySet()) ?: emptySet()
         set(value) = prefs.edit().putStringSet("selected_packages", value).apply()

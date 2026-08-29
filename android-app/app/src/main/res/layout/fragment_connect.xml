@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ── Server Connection Card ────────────────────────────── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CONNECT TO PC SERVER"
+            android:textSize="10.5sp"
+            android:textColor="@color/textDim"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface1"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <!-- Manual Server URL Input -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Server IP / Hostname"
+                android:textSize="11.5sp"
+                android:textColor="@color/textDim"
+                android:layout_marginBottom="6dp" />
+
+            <EditText
+                android:id="@+id/etServerInput"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:hint="192.168.1.x:2907"
+                android:inputType="text"
+                android:background="@color/surface2"
+                android:textColor="@color/textMain"
+                android:textColorHint="@color/textDim"
+                android:textSize="13.5sp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/btnConnect"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Connect to PC Server"
+                android:textSize="13.5sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="@color/accent"
+                android:stateListAnimator="@null" />
+
+            <TextView
+                android:id="@+id/tvConnectError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11.5sp"
+                android:textColor="@color/danger"
+                android:gravity="center"
+                android:layout_marginTop="8dp" />
+
+            <!-- Recent Servers Chips -->
+            <LinearLayout
+                android:id="@+id/layoutRecentServersContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginTop="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Recent Servers:"
+                    android:textSize="10.5sp"
+                    android:textColor="@color/textDim"
+                    android:layout_marginBottom="6dp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/layoutRecentChips"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/border"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Wi-Fi Auto Discovery (Below Manual Input) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="10dp">
+
+                <ProgressBar
+                    android:id="@+id/pbScan"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:indeterminateTint="@color/accentLight"
+                    android:layout_marginEnd="10dp" />
+
+                <TextView
+                    android:id="@+id/tvScanStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Scanning local Wi-Fi for PC server…"
+                    android:textSize="12sp"
+                    android:textColor="@color/accentLight"
+                    android:paddingEnd="10dp" />
+
+                <Button
+                    android:id="@+id/btnRefreshScan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:text="Scan"
+                    android:textSize="11.5sp"
+                    android:textColor="@color/textMain"
+                    android:backgroundTint="@color/surface2"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <!-- Discovered Servers Container -->
+            <LinearLayout
+                android:id="@+id/layoutDiscoveredList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

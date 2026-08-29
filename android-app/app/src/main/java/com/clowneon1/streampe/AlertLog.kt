@@ -13,10 +13,12 @@ data class AlertEntry(
     val appName   : String,
     val title     : String,
     val text      : String,
-    val sender    : String,
-    val amount    : String,
-    val source    : String,   // "notification" | "test"
-    val fullJson  : String
+    val bigText   : String = "",
+    val subText   : String = "",
+    val sender    : String = "",
+    val amount    : String = "",
+    val source    : String = "notification",   // "notification" | "tester"
+    val fullJson  : String = ""
 )
 
 object AlertLog {
@@ -61,6 +63,8 @@ object AlertLog {
                                 appName   = obj.optString("appName", "Unknown"),
                                 title     = obj.optString("title", ""),
                                 text      = obj.optString("text", ""),
+                                bigText   = obj.optString("bigText", ""),
+                                subText   = obj.optString("subText", ""),
                                 sender    = obj.optString("sender", ""),
                                 amount    = obj.optString("amount", ""),
                                 source    = obj.optString("source", "notification"),
@@ -117,6 +121,8 @@ object AlertLog {
                         put("appName",   item.appName)
                         put("title",     item.title)
                         put("text",      item.text)
+                        put("bigText",   item.bigText)
+                        put("subText",   item.subText)
                         put("sender",    item.sender)
                         put("amount",    item.amount)
                         put("source",    item.source)
@@ -144,6 +150,8 @@ object AlertLog {
         appName   = json.optString("appName",  json.optString("sourceApp", "Unknown")),
         title     = json.optString("title",    ""),
         text      = json.optString("text",     ""),
+        bigText   = json.optString("bigText",  ""),
+        subText   = json.optString("subText",  ""),
         sender    = json.optString("sender",   ""),
         amount    = json.optString("amount",   ""),
         source    = json.optString("source",   "notification"),
