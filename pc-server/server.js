@@ -1133,23 +1133,18 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
 
     saveProfileMetadata(profile, metadata);
   } else {
-    // Full sync from disk files (triggered on startup, profile switch, manual edit, delete, or import)
-    const metadataPath = getMetadataPath(profile);
-    if (!forceRebuild && fs.existsSync(metadataPath)) {
-      metadata = loadProfileMetadata(profile);
-    } else {
-      const rawTransactions = loadDonations(profile);
-      const transactions = decorateWithDisplayName(rawTransactions, targetSettings, profile);
-      const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
+    // Full sync from disk files (re-evaluates transactions with active donor aliases)
+    const rawTransactions = loadDonations(profile);
+    const transactions = decorateWithDisplayName(rawTransactions, targetSettings, profile);
+    const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
 
-      metadata = {
-        goal: { currentAmount: metrics.goalAmount },
-        leaderboard: { supporters: metrics.supporters },
-        recent: { recentDonations: metrics.recentDonations }
-      };
+    metadata = {
+      goal: { currentAmount: metrics.goalAmount },
+      leaderboard: { supporters: metrics.supporters },
+      recent: { recentDonations: metrics.recentDonations }
+    };
 
-      saveProfileMetadata(profile, metadata);
-    }
+    saveProfileMetadata(profile, metadata);
   }
 
   // Merge into in-memory settings for widgets and websocket broadcasts
