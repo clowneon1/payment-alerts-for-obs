@@ -21,6 +21,10 @@ function getDefaultAppDataDir() {
   return path.join(appData, APP_NAME);
 }
 
+const DISCORD_URL = 'https://partially-practical.codepenguin.in';
+const WEBSITE_URL = 'https://partially-practical.codepenguin.in';
+const GITHUB_REPO_URL = 'https://github.com/clowneon1/streampe';
+
 module.exports = {
   APP_NAME,
   APP_VERSION,
@@ -33,5 +37,8 @@ module.exports = {
   NETWORK_CHANGE_CHECK_INTERVAL_MS,
   ANDROID_HEARTBEAT_INTERVAL_MS,
   OBS_HEARTBEAT_INTERVAL_MS,
+  DISCORD_URL,
+  WEBSITE_URL,
+  GITHUB_REPO_URL,
   getDefaultAppDataDir
 };
