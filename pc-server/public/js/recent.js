@@ -21,6 +21,15 @@
   }
 
   function applyRecentSettings(newSettings) {
+    if (newSettings && config && config.widgets && config.widgets.recent) {
+      if (!newSettings.widgets) newSettings.widgets = {};
+      if (config.widgets.recent.recentDonations && config.widgets.recent.recentDonations.length) {
+        if (!newSettings.widgets.recent || !newSettings.widgets.recent.recentDonations || !newSettings.widgets.recent.recentDonations.length) {
+          if (!newSettings.widgets.recent) newSettings.widgets.recent = {};
+          newSettings.widgets.recent.recentDonations = config.widgets.recent.recentDonations;
+        }
+      }
+    }
     config = StorageHelper.mergeWithDefaults(newSettings);
     const recent = config.widgets.recent;
     const root = document.documentElement;
@@ -89,20 +98,19 @@
       container.innerHTML = `
         <div class="lb-card">
           <div class="lb-header">
-            <i data-lucide="history" style="width: 22px; height: 22px; color: var(--recent-accent-color);"></i>
+            <svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#9146ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
             <div class="lb-title">${TemplateEngine.escapeHtml(recentTitle)}</div>
           </div>
           <div class="lb-empty">No payments received yet</div>
         </div>
       `;
-      if (window.lucide) lucide.createIcons();
       return;
     }
 
     container.innerHTML = `
       <div class="lb-card">
         <div class="lb-header">
-          <i data-lucide="history" style="width: 22px; height: 22px; color: var(--recent-accent-color);"></i>
+          <svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#9146ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
           <div class="lb-title">${TemplateEngine.escapeHtml(recentTitle)}</div>
         </div>
         <div class="lb-list">
@@ -110,7 +118,6 @@
         </div>
       </div>
     `;
-    if (window.lucide) lucide.createIcons();
   }
 
   function rowsHtml(items, recent) {
@@ -119,7 +126,7 @@
       return `
         <div class="lb-row">
           <div class="lb-user-info">
-            <div class="lb-badge"><i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i></div>
+            <div class="lb-badge">#${idx + 1}</div>
             <div class="lb-name">${TemplateEngine.escapeHtml(item.sender)}</div>
           </div>
           ${recent.showAmounts !== false ? `<div class="lb-amount">${formattedAmount}</div>` : ''}

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- ══ HEADER ════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:background="@color/surface1">
+
+        <Button
+            android:id="@+id/btnAboutBack"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:text="←"
+            android:textSize="18sp"
+            android:textColor="@color/textMain"
+            android:backgroundTint="@color/surface2"
+            android:padding="0dp"
+            android:stateListAnimator="@null" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="About StreamPe"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/textMain"
+            android:layout_marginStart="14dp" />
+    </LinearLayout>
+
+    <!-- ══ SCROLL CONTENT ════════════════════════════════════════════ -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- App Banner Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="@color/surface1"
+                android:padding="24dp"
+                android:layout_marginBottom="16dp">
+
+                <ImageView
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@mipmap/ic_launcher"
+                    android:scaleType="centerInside"
+                    android:layout_marginBottom="12dp"
+                    android:contentDescription="StreamPe Logo" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="StreamPe Companion"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/textMain"
+                    android:layout_marginBottom="2dp" />
+
+                <TextView
+                    android:id="@+id/tvAboutVersion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="v2.2.0"
+                    android:textSize="13sp"
+                    android:textColor="@color/accentLight"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:id="@+id/tvAboutStatusBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Checking for updates…"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/textDim"
+                    android:background="@color/surface2"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="5dp"
+                    android:paddingBottom="5dp" />
+            </LinearLayout>
+
+            <!-- Update Available Card -->
+            <LinearLayout
+                android:id="@+id/layoutAboutUpdateBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface2"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvAboutNewVersionText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="A new update is available!"
+                    android:textSize="13.5sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accentLight"
+                    android:layout_marginBottom="10dp" />
+
+                <Button
+                    android:id="@+id/btnAboutDownloadUpdate"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:text="Download Update (APK)"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:backgroundTint="@color/accent"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <!-- Quick Actions -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="COMMUNITY &amp; SUPPORT"
+                android:textSize="10.5sp"
+                android:textColor="@color/textDim"
+                android:letterSpacing="0.08"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface1"
+                android:padding="14dp"
+                android:layout_marginBottom="16dp">
+
+                <Button
+                    android:id="@+id/btnAboutDiscord"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="Discord Support"
+                    android:textSize="12.5sp"
+                    android:textColor="@color/accentLight"
+                    android:backgroundTint="@color/accentDim"
+                    android:layout_marginBottom="10dp"
+                    android:stateListAnimator="@null" />
+
+                <Button
+                    android:id="@+id/btnAboutGitHub"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="GitHub Repository &amp; Star"
+                    android:textSize="12.5sp"
+                    android:textColor="#ffb703"
+                    android:backgroundTint="@color/surface2"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <!-- Setup Configuration -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="CONFIGURATION"
+                android:textSize="10.5sp"
+                android:textColor="@color/textDim"
+                android:letterSpacing="0.08"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface1"
+                android:padding="14dp"
+                android:layout_marginBottom="24dp">
+
+                <Button
+                    android:id="@+id/btnAboutReopenWizard"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="Re-run Setup Wizard"
+                    android:textSize="12.5sp"
+                    android:textColor="@color/textMain"
+                    android:backgroundTint="@color/surface2"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvAboutMadeWithLove"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Made with ❤️ by clowneon1"
+                android:textSize="12sp"
+                android:textColor="@color/textDim"
+                android:gravity="center"
+                android:layout_marginBottom="16dp" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

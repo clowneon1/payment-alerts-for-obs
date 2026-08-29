@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Preset Selector -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Test Preset"
+            android:textSize="11sp"
+            android:textColor="@color/textDim"
+            android:letterSpacing="0.05"
+            android:layout_marginBottom="6dp" />
+
+        <Spinner
+            android:id="@+id/spinnerTestPresets"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@color/surface2"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="14dp" />
+
+        <!-- Notification Title -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Notification Title"
+            android:textSize="11sp"
+            android:textColor="@color/textDim"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etTestTitle"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@color/surface2"
+            android:textColor="@color/textMain"
+            android:textColorHint="@color/textDim"
+            android:hint="e.g. PhonePe - Rahul"
+            android:textSize="13sp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Notification Text -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Notification Text / Body"
+            android:textSize="11sp"
+            android:textColor="@color/textDim"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etTestText"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@color/surface2"
+            android:textColor="@color/textMain"
+            android:textColorHint="@color/textDim"
+            android:hint="e.g. has sent ₹500.00"
+            android:textSize="13sp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Package Name -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Package Name (Auto-filled)"
+            android:textSize="11sp"
+            android:textColor="@color/textDim"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/etTestPkg"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@color/surface2"
+            android:textColor="@color/textMain"
+            android:textColorHint="@color/textDim"
+            android:hint="com.phonepe.app"
+            android:textSize="13sp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="18dp" />
+
+        <!-- Send Button -->
+        <Button
+            android:id="@+id/btnSendTestAlert"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Send Test Alert to OBS"
+            android:textSize="13.5sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="@color/accent"
+            android:stateListAnimator="@null"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Test Log Output -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Recent Tests"
+            android:textSize="11sp"
+            android:textColor="@color/textDim"
+            android:letterSpacing="0.05"
+            android:layout_marginBottom="6dp" />
+
+        <TextView
+            android:id="@+id/tvTestOutput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/surface2"
+            android:textColor="@color/textMuted"
+            android:textSize="11sp"
+            android:padding="12dp"
+            android:minHeight="60dp"
+            android:gravity="top"
+            android:text="Test alert triggers will appear here…" />
+
+    </LinearLayout>
+</ScrollView>

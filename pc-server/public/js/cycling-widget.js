@@ -29,8 +29,8 @@
     root.style.setProperty('--cycling-padding', (widget.style.padding ?? 16) + 'px');
     root.style.setProperty('--cycling-width', (widget.layout.width ?? 350) + 'px');
     root.style.setProperty('--cycling-font-size', (widget.text.fontSize ?? 18) + (widget.text.fontSizeUnit || 'px'));
-    root.style.setProperty('--cycling-position-x', widget.layout.positionX ?? 10);
-    root.style.setProperty('--cycling-position-y', widget.layout.positionY ?? 90);
+    root.style.setProperty('--cycling-position-x', widget.layout.positionX ?? 50);
+    root.style.setProperty('--cycling-position-y', widget.layout.positionY ?? 50);
 
     // Media properties
     root.style.setProperty('--cycling-media-size', (widget.style.mediaSize ?? 32) + 'px');
@@ -50,8 +50,8 @@
     root.style.setProperty('--cycling-out-duration', outDur + 'ms');
 
     // Dynamic transform calculation based on position coordinates
-    const posX = widget.layout.positionX ?? 10;
-    const posY = widget.layout.positionY ?? 90;
+    const posX = widget.layout.positionX ?? 50;
+    const posY = widget.layout.positionY ?? 50;
     const transX = posX === 50 ? '-50%' : (posX > 50 ? '-100%' : '0%');
     const transY = posY === 50 ? '-50%' : (posY > 50 ? '-100%' : '0%');
     root.style.setProperty('--cycling-transform', `translate(${transX}, ${transY})`);

@@ -15,6 +15,13 @@
   }
 
   function applyGoalSettings(newSettings) {
+    if (newSettings && config && config.widgets && config.widgets.goal) {
+      if (newSettings.widgets && newSettings.widgets.goal && (newSettings.widgets.goal.currentAmount === undefined || newSettings.widgets.goal.currentAmount === 0)) {
+        if (config.widgets.goal.currentAmount > 0) {
+          newSettings.widgets.goal.currentAmount = config.widgets.goal.currentAmount;
+        }
+      }
+    }
     config = StorageHelper.mergeWithDefaults(newSettings);
     const goal = config.widgets.goal;
     const root = document.documentElement;

@@ -4,15 +4,16 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="12dp"
-    android:background="?attr/selectableItemBackground"
+    android:background="@color/surface1"
+    android:layout_marginBottom="6dp"
     android:gravity="center_vertical">
 
     <!-- App icon -->
     <ImageView
         android:id="@+id/ivAppIcon"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
-        android:layout_marginEnd="14dp"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:layout_marginEnd="12dp"
         android:scaleType="fitCenter"
         android:contentDescription="App icon" />
 
@@ -27,16 +28,16 @@
             android:id="@+id/tvAppName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:textColor="#ffffff" />
+            android:textColor="@color/textMain" />
 
         <TextView
             android:id="@+id/tvPackageName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="11sp"
-            android:textColor="#666666"
+            android:textColor="@color/textDim"
             android:layout_marginTop="2dp" />
 
         <TextView
@@ -45,9 +46,9 @@
             android:layout_height="wrap_content"
             android:textSize="11sp"
             android:textStyle="bold"
+            android:textColor="@color/warning"
             android:layout_marginTop="4dp"
             android:visibility="gone" />
-
     </LinearLayout>
 
     <!-- Checkbox -->
@@ -55,6 +56,7 @@
         android:id="@+id/cbSelected"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:buttonTint="@color/accent"
         android:clickable="false"
         android:focusable="false" />
 

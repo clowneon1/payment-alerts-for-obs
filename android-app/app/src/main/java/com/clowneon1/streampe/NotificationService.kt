@@ -27,8 +27,8 @@ class NotificationService : NotificationListenerService() {
         val pkg = sbn.packageName
         if (pkg == packageName) return
 
-        val allowed = allowedPackages
-        if (allowed.isNullOrEmpty() || pkg !in allowed) return
+        val allowed = allowedPackages ?: AppPrefs(applicationContext).selectedPackages
+        if (pkg !in allowed) return
 
         val notif       = sbn.notification
         val extras      = notif.extras

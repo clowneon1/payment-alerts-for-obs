@@ -1,7 +1,7 @@
 const path = require('path');
 
 const APP_NAME = 'StreamPe';
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const DEFAULT_PORT = 2907;
 const FALLBACK_PORTS = [DEFAULT_PORT, 8876, 2708, 9091, 1001, 0];
 const UDP_DISCOVERY_PORT = 58025;
@@ -21,6 +21,10 @@ function getDefaultAppDataDir() {
   return path.join(appData, APP_NAME);
 }
 
+const DISCORD_URL = 'https://partially-practical.codepenguin.in';
+const WEBSITE_URL = 'https://partially-practical.codepenguin.in';
+const GITHUB_REPO_URL = 'https://github.com/clowneon1/streampe';
+
 module.exports = {
   APP_NAME,
   APP_VERSION,
@@ -33,5 +37,8 @@ module.exports = {
   NETWORK_CHANGE_CHECK_INTERVAL_MS,
   ANDROID_HEARTBEAT_INTERVAL_MS,
   OBS_HEARTBEAT_INTERVAL_MS,
+  DISCORD_URL,
+  WEBSITE_URL,
+  GITHUB_REPO_URL,
   getDefaultAppDataDir
 };

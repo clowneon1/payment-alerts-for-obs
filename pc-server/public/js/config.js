@@ -194,26 +194,17 @@ document.addEventListener('DOMContentLoaded', () => {
     btn._copying = true;
     const original = btn.innerHTML;
     const originalTitle = btn.title;
-    const originalBg = btn.style.background;
-    const originalColor = btn.style.color;
-    const originalBorder = btn.style.border;
-    btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px;"></i>';
+    btn.innerHTML = '<i data-lucide="check" style="width:13px;height:13px;stroke:var(--cyan);"></i>';
     btn.title = 'Copied!';
-    if (window.lucide) lucide.createIcons({ attrs: { class: 'lucide' }, nameAttr: 'data-lucide' });
-    btn.style.background = '#00e676';
-    btn.style.color = '#000';
-    btn.style.border = '1.5px solid #00e676';
+    if (window.lucide) lucide.createIcons();
     btn.classList.add('btn-copy-flash');
     setTimeout(() => {
       btn.innerHTML = original;
       btn.title = originalTitle;
-      btn.style.background = originalBg;
-      btn.style.color = originalColor;
-      btn.style.border = originalBorder;
       btn.classList.remove('btn-copy-flash');
       btn._copying = false;
-      if (window.lucide) lucide.createIcons({ attrs: { class: 'lucide' }, nameAttr: 'data-lucide' });
-    }, 1600);
+      if (window.lucide) lucide.createIcons();
+    }, 1500);
   }
 
   // ── Generic field helpers ────────────────────────────────────
@@ -492,11 +483,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const goal = config.widgets.goal;
+    const prevGoalCurrent = goal.currentAmount;
     goal.enabled = checked('chk-enable-goal', goal.enabled);
     goal.allowOverflow = checked('chk-goal-allow-overflow', !!goal.allowOverflow);
     goal.title = val('input-goal-title', goal.title);
     goal.targetAmount = numVal('input-goal-target', goal.targetAmount);
-    goal.currentAmount = numVal('input-goal-current', goal.currentAmount);
+    goal.currentAmount = prevGoalCurrent !== undefined ? prevGoalCurrent : 0;
     goal.startAmount = numVal('input-goal-start', goal.startAmount);
     goal.endDate = val('input-goal-end-date', goal.endDate);
     goal.text = Object.assign(readTextStyle(TEXT_PREFIXES.goal, goal.text), {
@@ -563,17 +555,21 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       if (activeList.type === 'leaderboard') {
+        const prevSupporters = config.widgets.leaderboard.supporters;
         config.widgets.leaderboard.title = activeList.title;
         config.widgets.leaderboard.maxEntries = activeList.maxEntries;
         config.widgets.leaderboard.showAmounts = activeList.showAmounts;
         config.widgets.leaderboard.style = Object.assign({}, activeList.style);
         config.widgets.leaderboard.text = Object.assign({}, activeList.text);
+        if (prevSupporters) config.widgets.leaderboard.supporters = prevSupporters;
       } else {
+        const prevRecent = config.widgets.recent.recentDonations;
         config.widgets.recent.title = activeList.title;
         config.widgets.recent.maxEntries = activeList.maxEntries;
         config.widgets.recent.showAmounts = activeList.showAmounts;
         config.widgets.recent.style = Object.assign({}, activeList.style);
         config.widgets.recent.text = Object.assign({}, activeList.text);
+        if (prevRecent) config.widgets.recent.recentDonations = prevRecent;
       }
     }
 
@@ -605,8 +601,8 @@ document.addEventListener('DOMContentLoaded', () => {
       mediaRadius: numVal('input-cycling-media-radius', 8)
     });
 
-    const cyclingPreset = val('cycling-position-preset', 'bottom-left');
-    const cyclingAnchor = ConfigSchema.POSITION_PRESETS[cyclingPreset] || { x: 10, y: 90 };
+    const cyclingPreset = val('cycling-position-preset', 'center');
+    const cyclingAnchor = ConfigSchema.POSITION_PRESETS[cyclingPreset] || { x: 50, y: 50 };
     cycling.layout = {
       positionPreset: cyclingPreset,
       positionX: cyclingAnchor.x,
@@ -1055,10 +1051,10 @@ document.addEventListener('DOMContentLoaded', () => {
     html = html.replace(/\*(.*?)\*/gim, '<em style="color: #cbd5e1;">$1</em>');
 
     // Inline code `code`
-    html = html.replace(/`([^`]+)`/gim, '<code style="background: rgba(0, 229, 255, 0.08); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-family: monospace;">$1</code>');
+    html = html.replace(/`([^`]+)`/gim, '<code style="background: rgba(145, 70, 255, 0.12); color: var(--accent-light); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-family: monospace; border: 1px solid rgba(145, 70, 255, 0.25);">$1</code>');
 
     // Markdown links [text](url)
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" style="color: var(--accent); text-decoration: underline;">$1</a>');
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" style="color: var(--accent-light); text-decoration: underline;">$1</a>');
 
     // Bullet points
     html = html.replace(/^\* (.*$)/gim, '<div style="display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.5;"><span style="color: var(--accent); font-weight: bold;">•</span><span>$1</span></div>');
@@ -1802,8 +1798,21 @@ document.addEventListener('DOMContentLoaded', () => {
         message: 'Reset all settings in this profile to defaults?'
       });
       if (!confirmed) return;
-      populateForm(ConfigSchema.createDefaultConfig());
-      showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults');
+      try {
+        const tplRes = await fetch('/api/profiles/default-template');
+        const tplData = await tplRes.json();
+        const defConfig = (tplData.ok && tplData.template) ? tplData.template : ConfigSchema.createDefaultConfig();
+        populateForm(defConfig);
+        const saveRes = await saveToServer();
+        if (saveRes.ok) {
+          showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults and saved profile!', 'success');
+        } else {
+          showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults (local only)');
+        }
+      } catch (err) {
+        populateForm(ConfigSchema.createDefaultConfig());
+        showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults');
+      }
     });
 
     // ── Profiles
@@ -1828,10 +1837,43 @@ document.addEventListener('DOMContentLoaded', () => {
         showInput: true
       });
       if (!name) return;
+      try {
+        const tplRes = await fetch('/api/profiles/default-template');
+        const tplData = await tplRes.json();
+        const newSettings = (tplData.ok && tplData.template) ? tplData.template : ConfigSchema.createDefaultConfig();
+        const res = await fetch('/api/profiles/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, settings: newSettings })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          config = data.settings;
+          populateForm(data.settings);
+          await loadProfilesList(name);
+          await fetchAndRenderAnalytics();
+          showToast('<i data-lucide="user"></i> Created profile "' + name + '"');
+        }
+      } catch (err) {
+        showToast('<i data-lucide="alert-triangle"></i> Failed to create profile: ' + err.message);
+      }
+    });
+
+    on('btn-profile-clone', 'click', async () => {
+      const select = el('select-profile');
+      const currentName = select ? select.value : 'Default';
+      const name = await AppModal.show({
+        title: 'Clone Profile',
+        message: `Enter name for cloned copy of "${currentName}":`,
+        showInput: true,
+        defaultValue: `${currentName} (Copy)`
+      });
+      if (!name) return;
+      readFormValues();
       await saveToServer(name);
       await loadProfilesList(name);
       await fetchAndRenderAnalytics();
-      showToast('<i data-lucide="user"></i> Created profile "' + name + '"');
+      showToast('<i data-lucide="copy"></i> Cloned profile to "' + name + '"');
     });
 
     on('btn-profile-rename', 'click', async () => {
@@ -2384,16 +2426,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (_) { }
 
     const levelStyles = {
-      INFO: 'background: rgba(0, 229, 255, 0.12); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.28);',
+      INFO: 'background: rgba(145, 70, 255, 0.15); color: #d5baff; border: 1px solid rgba(145, 70, 255, 0.35);',
       WARN: 'background: rgba(255, 214, 0, 0.12); color: #ffd600; border: 1px solid rgba(255, 214, 0, 0.28);',
       ERROR: 'background: rgba(255, 82, 82, 0.16); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.35); font-weight: 700;',
       EVENT: 'background: rgba(224, 64, 251, 0.15); color: #e040fb; border: 1px solid rgba(224, 64, 251, 0.3);',
-      PARSE: 'background: rgba(0, 230, 118, 0.12); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.28);',
+      PARSE: 'background: rgba(0, 245, 147, 0.12); color: #00F593; border: 1px solid rgba(0, 245, 147, 0.28);',
       DEDUP: 'background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2);',
     };
 
     const badgeStyle = levelStyles[level] || 'color: #cbd5e1;';
-    const tagHtml = tag ? `<span style="color: #67e8f9; font-weight: 600; margin-right: 4px;">[${TemplateEngine.escapeHtml(tag)}]</span>` : '';
+    const tagHtml = tag ? `<span style="color: #d5baff; font-weight: 600; margin-right: 4px;">[${TemplateEngine.escapeHtml(tag)}]</span>` : '';
 
     return `<div class="log-line log-level-${level.toLowerCase()}" style="margin-bottom: 3px; line-height: 1.6; font-family: inherit;"><span style="color: #475569; font-size: 10px; margin-right: 6px; user-select: none;">[${TemplateEngine.escapeHtml(timeDisplay)}]</span><span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; margin-right: 6px; letter-spacing: 0.5px; ${badgeStyle}">${level}</span>${tagHtml}<span style="color: #f1f5f9;">${TemplateEngine.escapeHtml(msg)}</span></div>`;
   }
@@ -2709,7 +2751,7 @@ document.addEventListener('DOMContentLoaded', () => {
     centerAmt.textContent = (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
       ? PaymentsCsv.formatCompactCurrency(donut.totalRevenue || 0)
       : (donut.formattedTotal || '₹0.00');
-    if (centerLbl) centerLbl.textContent = `${donut.totalCount || 0} Donations`;
+    if (centerLbl) centerLbl.textContent = `${donut.totalCount || 0} Earnings`;
 
     const segments = donut.segments || [];
 
@@ -2766,27 +2808,42 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
+  let currentTimelineData = [];
+
   function renderTrendChart(trends) {
-    const svg = el('analytics-trend-svg');
+    currentTimelineData = trends || [];
+    renderSingleTrendSvg(el('analytics-trend-svg'), currentTimelineData, false);
+    renderSingleTrendSvg(el('modal-analytics-trend-svg'), currentTimelineData, true);
+
+    // Update modal summary if present
+    const modalTotalEl = el('modal-trend-total');
+    if (modalTotalEl && currentTimelineData.length) {
+      const sum = currentTimelineData.reduce((acc, t) => acc + (t.amount || 0), 0);
+      const curr = (typeof currentConfig !== 'undefined' && currentConfig && currentConfig.currency) || 'INR';
+      modalTotalEl.textContent = `Period Total: ${PaymentsCsv.formatCurrency(sum, curr)}`;
+    }
+  }
+
+  function renderSingleTrendSvg(svg, trends, isModal = false) {
     if (!svg) return;
 
     if (!trends || !trends.length) {
       svg.innerHTML = `
-        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="12">
+        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="${isModal ? '14' : '12'}" font-family="Geist, sans-serif">
           No transactions recorded for this timeframe
         </text>
       `;
       return;
     }
 
-    const viewBoxWidth = 680;
-    const viewBoxHeight = 240;
+    const viewBoxWidth = isModal ? 840 : 540;
+    const viewBoxHeight = isModal ? 320 : 220;
     svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
 
-    const leftMargin = 68;
-    const rightMargin = 20;
-    const topMargin = 22;
-    const bottomMargin = 38;
+    const leftMargin = isModal ? 70 : 55;
+    const rightMargin = isModal ? 24 : 16;
+    const topMargin = isModal ? 28 : 22;
+    const bottomMargin = isModal ? 42 : 34;
 
     const plotWidth = viewBoxWidth - leftMargin - rightMargin;
     const plotHeight = viewBoxHeight - topMargin - bottomMargin;
@@ -2826,14 +2883,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <line x1="${leftMargin}" y1="${y}" x2="${viewBoxWidth - rightMargin}" y2="${y}"
           class="${isBaseline ? 'trend-axis-line' : 'trend-grid-line'}"
           stroke-width="${isBaseline ? '1.5' : '1'}" />
-        <text x="${leftMargin - 8}" y="${y + 3.5}" text-anchor="end" fill="var(--text-muted)" font-size="10" font-family="sans-serif">
+        <text x="${leftMargin - 8}" y="${y + 4}" text-anchor="end" fill="var(--text-muted)" font-size="${isModal ? '12' : '11'}" font-weight="500" font-family="Geist, sans-serif">
           ${formatShortCurrency(val)}
         </text>
       `;
     });
 
     const slotWidth = plotWidth / trends.length;
-    const barWidth = Math.max(8, Math.min(34, slotWidth * 0.62));
+    const barWidth = Math.max(isModal ? 12 : 8, Math.min(isModal ? 48 : 32, slotWidth * 0.65));
 
     let barsHtml = '';
     trends.forEach((t, i) => {
@@ -2843,19 +2900,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const barY = topMargin + plotHeight - barHeight;
       const isPositive = t.amount > 0;
 
-      // Draw subtle vertical grid delimiter
       const delimiterHtml = i > 0 ? `
         <line x1="${slotX}" y1="${topMargin}" x2="${slotX}" y2="${topMargin + plotHeight}" stroke="rgba(255,255,255,0.03)" stroke-dasharray="2,2" />
+      ` : '';
+
+      // Amount label on top of bar for modal or positive spikes
+      const valueLabelHtml = (isModal && isPositive) ? `
+        <text x="${slotX + slotWidth / 2}" y="${barY - 6}" text-anchor="middle"
+          fill="var(--cyan)" font-size="11" font-weight="600" font-family="Geist, sans-serif">
+          ${formatShortCurrency(t.amount)}
+        </text>
       ` : '';
 
       barsHtml += `
         ${delimiterHtml}
         <g class="trend-slot-group" data-date="${t.date}" data-amount="${t.formattedAmount}">
-          <!-- Hover highlight column slot -->
           <rect x="${slotX}" y="${topMargin}" width="${slotWidth}" height="${plotHeight}"
-            fill="rgba(0, 229, 255, 0.06)" rx="3" opacity="0" class="trend-slot-hover" />
+            fill="rgba(0, 244, 254, 0.06)" rx="4" opacity="0" class="trend-slot-hover" />
 
-          <!-- Clean Rounded Gradient Bar without dot -->
           <rect class="trend-bar" x="${barX}" y="${barY}" width="${barWidth}" height="${barHeight}" rx="4"
             fill="${isPositive ? 'url(#trendBarGrad)' : 'rgba(255,255,255,0.08)'}"
             opacity="${isPositive ? '0.92' : '0.4'}"
@@ -2863,12 +2925,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <title>${t.date}: ${t.formattedAmount} (${t.count || 0} donations)</title>
           </rect>
 
-          <!-- X Axis Day / Week / Month Label -->
-          <text x="${slotX + slotWidth / 2}" y="${viewBoxHeight - 12}" text-anchor="middle"
-            fill="${isPositive ? 'var(--text-main)' : 'var(--text-muted)'}"
-            font-size="${trends.length > 10 ? '9' : '10.5'}"
-            font-weight="${isPositive ? '600' : '400'}"
-            font-family="sans-serif"
+          ${valueLabelHtml}
+
+          <!-- X Axis Label with High Legibility Font -->
+          <text x="${slotX + slotWidth / 2}" y="${viewBoxHeight - (isModal ? 14 : 10)}" text-anchor="middle"
+            fill="${isPositive ? '#ffffff' : 'var(--text-muted)'}"
+            font-size="${isModal ? '12.5' : (trends.length > 10 ? '10' : '11.5')}"
+            font-weight="${isPositive ? '600' : '500'}"
+            font-family="Geist, sans-serif"
           >
             ${t.dayLabel}
           </text>
@@ -2879,9 +2943,9 @@ document.addEventListener('DOMContentLoaded', () => {
     svg.innerHTML = `
       <defs>
         <linearGradient id="trendBarGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#00e5ff" />
-          <stop offset="60%" stop-color="#7928ca" />
-          <stop offset="100%" stop-color="rgba(121, 40, 202, 0.3)" />
+          <stop offset="0%" stop-color="#d5baff" />
+          <stop offset="60%" stop-color="#9146ff" />
+          <stop offset="100%" stop-color="rgba(145, 70, 255, 0.3)" />
         </linearGradient>
       </defs>
       ${gridHtml}
@@ -2900,9 +2964,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!body.children.length || !body.querySelector('tr[style*="border-bottom"]')) {
       body.innerHTML = `
-        <tr>
-          <td colspan="7" style="padding: 40px 20px; text-align: center;">
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+        <tr class="table-loading-row">
+          <td colspan="7">
+            <div class="table-loading-container">
               <div class="rotation-spinner spinner-lg"></div>
               <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Loading transactions ledger...</div>
             </div>
@@ -2941,7 +3005,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btnNext) btnNext.disabled = data.page >= data.totalPages;
 
       if (!txs.length) {
-        body.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: var(--text-muted);">No matching transactions found</td></tr>';
+        body.innerHTML = `
+          <tr class="table-empty-row">
+            <td colspan="7">
+              <div class="table-loading-container">
+                <i data-lucide="inbox" style="width: 28px; height: 28px; color: var(--text-dim); opacity: 0.5;"></i>
+                <div style="font-size: 13px; color: var(--text-muted);">No matching transactions found</div>
+              </div>
+            </td>
+          </tr>
+        `;
+        if (window.lucide) lucide.createIcons();
         return;
       }
 
@@ -2955,23 +3029,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return `
           <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 8px 10px; color: var(--text-muted); font-size: 11px;">
-              <div style="font-weight: 500; color: var(--text-main);">${tx.date || ''}</div>
-              <div style="font-size: 10px;">${tx.time || ''}</div>
+            <td style="padding: 10px 10px; color: var(--text-muted); font-size: 12px;">
+              <div style="font-weight: 400; color: var(--text-main); font-size: 13px;">${tx.date || ''}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${tx.time || ''}</div>
             </td>
-            <td style="padding: 8px 10px;">
-              <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${TemplateEngine.escapeHtml(rawName)}</div>
+            <td style="padding: 10px 10px;">
+              <div style="font-weight: 400; color: var(--text-main); font-size: 13px;">${TemplateEngine.escapeHtml(rawName)}</div>
             </td>
-            <td style="padding: 8px 10px;">
-              ${hasAlias ? `<div style="color: var(--accent); font-weight: 600; font-size: 12px;"><i data-lucide="tag" style="width: 11px; height: 11px; vertical-align: middle; margin-right: 3px;"></i>${TemplateEngine.escapeHtml(formattedName)}</div>` : '<span style="opacity: 0.3; font-size: 11px;">—</span>'}
+            <td style="padding: 10px 10px;">
+              ${hasAlias ? `<div style="color: var(--accent-light, #d5baff); font-weight: 400; font-size: 13px;"><i data-lucide="tag" style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i>${TemplateEngine.escapeHtml(formattedName)}</div>` : '<span style="opacity: 0.3; font-size: 12px;">—</span>'}
             </td>
-            <td style="padding: 8px 10px;">
+            <td style="padding: 10px 10px;">
               <span class="provider-badge ${pKey}">${TemplateEngine.escapeHtml(meta.name)}</span>
             </td>
-            <td style="padding: 8px 10px; color: var(--text-muted); font-size: 11px;">
-              ${tx.message ? `<div style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${TemplateEngine.escapeHtml(tx.message)}</div>` : '<span style="opacity: 0.4;">—</span>'}
+            <td style="padding: 10px 10px; color: var(--text-muted); font-size: 12.5px;">
+              ${tx.message ? `<div style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f1f5f9;">${TemplateEngine.escapeHtml(tx.message)}</div>` : '<span style="opacity: 0.4;">—</span>'}
             </td>
-            <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: var(--accent); font-size: 13px;">
+            <td style="padding: 10px 10px; text-align: right; font-weight: 400; color: var(--text-main); font-size: 13px; font-variant-numeric: tabular-nums;">
               ${PaymentsCsv.formatCurrency(tx.amount, curr)}
             </td>
             <td style="padding: 6px 10px; text-align: center; white-space: nowrap;">
@@ -3357,49 +3431,77 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ── Ledger height controls ────────────────────────────────────────
+    // ── Ledger height expand/collapse toggle ─────────────────────────
     (function () {
-      const LEDGER_HEIGHTS = { sm: 220, md: 420, lg: 720 };
+      const NORMAL_HEIGHT = 420;
+      const EXPANDED_HEIGHT = 760;
       const LEDGER_HEIGHT_KEY = 'ledger_height_pref';
       const container = document.querySelector('.analytics-ledger-table-container');
-      if (!container) return;
+      const expandBtn = el('btn-ledger-expand');
+      if (!container || !expandBtn) return;
 
-      function setLedgerHeight(px) {
-        container.style.height = px + 'px';
-        try { localStorage.setItem(LEDGER_HEIGHT_KEY, String(px)); } catch (_) { }
-        const btnSm = el('btn-ledger-height-sm');
-        const btnMd = el('btn-ledger-height-md');
-        const btnLg = el('btn-ledger-height-lg');
-        const accent = 'var(--accent)';
-        const muted = 'var(--text-muted)';
-        if (btnSm) btnSm.style.color = px === LEDGER_HEIGHTS.sm ? accent : muted;
-        if (btnMd) btnMd.style.color = px === LEDGER_HEIGHTS.md ? accent : muted;
-        if (btnLg) btnLg.style.color = px === LEDGER_HEIGHTS.lg ? accent : muted;
+      function updateExpandState(isExpanded) {
+        const height = isExpanded ? EXPANDED_HEIGHT : NORMAL_HEIGHT;
+        container.style.height = height + 'px';
+        try { localStorage.setItem(LEDGER_HEIGHT_KEY, isExpanded ? 'expanded' : 'collapsed'); } catch (_) { }
+
+        expandBtn.title = isExpanded ? 'Collapse table height' : 'Expand table height';
+        expandBtn.innerHTML = `<i data-lucide="${isExpanded ? 'minimize-2' : 'maximize-2'}" style="width:13px; height:13px;"></i>`;
+        if (window.lucide) lucide.createIcons();
       }
 
       // Restore persisted preference
+      let initialExpanded = false;
       try {
-        const saved = parseInt(localStorage.getItem(LEDGER_HEIGHT_KEY), 10);
-        if (saved && saved >= 220) setLedgerHeight(saved);
-        else setLedgerHeight(LEDGER_HEIGHTS.md);
-      } catch (_) { setLedgerHeight(LEDGER_HEIGHTS.md); }
+        initialExpanded = localStorage.getItem(LEDGER_HEIGHT_KEY) === 'expanded';
+      } catch (_) { }
+      updateExpandState(initialExpanded);
 
-      on('btn-ledger-height-sm', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.sm));
-      on('btn-ledger-height-md', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.md));
-      on('btn-ledger-height-lg', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.lg));
-
-      // Expand/collapse toggle — cycles sm → md → lg → sm
       on('btn-ledger-expand', 'click', () => {
-        const current = parseInt(container.style.height, 10) || LEDGER_HEIGHTS.md;
-        const next = current <= LEDGER_HEIGHTS.sm ? LEDGER_HEIGHTS.md
-          : current <= LEDGER_HEIGHTS.md ? LEDGER_HEIGHTS.lg
-            : LEDGER_HEIGHTS.sm;
-        setLedgerHeight(next);
+        const currentHeight = parseInt(container.style.height, 10) || NORMAL_HEIGHT;
+        const isNowExpanded = currentHeight < EXPANDED_HEIGHT;
+        updateExpandState(isNowExpanded);
       });
     })();
 
     on('select-trend-view-mode', 'change', (e) => {
       analyticsState.timelineMode = e.target.value;
+      const modalSelect = el('select-modal-trend-view-mode');
+      if (modalSelect) modalSelect.value = e.target.value;
       fetchAndRenderAnalytics();
+    });
+
+    on('select-modal-trend-view-mode', 'change', (e) => {
+      analyticsState.timelineMode = e.target.value;
+      const cardSelect = el('select-trend-view-mode');
+      if (cardSelect) cardSelect.value = e.target.value;
+      fetchAndRenderAnalytics();
+    });
+
+    const openTimelineModal = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const modal = el('modal-timeline-expand');
+      if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+        renderSingleTrendSvg(el('modal-analytics-trend-svg'), currentTimelineData, true);
+      }
+    };
+
+    const closeTimelineModal = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const modal = el('modal-timeline-expand');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    };
+
+    on('btn-open-timeline-modal', 'click', openTimelineModal);
+    on('modal-timeline-close', 'click', closeTimelineModal);
+    on('btn-close-timeline-modal', 'click', closeTimelineModal);
+    on('modal-timeline-expand', 'click', (e) => {
+      if (e.target && e.target.id === 'modal-timeline-expand') closeTimelineModal(e);
     });
 
     on('select-donut-view-mode', 'change', (e) => {

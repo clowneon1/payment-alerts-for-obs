@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- Raw Text Search & Actions Bar (Bigger & Roomier) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@color/surface1">
+
+        <EditText
+            android:id="@+id/etSearchAlerts"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:hint="Search any text, amount, sender…"
+            android:inputType="text"
+            android:background="@color/surface2"
+            android:textColor="@color/textMain"
+            android:textColorHint="@color/textDim"
+            android:textSize="13.5sp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/btnClearAlerts"
+            android:layout_width="wrap_content"
+            android:layout_height="46dp"
+            android:text="Clear"
+            android:textSize="12sp"
+            android:textColor="@color/textMuted"
+            android:backgroundTint="@color/surface2"
+            android:layout_marginStart="8dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/border" />
+
+    <!-- Alert Count Header -->
+    <TextView
+        android:id="@+id/tvAlertsCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="0 alerts received"
+        android:textSize="11sp"
+        android:textColor="@color/textDim"
+        android:paddingStart="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone" />
+
+    <!-- Empty State -->
+    <LinearLayout
+        android:id="@+id/layoutEmptyState"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No Payment Alerts Yet"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/textMuted"
+            android:layout_marginBottom="6dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Incoming UPI notifications will appear here in real-time."
+            android:textSize="12.5sp"
+            android:textColor="@color/textDim"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- Recycler View -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerAlerts"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:padding="10dp" />
+
+</LinearLayout>

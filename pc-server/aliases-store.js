@@ -1,7 +1,7 @@
 /**
  * StreamPe — Donor Aliases CSV Store
  *
- * Manages donor alias mappings stored in `data/aliases.csv` (sender,alias,updatedAt).
+ * Manages donor alias mappings stored in `data/<profile>/aliases.csv` (sender,alias,updatedAt).
  * Maintains an in-memory O(1) case-insensitive lookup table for fast substitution
  * during live alerts and WebSocket payloads.
  */
@@ -69,11 +69,27 @@ function initAliasesStore(dataDir) {
   if (!fs.existsSync(baseDataDir)) {
     fs.mkdirSync(baseDataDir, { recursive: true });
   }
+  // Pre-load all existing profile aliases from disk
+  try {
+    const entries = fs.readdirSync(baseDataDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const aliasFile = path.join(baseDataDir, entry.name, 'aliases.csv');
+        if (fs.existsSync(aliasFile)) {
+          loadAliasesForProfile(entry.name);
+        }
+      }
+    }
+  } catch (_) {}
 }
 
 function loadAliasesForProfile(profileName) {
   const prof = profileName || 'Default';
-  const store = profileStores.get(prof) || { nameToAlias: new Map(), aliasToName: new Map() };
+  let store = profileStores.get(prof);
+  if (!store) {
+    store = { nameToAlias: new Map(), aliasToName: new Map() };
+    profileStores.set(prof, store);
+  }
   store.nameToAlias.clear();
   store.aliasToName.clear();
 
@@ -128,14 +144,21 @@ function saveAliasesForProfile(profileName) {
 
 function getAlias(senderName, profileName = 'Default') {
   if (!senderName) return '';
-  const store = getStoreForProfile(profileName);
+  const prof = profileName || 'Default';
+  const store = getStoreForProfile(prof);
   const entry = store.nameToAlias.get(String(senderName).trim().toLowerCase());
   return entry ? entry.alias : '';
 }
 
-function setAlias(senderName, alias, profileName = 'Default') {
+function setAlias(senderName, alias, profileOrNote = 'Default', maybeProfile) {
   if (!senderName || !alias) return false;
-  const prof = profileName || 'Default';
+  let prof = 'Default';
+  if (typeof maybeProfile === 'string' && maybeProfile) {
+    prof = maybeProfile;
+  } else if (typeof profileOrNote === 'string' && profileOrNote) {
+    prof = profileOrNote;
+  }
+
   const store = getStoreForProfile(prof);
   const senderKey = String(senderName).trim().toLowerCase();
   const entry = {
@@ -170,8 +193,12 @@ function formatDonorName(rawName, settings = {}, profileName = 'Default') {
   let name = String(rawName || 'Anonymous').trim();
   if (!name) return 'Anonymous';
 
+  const prof = profileName || 'Default';
   if (settings.enableAliases !== false) {
-    const alias = getAlias(name, profileName);
+    let alias = getAlias(name, prof);
+    if (!alias && prof !== 'Default') {
+      alias = getAlias(name, 'Default');
+    }
     if (alias) {
       name = alias;
     }
