@@ -83,11 +83,13 @@
       max: parseInt(recent.maxEntries, 10)
     });
 
-    if (recent.code.enableCustomCode !== false && recent.code.customHTML && recent.code.customHTML.trim()) {
-      container.innerHTML = TemplateEngine.render(recent.code.customHTML, {
-        title: recentTitle,
-        count: displayItems.length
-      });
+    if (recent.code && recent.code.enableCustomCode !== false) {
+      container.innerHTML = (typeof recent.code.customHTML === 'string' && recent.code.customHTML)
+        ? TemplateEngine.render(recent.code.customHTML, {
+            title: recentTitle,
+            count: displayItems.length
+          })
+        : '';
       const list = container.querySelector('.lb-list');
       if (list) list.innerHTML = rowsHtml(displayItems, recent);
       if (window.lucide) lucide.createIcons();

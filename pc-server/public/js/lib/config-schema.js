@@ -584,15 +584,15 @@
   }
 
   // Stored code defaults to the baseline source code so that enabling it
-  // results in a functional widget immediately.
+  // results in a functional widget immediately, but allows saving empty code.
   function normalizeCode(raw, kind) {
     const src = raw && typeof raw === 'object' ? raw : {};
     const defaults = DEFAULT_CODE[kind] || DEFAULT_CODE.alert;
     return {
       enableCustomCode: bool(src.enableCustomCode, false),
-      customHTML: (typeof src.customHTML === 'string' && src.customHTML.trim()) ? src.customHTML : defaults.customHTML,
-      customCSS: (typeof src.customCSS === 'string' && src.customCSS.trim()) ? src.customCSS : defaults.customCSS,
-      customJS: (typeof src.customJS === 'string' && src.customJS.trim()) ? src.customJS : defaults.customJS
+      customHTML: typeof src.customHTML === 'string' ? src.customHTML : defaults.customHTML,
+      customCSS: typeof src.customCSS === 'string' ? src.customCSS : defaults.customCSS,
+      customJS: typeof src.customJS === 'string' ? src.customJS : defaults.customJS
     };
   }
 

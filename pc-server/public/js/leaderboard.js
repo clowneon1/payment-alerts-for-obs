@@ -87,11 +87,13 @@
       max: parseInt(lb.maxEntries, 10)
     });
 
-    if (lb.code.enableCustomCode !== false && lb.code.customHTML && lb.code.customHTML.trim()) {
-      container.innerHTML = TemplateEngine.render(lb.code.customHTML, {
-        title: lbTitle,
-        count: topSupporters.length
-      });
+    if (lb.code && lb.code.enableCustomCode !== false) {
+      container.innerHTML = (typeof lb.code.customHTML === 'string' && lb.code.customHTML)
+        ? TemplateEngine.render(lb.code.customHTML, {
+            title: lbTitle,
+            count: topSupporters.length
+          })
+        : '';
       const list = container.querySelector('.lb-list');
       if (list) list.innerHTML = rowsHtml(topSupporters, lb);
       return;

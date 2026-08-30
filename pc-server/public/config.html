@@ -679,89 +679,38 @@
           <details class="collapsible-advanced" style="margin-top: 16px;">
             <summary class="collapsible-summary">
               <span><i data-lucide="code"
-                  style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;"></i> Advanced Custom
-                Code Overrides (HTML/CSS/JS)</span>
+                  style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;"></i> Advanced Custom Code</span>
               <span><i data-lucide="chevron-down"></i></span>
             </summary>
             <div class="collapsible-content">
               <div class="warning-callout" style="margin-top: 0;">
                 <span class="warning-icon"><i data-lucide="alert-triangle"></i></span>
                 <div>
-                  <strong>Security Warning:</strong> Custom HTML, CSS, and JavaScript functions are executed at your own
-                  risk. Verify code before running to ensure it performs safely.
+                  <strong>Security Warning:</strong> Custom HTML, CSS, and JavaScript functions are executed directly in OBS / browser sources.
                 </div>
               </div>
 
-              <div class="panel-header-with-switch" style="margin-bottom: 16px;">
-                <span style="font-weight: 600; font-size: 13px;">Enable Custom Code</span>
-                <label class="switch-container">
-                  <input type="checkbox" id="chk-enable-custom-code" />
-                  <span class="switch-slider"></span>
-                </label>
+              <div style="display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <div>
+                    <div style="font-weight: 600; font-size: 13.5px; color: #ffffff;">Enable Custom Alert Code</div>
+                    <div style="font-size: 12px; color: var(--text-dim);">Override visual theme with custom HTML, CSS &amp; JS</div>
+                  </div>
+                  <label class="switch-container">
+                    <input type="checkbox" id="chk-enable-custom-code" />
+                    <span class="switch-slider"></span>
+                  </label>
+                </div>
+
+                <button class="btn btn-primary btn-popout-code" type="button" data-popout-widget="alerts"
+                  style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 16px; font-size: 13px;">
+                  <i data-lucide="code-2"></i> Open Code Studio
+                </button>
               </div>
 
-              <div class="code-editor-container">
-                <div class="code-tabs-header">
-                  <div class="code-tabs">
-                    <button class="code-tab-btn active" type="button" data-code-tab="html">HTML</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="css">CSS</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="js">JS</button>
-                  </div>
-                  <div style="display: flex; gap: 6px;">
-                    <button class="btn btn-outline btn-format-code" type="button"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="align-left"></i> Format</button>
-                    <button class="btn btn-secondary btn-reset-widget-code" type="button" id="btn-reset-alert-code"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="rotate-ccw"></i> Reset Code</button>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="html" id="code-panel-html">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-custom-html" class="form-control code-editor-input"></textarea>
-                  </div>
-                  <div class="snippet-btns">
-                    <button class="snippet-btn" type="button" data-snippet="html-default"><i data-lucide="file"></i>
-                      Default Card
-                      HTML</button>
-                    <button class="snippet-btn" type="button" data-snippet="html-badge"><i data-lucide="tag"></i> Badge
-                      Style
-                      HTML</button>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="css" id="code-panel-css" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-custom-css" class="form-control code-editor-input"></textarea>
-                  </div>
-                  <div class="snippet-btns">
-                    <button class="snippet-btn" type="button" data-snippet="css-no-border"><i data-lucide="x"></i>
-                      Remove Left
-                      Border</button>
-                    <button class="snippet-btn" type="button" data-snippet="css-transparent"><i data-lucide="ghost"></i>
-                      Transparent
-                      Card</button>
-                    <button class="snippet-btn" type="button" data-snippet="css-large-media"><i data-lucide="image"></i>
-                      100%
-                      Media Width</button>
-                    <button class="snippet-btn" type="button" data-snippet="css-glow"><i data-lucide="sparkles"></i>
-                      Neon Glow</button>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="js" id="code-panel-js" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-custom-js" class="form-control code-editor-input"></textarea>
-                  </div>
-                  <div class="snippet-btns">
-                    <button class="snippet-btn" type="button" data-snippet="js-log"><i data-lucide="scroll"></i> Log
-                      Notification
-                      Data</button>
-                    <button class="snippet-btn" type="button" data-snippet="js-scale"><i data-lucide="zap"></i> Scale
-                      Pulse
-                      Animation</button>
-                  </div>
-                </div>
-              </div>
+              <textarea id="input-custom-html" style="display: none;"></textarea>
+              <textarea id="input-custom-css" style="display: none;"></textarea>
+              <textarea id="input-custom-js" style="display: none;"></textarea>
             </div>
           </details>
         </div>
@@ -887,50 +836,40 @@
                 </div>
               </div>
 
-              <div class="form-group"
-                style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
-                <div class="label-with-switch">
-                  <label style="margin-bottom: 0;">Gradient Options</label>
-                  <label class="checkbox-row" style="margin-top: 0;">
-                    <input type="checkbox" id="chk-goal-use-gradient" checked />
-                    <span>Use Gradient</span>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <label for="input-goal-fill-color2" style="margin-bottom: 0;">Secondary Gradient Color</label>
+                  <label class="checkbox-row" style="margin-bottom: 0; font-size: 11.5px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--text-muted);">
+                    <input type="checkbox" id="chk-goal-use-gradient" checked style="width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer;" />
+                    <span>Enable</span>
                   </label>
                 </div>
-                <div id="goal-fill2-container" style="margin-top: 10px;">
-                  <label>Secondary Fill Color</label>
-                  <div class="color-picker-row">
-                    <input type="color" id="input-goal-fill-color2" class="color-picker" value="#7ce3ff" />
-                    <input type="text" id="input-goal-fill-color2-hex" class="form-control" value="#7ce3ff" />
-                  </div>
+                <div id="goal-fill2-container" class="color-picker-row">
+                  <input type="color" id="input-goal-fill-color2" class="color-picker" value="#7ce3ff" />
+                  <input type="text" id="input-goal-fill-color2-hex" class="form-control" value="#7ce3ff" />
                 </div>
               </div>
 
               <div class="form-row">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="input-goal-bar-height">Bar Height (px)</label>
-                    <input type="number" id="input-goal-bar-height" class="form-control" min="1" max="500" value="36" />
-                  </div>
-                  <div class="form-group">
-                    <label for="select-goal-effect">Bar Fill Effect</label>
-                    <select id="select-goal-effect" class="form-control">
-                      <option value="none">None</option>
-                      <option value="glow">Animated Glow</option>
-                      <option value="shimmer">Shimmer Streak</option>
-                    </select>
-                  </div>
+                <div class="form-group">
+                  <label for="input-goal-bar-height">Bar Height (px)</label>
+                  <input type="number" id="input-goal-bar-height" class="form-control" min="1" max="500" value="36" />
                 </div>
+                <div class="form-group">
+                  <label for="select-goal-effect">Bar Fill Effect</label>
+                  <select id="select-goal-effect" class="form-control">
+                    <option value="none">None</option>
+                    <option value="glow">Animated Glow</option>
+                    <option value="shimmer">Shimmer Streak</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
                 <div class="form-group">
                   <label for="input-goal-bar-roundness">Bar Roundness (px)</label>
                   <input type="number" id="input-goal-bar-roundness" class="form-control" min="0" max="200"
                     value="40" />
-                </div>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="input-goal-bg-opacity">Background Opacity (%)</label>
-                  <input type="number" id="input-goal-bg-opacity" class="form-control" min="0" max="100" value="100" />
                 </div>
                 <div class="form-group">
                   <label for="input-goal-bar-opacity">Bar Opacity (%)</label>
@@ -948,6 +887,11 @@
                   <label for="input-goal-border-width">Border Width (px)</label>
                   <input type="number" id="input-goal-border-width" class="form-control" min="0" max="50" value="1" />
                 </div>
+              </div>
+
+              <div class="form-group">
+                <label for="input-goal-bg-opacity">Background Opacity (%)</label>
+                <input type="number" id="input-goal-bg-opacity" class="form-control" min="0" max="100" value="100" />
               </div>
             </div>
           </details>
@@ -1074,15 +1018,16 @@
               <span><i data-lucide="chevron-down"></i></span>
             </summary>
             <div class="collapsible-content">
+              <div class="form-group">
+                <label for="goal-canvas-preset">Canvas Preset</label>
+                <select id="goal-canvas-preset" class="form-control" data-canvas-preset="goal">
+                  <option value="1080p">1080p — 1920 × 1080</option>
+                  <option value="720p">720p — 1280 × 720</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+
               <div class="form-row">
-                <div class="form-group">
-                  <label for="goal-canvas-preset">Canvas Preset</label>
-                  <select id="goal-canvas-preset" class="form-control" data-canvas-preset="goal">
-                    <option value="1080p">1080p — 1920 × 1080</option>
-                    <option value="720p">720p — 1280 × 720</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
                 <div class="form-group">
                   <label for="goal-canvas-width">Canvas Width (px)</label>
                   <input type="number" id="goal-canvas-width" class="form-control" min="100" max="7680" value="1920" />
@@ -1093,74 +1038,50 @@
                 </div>
               </div>
 
-              <div class="form-group" style="margin-top: 10px;">
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                  <button class="btn btn-secondary" type="button" id="btn-goal-test-add"><i data-lucide="zap"></i> Add
-                    &#8377;100 Test</button>
-                  <button class="btn btn-danger" type="button" id="btn-goal-reset"><i data-lucide="rotate-ccw"></i>
-                    Reset Current Amount</button>
+              <div class="form-group">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <button class="btn btn-secondary" type="button" id="btn-goal-test-add"><i data-lucide="zap"></i> Add &#8377;100 Test</button>
+                  <button class="btn btn-danger" type="button" id="btn-goal-reset"><i data-lucide="rotate-ccw"></i> Reset Current Amount</button>
                 </div>
               </div>
             </div>
           </details>
 
-          <details class="collapsible-advanced">
+          <details class="collapsible-advanced" style="margin-top: 16px;">
             <summary class="collapsible-summary">
-              <span><i data-lucide="settings"
-                  style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;"></i> Advanced Code &amp;
-                Layout Settings</span>
+              <span><i data-lucide="code"
+                  style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;"></i> Advanced Custom Code</span>
               <span><i data-lucide="chevron-down"></i></span>
             </summary>
             <div class="collapsible-content">
               <div class="warning-callout" style="margin-top: 0;">
                 <span class="warning-icon"><i data-lucide="alert-triangle"></i></span>
                 <div>
-                  <strong>Security Warning:</strong> Custom HTML, CSS, and JavaScript functions are executed at your own
-                  risk. Verify code before running to ensure it performs safely.
+                  <strong>Security Warning:</strong> Custom HTML, CSS, and JavaScript functions are executed directly in OBS / browser sources.
                 </div>
               </div>
 
-              <div class="panel-header-with-switch" style="margin-bottom: 12px;">
-                <span style="font-weight: 600; font-size: 13px;">Enable Custom Goal Code</span>
-                <label class="switch-container">
-                  <input type="checkbox" id="chk-enable-goal-custom-code" />
-                  <span class="switch-slider"></span>
-                </label>
+              <div style="display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <div>
+                    <div style="font-weight: 600; font-size: 13.5px; color: #ffffff;">Enable Custom Goal Code</div>
+                    <div style="font-size: 12px; color: var(--text-dim);">Override goal bar styling with custom HTML, CSS &amp; JS</div>
+                  </div>
+                  <label class="switch-container">
+                    <input type="checkbox" id="chk-enable-goal-custom-code" />
+                    <span class="switch-slider"></span>
+                  </label>
+                </div>
+
+                <button class="btn btn-primary btn-popout-code" type="button" data-popout-widget="goal"
+                  style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 16px; font-size: 13px;">
+                  <i data-lucide="code-2"></i> Open Code Studio
+                </button>
               </div>
 
-              <div class="code-editor-container">
-                <div class="code-tabs-header">
-                  <div class="code-tabs">
-                    <button class="code-tab-btn active" type="button" data-code-tab="html">HTML</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="css">CSS</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="js">JS</button>
-                  </div>
-                  <div style="display: flex; gap: 6px;">
-                    <button class="btn btn-outline btn-format-code" type="button"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="align-left"></i> Format</button>
-                    <button class="btn btn-secondary btn-reset-widget-code" type="button" id="btn-reset-goal-code"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="rotate-ccw"></i> Reset Code</button>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="html" id="code-panel-goal-html">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-goal-custom-html" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="css" id="code-panel-goal-css" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-goal-custom-css" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="js" id="code-panel-goal-js" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-goal-custom-js" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-              </div>
+              <textarea id="input-goal-custom-html" style="display: none;"></textarea>
+              <textarea id="input-goal-custom-css" style="display: none;"></textarea>
+              <textarea id="input-goal-custom-js" style="display: none;"></textarea>
             </div>
           </details>
         </div>
@@ -1520,45 +1441,27 @@
                 </div>
               </div>
 
-              <div class="panel-header-with-switch" style="margin-bottom: 12px;">
-                <span style="font-weight: 600; font-size: 13px;">Enable Custom Code for Active List</span>
-                <label class="switch-container">
-                  <input type="checkbox" id="chk-enable-list-custom-code" />
-                  <span class="switch-slider"></span>
-                </label>
-              </div>
-
-              <div class="code-editor-container">
-                <div class="code-tabs-header">
-                  <div class="code-tabs">
-                    <button class="code-tab-btn active" type="button" data-code-tab="html">HTML</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="css">CSS</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="js">JS</button>
+              <div style="display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <div>
+                    <div style="font-weight: 600; font-size: 13.5px; color: #ffffff;">Enable Custom List Code</div>
+                    <div style="font-size: 12px; color: var(--text-dim);">Override list/feed layout with custom HTML, CSS &amp; JS</div>
                   </div>
-                  <div style="display: flex; gap: 6px;">
-                    <button class="btn btn-outline btn-format-code" type="button"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="align-left"></i> Format</button>
-                    <button class="btn btn-secondary btn-reset-widget-code" type="button" id="btn-reset-list-code"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="rotate-ccw"></i> Reset Code</button>
-                  </div>
+                  <label class="switch-container">
+                    <input type="checkbox" id="chk-enable-list-custom-code" />
+                    <span class="switch-slider"></span>
+                  </label>
                 </div>
 
-                <div class="code-tab-panel" data-code-panel="html" id="code-panel-list-html">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-list-custom-html" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-                <div class="code-tab-panel" data-code-panel="css" id="code-panel-list-css" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-list-custom-css" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-                <div class="code-tab-panel" data-code-panel="js" id="code-panel-list-js" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-list-custom-js" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
+                <button class="btn btn-primary btn-popout-code" type="button" data-popout-widget="list"
+                  style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 16px; font-size: 13px;">
+                  <i data-lucide="code-2"></i> Open Code Studio
+                </button>
               </div>
+
+              <textarea id="input-list-custom-html" style="display: none;"></textarea>
+              <textarea id="input-list-custom-css" style="display: none;"></textarea>
+              <textarea id="input-list-custom-js" style="display: none;"></textarea>
             </div>
           </details>
         </div>
@@ -1844,72 +1747,27 @@
                 </div>
               </div>
 
-              <div class="panel-header-with-switch" style="margin-bottom: 12px;">
-                <span style="font-weight: 600; font-size: 13px;">Enable Custom Cycling Code</span>
-                <label class="switch-container">
-                  <input type="checkbox" id="chk-enable-cycling-custom-code" />
-                  <span class="switch-slider"></span>
-                </label>
+              <div style="display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <div>
+                    <div style="font-weight: 600; font-size: 13.5px; color: #ffffff;">Enable Custom Cycling Code</div>
+                    <div style="font-size: 12px; color: var(--text-dim);">Override cycling banner theme with custom HTML, CSS &amp; JS</div>
+                  </div>
+                  <label class="switch-container">
+                    <input type="checkbox" id="chk-enable-cycling-custom-code" />
+                    <span class="switch-slider"></span>
+                  </label>
+                </div>
+
+                <button class="btn btn-primary btn-popout-code" type="button" data-popout-widget="cycling"
+                  style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 9px 16px; font-size: 13px;">
+                  <i data-lucide="code-2"></i> Open Code Studio
+                </button>
               </div>
 
-              <div class="code-editor-container">
-                <div class="code-tabs-header">
-                  <div class="code-tabs">
-                    <button class="code-tab-btn active" type="button" data-code-tab="html">HTML</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="css">CSS</button>
-                    <button class="code-tab-btn" type="button" data-code-tab="js">JS</button>
-                  </div>
-                  <div style="display: flex; gap: 6px;">
-                    <button class="btn btn-outline btn-format-code" type="button"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="align-left"></i> Format</button>
-                    <button class="btn btn-secondary btn-reset-widget-code" type="button" id="btn-reset-cycling-code"
-                      style="padding: 2px 8px; font-size: 11px;"><i data-lucide="rotate-ccw"></i> Reset Code</button>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="html" id="code-panel-cycling-html">
-                  <div class="variable-pills-container" style="margin-bottom: 8px;">
-                    <span class="pills-label">Click variable tag to insert into template:</span>
-                    <div class="variable-pills">
-                      <span class="var-pill" data-var="label"
-                        data-target-input="input-cycling-custom-html">{{label}}</span>
-                      <span class="var-pill" data-var="text"
-                        data-target-input="input-cycling-custom-html">{{text}}</span>
-                      <span class="var-pill" data-var="transitionEffect"
-                        data-target-input="input-cycling-custom-html">{{transitionEffect}}</span>
-                      <span class="var-pill" data-var="mediaHtml"
-                        data-target-input="input-cycling-custom-html">{{mediaHtml}}</span>
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-cycling-custom-html" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="css" id="code-panel-cycling-css" style="display: none;">
-                  <div class="css-reference-box">
-                    <div class="css-ref-header"><i data-lucide="info"
-                        style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i> Cycling
-                      Widget CSS Classes Reference (Click tag to insert/copy):</div>
-                    <div class="css-ref-tags">
-                      <span class="css-pill" data-copy=".cycling-card">{ .cycling-card }</span>
-                      <span class="css-pill" data-copy=".cycling-icon">{ .cycling-icon }</span>
-                      <span class="css-pill" data-copy=".cycling-content">{ .cycling-content }</span>
-                      <span class="css-pill" data-copy=".cycling-label">{ .cycling-label }</span>
-                      <span class="css-pill" data-copy=".cycling-text">{ .cycling-text }</span>
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-cycling-custom-css" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-
-                <div class="code-tab-panel" data-code-panel="js" id="code-panel-cycling-js" style="display: none;">
-                  <div class="form-group" style="margin-bottom: 8px;">
-                    <textarea id="input-cycling-custom-js" class="form-control code-editor-input"></textarea>
-                  </div>
-                </div>
-              </div>
+              <textarea id="input-cycling-custom-html" style="display: none;"></textarea>
+              <textarea id="input-cycling-custom-css" style="display: none;"></textarea>
+              <textarea id="input-cycling-custom-js" style="display: none;"></textarea>
             </div>
           </details>
         </div>
@@ -2833,6 +2691,114 @@
         <button type="button" class="btn btn-secondary" id="btn-cancel-new-list">Cancel</button>
         <button type="button" class="btn btn-primary" id="btn-confirm-new-list"><i data-lucide="check"></i> Create
           List</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Fullscreen Advanced Code & Layout Studio Modal ── -->
+  <div id="modal-code-studio" class="code-studio-modal" style="display: none;">
+    <div class="code-studio-backdrop" id="code-studio-backdrop"></div>
+    <div class="code-studio-window">
+      <!-- Studio Header -->
+      <div class="code-studio-header">
+        <div class="code-studio-title-area">
+          <div class="code-studio-badge" id="code-studio-badge">ALERTS</div>
+          <h3 id="code-studio-title" class="code-studio-title">Code Studio</h3>
+        </div>
+
+        <!-- Language Switcher Tabs -->
+        <div class="code-studio-lang-tabs">
+          <button class="code-studio-lang-btn active" type="button" data-studio-lang="html">
+            <i data-lucide="code"></i> HTML
+          </button>
+          <button class="code-studio-lang-btn" type="button" data-studio-lang="css">
+            <i data-lucide="palette"></i> CSS
+          </button>
+          <button class="code-studio-lang-btn" type="button" data-studio-lang="js">
+            <i data-lucide="terminal"></i> JS
+          </button>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="code-studio-actions">
+          <button class="btn btn-outline" id="btn-studio-format" type="button" title="Format Code (Prettier)">
+            <i data-lucide="align-left"></i> Format
+          </button>
+          <button class="btn btn-secondary" id="btn-studio-reset" type="button" title="Reset this language to shipped default template">
+            <i data-lucide="rotate-ccw"></i> Reset
+          </button>
+          <button class="btn btn-outline" id="btn-studio-toggle-preview" type="button" title="Toggle Live Preview Pane">
+            <i data-lucide="columns"></i> <span id="lbl-studio-preview-toggle">Hide Preview</span>
+          </button>
+          <button class="btn btn-primary" id="btn-studio-save" type="button" title="Save Code to Server (Ctrl+S)">
+            <i data-lucide="save"></i> Save
+          </button>
+          <button class="code-studio-close-btn" id="btn-studio-close" type="button" title="Close (ESC)">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Studio Body (Split Editor & Live Sandbox) -->
+      <div class="code-studio-body" id="code-studio-body">
+        <!-- Editor Column -->
+        <div class="code-studio-editor-column" id="code-studio-editor-column">
+          <!-- CodeMirror Host -->
+          <div class="code-studio-editor-host" id="code-studio-editor-host">
+            <textarea id="input-studio-editor-textarea" style="display: none;"></textarea>
+          </div>
+
+          <!-- Bottom Toolkit & Presets Dock -->
+          <!-- Bottom Toolkit Dock -->
+          <div class="code-studio-bottom-panel" id="code-studio-bottom-panel">
+            <div class="code-studio-bottom-header">
+              <div class="code-studio-bottom-tabs">
+                <button class="code-studio-bottom-tab active" data-bottom-tab="vars" type="button">
+                  <i data-lucide="tag"></i> Variables
+                </button>
+                <button class="code-studio-bottom-tab" data-bottom-tab="classes" type="button">
+                  <i data-lucide="palette"></i> CSS Classes
+                </button>
+              </div>
+            </div>
+            <div class="code-studio-bottom-content" id="code-studio-bottom-content">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Preview Column -->
+        <div class="code-studio-preview-column" id="code-studio-preview-column">
+          <div class="code-studio-preview-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="live-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #00F593; display: inline-block;"></span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Live Sandbox Preview</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-outline" id="btn-studio-trigger-test" type="button" style="font-size: 11px; padding: 2px 8px;">
+                <i data-lucide="zap"></i> Trigger Test
+              </button>
+            </div>
+          </div>
+          <div class="code-studio-iframe-wrap">
+            <iframe id="code-studio-iframe" class="code-studio-iframe" frameborder="0"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- Studio Status Bar -->
+      <div class="code-studio-status-bar">
+        <div class="code-studio-status-left">
+          <span id="code-studio-mode-pill" class="code-studio-mode-pill">HTML</span>
+          <span id="code-studio-cursor-info">Line 1, Col 1</span>
+          <span class="code-studio-status-dot">•</span>
+          <span id="code-studio-char-info">0 chars</span>
+        </div>
+        <div class="code-studio-status-right">
+          <span><kbd>ESC</kbd> Close</span>
+          <span><kbd>Ctrl</kbd>+<kbd>S</kbd> Save</span>
+          <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> Format</span>
+        </div>
       </div>
     </div>
   </div>

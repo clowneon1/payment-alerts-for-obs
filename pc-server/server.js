@@ -34,21 +34,26 @@ const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('bun') &&
   !process.execPath.endsWith('bun.exe');
 
+const isDev = !isCompiled && process.env.NODE_ENV !== 'production';
+
 let baseDir = isCompiled ? path.dirname(process.execPath) : __dirname;
 let PUBLIC_DIR = path.join(baseDir, 'public');
 if (!fs.existsSync(PUBLIC_DIR)) {
   PUBLIC_DIR = path.join(__dirname, 'public');
 }
 
-// Default storage root is Windows %APPDATA%\StreamPe (or ~/.config/StreamPe on POSIX)
-let defaultAppDataDir = getDefaultAppDataDir();
-let writableBaseDir = defaultAppDataDir;
+// In development mode (npm run dev), strictly use pc-server/data as root
+// In compiled/production runtime, use AppData (%APPDATA%\StreamPe) or custom configured path
+let defaultAppDataDir = isDev ? path.join(__dirname, 'data') : getDefaultAppDataDir();
+let writableBaseDir = isDev ? path.join(__dirname, 'data') : defaultAppDataDir;
 
-try {
-  if (process.env.TAURI_APP_DATA) {
-    writableBaseDir = process.env.TAURI_APP_DATA;
-  }
-} catch (e) { }
+if (!isDev) {
+  try {
+    if (process.env.TAURI_APP_DATA) {
+      writableBaseDir = process.env.TAURI_APP_DATA;
+    }
+  } catch (e) { }
+}
 
 // Auto-migrate legacy portable directory files (config, data, logs) to AppData if needed
 function migrateLocalDataIfNeeded(localBase, targetBase) {
@@ -123,21 +128,23 @@ app.get('/app', (req, res) => {
 // ── Path Config Bootstrapping ──
 const PATH_CONFIG_FILE = path.join(writableBaseDir, 'path-config.json');
 let customPaths = { storageRootDir: '' };
-try {
-  if (fs.existsSync(PATH_CONFIG_FILE)) {
-    customPaths = JSON.parse(fs.readFileSync(PATH_CONFIG_FILE, 'utf8')) || {};
+if (!isDev) {
+  try {
+    if (fs.existsSync(PATH_CONFIG_FILE)) {
+      customPaths = JSON.parse(fs.readFileSync(PATH_CONFIG_FILE, 'utf8')) || {};
+    }
+  } catch (e) {
+    console.error('[Server] Failed to read path-config.json:', e.message);
   }
-} catch (e) {
-  console.error('[Server] Failed to read path-config.json:', e.message);
 }
 
-const storageRoot = customPaths.storageRootDir && customPaths.storageRootDir.trim()
+const storageRoot = (!isDev && customPaths.storageRootDir && customPaths.storageRootDir.trim())
   ? path.resolve(customPaths.storageRootDir.trim())
   : writableBaseDir;
 
 const LOG_DIR = path.join(storageRoot, 'logs');
 const SETTINGS_DIR = path.join(storageRoot, 'config');
-const DATA_DIR = path.join(storageRoot, 'data');
+const DATA_DIR = isDev ? storageRoot : path.join(storageRoot, 'data');
 
 for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   try {
@@ -145,6 +152,12 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   } catch (e) {
     console.error(`[Server] Failed to create directory ${dir}:`, e.message);
   }
+}
+
+if (isDev) {
+  console.log(`[Storage] 🛠️ Dev Mode Active: Using pc-server/data as root (${storageRoot})`);
+} else {
+  console.log(`[Storage] 📦 Production Mode: Using storage root (${storageRoot})`);
 }
 
 // Consolidate legacy per-profile folders (data/<profile>/YYYY/MM.csv) into unified data/YYYY/MM.csv

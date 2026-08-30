@@ -145,14 +145,16 @@
 
     const inEffect = widget.transitionIn || widget.transitionEffect || 'slide-up';
 
-    if (widget.code && widget.code.enableCustomCode !== false && widget.code.customHTML && widget.code.customHTML.trim()) {
-      const rendered = TemplateEngine.render(widget.code.customHTML, {
-        label: TemplateEngine.escapeHtml(label),
-        text: TemplateEngine.escapeHtml(text),
-        transitionEffect: inEffect,
-        transitionIn: inEffect,
-        mediaHtml
-      });
+    if (widget.code && widget.code.enableCustomCode !== false) {
+      const rendered = (typeof widget.code.customHTML === 'string' && widget.code.customHTML)
+        ? TemplateEngine.render(widget.code.customHTML, {
+            label: TemplateEngine.escapeHtml(label),
+            text: TemplateEngine.escapeHtml(text),
+            transitionEffect: inEffect,
+            transitionIn: inEffect,
+            mediaHtml
+          })
+        : '';
       container.innerHTML = rendered;
     } else {
       container.innerHTML = `

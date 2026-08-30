@@ -134,8 +134,10 @@
     const goalTitle = TemplateEngine.render(goal.text.titleTemplate || goal.title || 'Payment Goal', context);
     context.title = goalTitle; // Use the rendered title for custom HTML
 
-    if (goal.code.enableCustomCode !== false && goal.code.customHTML && goal.code.customHTML.trim()) {
-      container.innerHTML = TemplateEngine.render(goal.code.customHTML, context);
+    if (goal.code && goal.code.enableCustomCode !== false) {
+      container.innerHTML = (typeof goal.code.customHTML === 'string' && goal.code.customHTML)
+        ? TemplateEngine.render(goal.code.customHTML, context)
+        : '';
       return;
     }
 

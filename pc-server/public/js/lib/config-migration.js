@@ -23,6 +23,16 @@
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
+  function compact(obj) {
+    const out = {};
+    if (obj && typeof obj === 'object') {
+      Object.keys(obj).forEach(k => {
+        if (obj[k] !== undefined) out[k] = obj[k];
+      });
+    }
+    return out;
+  }
+
   function isVersion2(raw) {
     return isObject(raw) && (raw.version >= ConfigSchema.CONFIG_VERSION || Array.isArray(raw.alertTemplates));
   }

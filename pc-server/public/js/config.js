@@ -29,49 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const iframe = el('preview-iframe');
 
   function initCodeEditors() {
-    const editorConfigs = [
-      { id: 'input-custom-html', mode: 'htmlmixed' },
-      { id: 'input-custom-css', mode: 'css' },
-      { id: 'input-custom-js', mode: 'javascript' },
-      { id: 'input-goal-custom-html', mode: 'htmlmixed' },
-      { id: 'input-goal-custom-css', mode: 'css' },
-      { id: 'input-goal-custom-js', mode: 'javascript' },
-      { id: 'input-lb-custom-html', mode: 'htmlmixed' },
-      { id: 'input-lb-custom-css', mode: 'css' },
-      { id: 'input-lb-custom-js', mode: 'javascript' },
-      { id: 'input-recent-custom-html', mode: 'htmlmixed' },
-      { id: 'input-recent-custom-css', mode: 'css' },
-      { id: 'input-recent-custom-js', mode: 'javascript' },
-      { id: 'input-list-custom-html', mode: 'htmlmixed' },
-      { id: 'input-list-custom-css', mode: 'css' },
-      { id: 'input-list-custom-js', mode: 'javascript' },
-      { id: 'input-cycling-custom-html', mode: 'htmlmixed' },
-      { id: 'input-cycling-custom-css', mode: 'css' },
-      { id: 'input-cycling-custom-js', mode: 'javascript' }
-    ];
+    // Inline editors replaced by centralized Code Studio
+  }
 
-    editorConfigs.forEach(conf => {
-      const textarea = el(conf.id);
-      if (!textarea) return;
-
-      const editor = CodeMirror.fromTextArea(textarea, {
-        mode: conf.mode,
-        theme: 'dracula',
-        lineNumbers: true,
-        matchBrackets: true,
-        autoCloseBrackets: true,
-        tabSize: 2,
-        indentUnit: 2,
-        viewportMargin: Infinity,
-        lineWrapping: true
-      });
-
-      editor.on('change', () => {
-        if (!suppressSync) syncLivePreview();
-      });
-
-      editors[conf.id] = editor;
-    });
+  function pulseEditorElement(cmInstance) {
+    if (!cmInstance) return;
+    const wrapper = cmInstance.getWrapperElement ? cmInstance.getWrapperElement() : (cmInstance.nodeType ? cmInstance : null);
+    if (wrapper) {
+      wrapper.classList.remove('editor-flash-pulse');
+      void wrapper.offsetWidth;
+      wrapper.classList.add('editor-flash-pulse');
+      setTimeout(() => wrapper.classList.remove('editor-flash-pulse'), 700);
+    }
   }
 
   async function formatCode(editorId) {
@@ -95,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
         singleQuote: true
       });
       editor.setValue(formatted);
-      showToast('<i data-lucide="check"></i> Code formatted');
+      pulseEditorElement(editor);
+      showToast('<i data-lucide="check"></i> Code formatted', 'success');
     } catch (err) {
       console.warn('[Prettier] Formatting error:', err);
       showToast('<i data-lucide="alert-triangle"></i> Format failed: ' + err.message.split('\n')[0], 'error');
@@ -107,7 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!toast) return;
     toast.innerHTML = message;
     if (window.lucide) lucide.createIcons();
-    toast.style.borderColor = type === 'success' ? '#00e676' : (type === 'error' ? '#ff5252' : 'var(--accent)');
+    toast.style.borderColor = type === 'error' ? '#ff5252' : 'var(--accent, #9146ff)';
+    toast.style.boxShadow = type === 'error' ? '0 8px 32px rgba(0, 0, 0, 0.75), 0 0 18px rgba(255, 82, 82, 0.35)' : '0 8px 32px rgba(0, 0, 0, 0.75), 0 0 18px var(--accent-glow, rgba(145, 70, 255, 0.35))';
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 3000);
   }
@@ -165,6 +136,511 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') el('modal-confirm').click();
     if (e.key === 'Escape') AppModal.hide(null);
   });
+
+  // ── Advanced Fullscreen Code Studio Controller ──────────────
+  // ── Advanced Fullscreen Code Studio Controller ──────────────
+  const CodeStudio = {
+    modal: null,
+    editor: null,
+    activeWidget: 'alerts', // 'alerts' | 'goal' | 'list' | 'cycling'
+    activeLang: 'html',     // 'html' | 'css' | 'js'
+    activeBottomTab: 'vars', // 'vars' | 'classes'
+    previewVisible: true,
+    debounceTimer: null,
+
+    variablesMap: {
+      alerts: [
+        { name: 'amount', desc: 'Numeric amount (e.g. 500)' },
+        { name: 'formattedAmount', desc: 'Formatted with currency (e.g. ₹500.00)' },
+        { name: 'sender', desc: 'Donor name or alias' },
+        { name: 'rawSender', desc: 'Original bank sender name' },
+        { name: 'message', desc: 'Donor message or payment note' },
+        { name: 'currency', desc: 'Currency code (e.g. INR)' },
+        { name: 'providerName', desc: 'Payment app name (e.g. PhonePe)' },
+        { name: 'providerKey', desc: 'App key (phonepe, gpay, etc)' },
+        { name: 'mediaHtml', desc: 'Rendered media element' },
+        { name: 'time', desc: 'Timestamp (e.g. 10:45 AM)' }
+      ],
+      goal: [
+        { name: 'title', desc: 'Goal title' },
+        { name: 'currentAmount', desc: 'Current accumulated amount' },
+        { name: 'targetAmount', desc: 'Goal target amount' },
+        { name: 'percentage', desc: 'Progress percentage (0-100)' },
+        { name: 'formattedCurrent', desc: 'Formatted current (e.g. ₹1,200.00)' },
+        { name: 'formattedTarget', desc: 'Formatted target (e.g. ₹5,000.00)' }
+      ],
+      list: [
+        { name: 'title', desc: 'List widget header title' },
+        { name: 'items', desc: 'Rows container placeholder' },
+        { name: 'count', desc: 'Number of donors/rows' },
+        { name: 'totalAmount', desc: 'Total sum of listed donations' },
+        { name: 'formattedTotal', desc: 'Formatted total amount' }
+      ],
+      cycling: [
+        { name: 'label', desc: 'Step label (e.g. Top Donor)' },
+        { name: 'text', desc: 'Content text (e.g. Rahul - ₹500)' },
+        { name: 'transitionEffect', desc: 'Active transition name' },
+        { name: 'mediaHtml', desc: 'Optional media HTML' }
+      ]
+    },
+
+    cssClassesMap: {
+      alerts: [
+        '.alert-box', '.alert-media', '.alert-content', '.alert-sender',
+        '.alert-amount', '.alert-message', '.alert-time', '.alert-badge'
+      ],
+      goal: [
+        '.goal-container', '.goal-title', '.goal-amount-text',
+        '.goal-bar-container', '.goal-bar-fill', '.goal-percentage'
+      ],
+      list: [
+        '.lb-card', '.lb-header', '.lb-title', '.lb-list',
+        '.lb-row', '.lb-badge', '.lb-name', '.lb-amount',
+        '.rank-1', '.rank-2', '.rank-3'
+      ],
+      cycling: [
+        '.cycling-card', '.cycling-icon', '.cycling-content',
+        '.cycling-label', '.cycling-text'
+      ]
+    },
+
+    widgetTargetMap: {
+      alerts: {
+        badge: 'ALERTS',
+        previewUrl: '/overlay/alert',
+        codeKind: 'alert'
+      },
+      goal: {
+        badge: 'GOAL WIDGET',
+        previewUrl: '/overlay/goal',
+        codeKind: 'goal'
+      },
+      list: {
+        badge: 'LIST WIDGET',
+        previewUrl: '/overlay/list',
+        codeKind: 'leaderboard'
+      },
+      cycling: {
+        badge: 'CYCLING WIDGET',
+        previewUrl: '/overlay/cycling-widget',
+        codeKind: 'cycling'
+      }
+    },
+
+    getCodeObject() {
+      if (this.activeWidget === 'alerts') {
+        const tpl = currentTemplate();
+        if (tpl) {
+          if (!tpl.code) tpl.code = ConfigSchema.normalizeCode({}, 'alert');
+          return tpl.code;
+        }
+      } else if (this.activeWidget === 'goal') {
+        const g = config.widgets?.goal;
+        if (g) {
+          if (!g.code) g.code = ConfigSchema.normalizeCode({}, 'goal');
+          return g.code;
+        }
+      } else if (this.activeWidget === 'list') {
+        const l = currentListConfig();
+        if (l) {
+          if (!l.code) l.code = ConfigSchema.normalizeCode({}, l.type === 'recent' ? 'recent' : 'leaderboard');
+          return l.code;
+        }
+      } else if (this.activeWidget === 'cycling') {
+        const c = config.widgets?.cycling;
+        if (c) {
+          if (!c.code) c.code = ConfigSchema.normalizeCode({}, 'cycling');
+          return c.code;
+        }
+      }
+      return null;
+    },
+
+    getCurrentLangKey(lang) {
+      if (lang === 'html') return 'customHTML';
+      if (lang === 'css') return 'customCSS';
+      if (lang === 'js') return 'customJS';
+      return 'customHTML';
+    },
+
+    getCodeValue(lang) {
+      const codeObj = this.getCodeObject();
+      if (!codeObj) return '';
+      const key = this.getCurrentLangKey(lang);
+      return typeof codeObj[key] === 'string' ? codeObj[key] : '';
+    },
+
+    syncCurrentToConfig() {
+      if (!this.editor) return;
+      const codeObj = this.getCodeObject();
+      if (!codeObj) return;
+      const key = this.getCurrentLangKey(this.activeLang);
+      codeObj[key] = this.editor.getValue();
+    },
+
+    init() {
+      this.modal = el('modal-code-studio');
+      if (!this.modal) return;
+
+      const textarea = el('input-studio-editor-textarea');
+      if (textarea && !this.editor && window.CodeMirror) {
+        this.editor = CodeMirror.fromTextArea(textarea, {
+          mode: 'htmlmixed',
+          theme: 'dracula',
+          lineNumbers: true,
+          matchBrackets: true,
+          autoCloseBrackets: true,
+          tabSize: 2,
+          indentUnit: 2,
+          lineWrapping: true,
+          viewportMargin: Infinity
+        });
+
+        this.editor.on('change', () => {
+          this.onEditorChange();
+        });
+
+        this.editor.on('cursorActivity', () => {
+          this.updateCursorStatus();
+        });
+      }
+
+      this.bindEvents();
+    },
+
+    bindEvents() {
+      document.querySelectorAll('.btn-popout-code').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const widget = btn.dataset.popoutWidget || 'alerts';
+          this.open(widget, 'html');
+        });
+      });
+
+      const closeBtn = el('btn-studio-close');
+      const saveBtn = el('btn-studio-save');
+      const backdrop = el('code-studio-backdrop');
+      if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+      if (backdrop) backdrop.addEventListener('click', () => this.close());
+      if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+          this.syncCurrentToConfig();
+          const res = await saveToServer();
+          if (res && res.ok) {
+            showToast('<i data-lucide="check"></i> Code changes saved successfully!', 'success');
+          }
+        });
+      }
+
+      document.querySelectorAll('.code-studio-lang-btn').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const lang = tab.dataset.studioLang;
+          this.switchLang(lang);
+        });
+      });
+
+      document.querySelectorAll('.code-studio-bottom-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          this.activeBottomTab = tab.dataset.bottomTab;
+          document.querySelectorAll('.code-studio-bottom-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.bottomTab === this.activeBottomTab);
+          });
+          this.renderBottomPanel();
+        });
+      });
+
+      const formatBtn = el('btn-studio-format');
+      if (formatBtn) formatBtn.addEventListener('click', () => this.formatCurrentCode());
+
+      const resetBtn = el('btn-studio-reset');
+      if (resetBtn) resetBtn.addEventListener('click', () => this.resetCurrentCode());
+
+      const togglePreviewBtn = el('btn-studio-toggle-preview');
+      if (togglePreviewBtn) togglePreviewBtn.addEventListener('click', () => this.togglePreview());
+
+      const testBtn = el('btn-studio-trigger-test');
+      if (testBtn) testBtn.addEventListener('click', () => this.triggerTestInPreview());
+
+      window.addEventListener('keydown', async (e) => {
+        if (!this.isOpen()) return;
+
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this.close();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          this.syncCurrentToConfig();
+          const res = await saveToServer();
+          if (res && res.ok) showToast('<i data-lucide="check"></i> Code changes saved!', 'success');
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          this.formatCurrentCode();
+        }
+      });
+    },
+
+    isOpen() {
+      return this.modal && this.modal.style.display !== 'none';
+    },
+
+    open(widget = 'alerts', lang = 'html') {
+      this.activeWidget = widget;
+      this.activeLang = lang;
+
+      const meta = this.widgetTargetMap[widget] || this.widgetTargetMap.alerts;
+      const badgeEl = el('code-studio-badge');
+      if (badgeEl) {
+        if (widget === 'list') {
+          const activeList = currentListConfig();
+          badgeEl.textContent = (activeList && activeList.type === 'recent') ? 'RECENT DONATIONS' : 'TOP SUPPORTERS';
+        } else {
+          badgeEl.textContent = meta.badge;
+        }
+      }
+
+      const testBtn = el('btn-studio-trigger-test');
+      if (testBtn) {
+        testBtn.style.display = (widget === 'alerts') ? 'inline-flex' : 'none';
+      }
+
+      const iframe = el('code-studio-iframe');
+      if (iframe) {
+        let previewUrl = meta.previewUrl;
+        if (widget === 'list') {
+          const activeList = currentListConfig();
+          previewUrl = `/overlay/list?id=${activeList.id}`;
+        }
+        iframe.src = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}preview=true&t=${Date.now()}`;
+      }
+
+      this.modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+
+      this.switchLang(lang, true);
+      if (window.lucide) lucide.createIcons();
+    },
+
+    close() {
+      this.syncCurrentToConfig();
+      if (this.modal) this.modal.style.display = 'none';
+      document.body.style.overflow = '';
+      readFormValues();
+      syncLivePreview();
+    },
+
+    switchLang(lang, isInitial = false) {
+      if (!isInitial) {
+        this.syncCurrentToConfig();
+      }
+
+      this.activeLang = lang;
+
+      document.querySelectorAll('.code-studio-lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.studioLang === lang);
+      });
+
+      const modePill = el('code-studio-mode-pill');
+      if (modePill) modePill.textContent = lang.toUpperCase();
+
+      let mode = 'htmlmixed';
+      if (lang === 'css') mode = 'css';
+      if (lang === 'js') mode = 'javascript';
+
+      // Auto set bottom tab to classes for CSS, or vars for HTML/JS
+      this.activeBottomTab = lang === 'css' ? 'classes' : 'vars';
+      document.querySelectorAll('.code-studio-bottom-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.bottomTab === this.activeBottomTab);
+      });
+
+      const initialValue = this.getCodeValue(lang);
+
+      if (this.editor) {
+        this.editor.setOption('mode', mode);
+        this.editor.setValue(initialValue || '');
+        this.editor.clearHistory();
+        setTimeout(() => {
+          this.editor.refresh();
+          this.editor.focus();
+        }, 50);
+      }
+
+      this.renderBottomPanel();
+      this.updateCursorStatus();
+    },
+
+    renderBottomPanel() {
+      const container = el('code-studio-bottom-content');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      if (this.activeBottomTab === 'vars') {
+        const vars = this.variablesMap[this.activeWidget] || [];
+        if (vars.length === 0) {
+          container.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">No template variables for this widget.</span>';
+          return;
+        }
+
+        vars.forEach(v => {
+          const chip = document.createElement('span');
+          chip.className = 'code-studio-chip';
+          chip.textContent = v;
+          chip.addEventListener('click', () => {
+            if (this.editor) {
+              const doc = this.editor.getDoc();
+              const cursor = doc.getCursor();
+              doc.replaceRange(v, cursor);
+              this.editor.focus();
+            }
+            copyToClipboard(v).catch(() => { });
+            showToast(`<i data-lucide="copy"></i> Copied "${v}"`);
+          });
+          container.appendChild(chip);
+        });
+      } else {
+        const classes = this.cssClassesMap[this.activeWidget] || [];
+        if (classes.length === 0) {
+          container.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">No class selectors for this widget.</span>';
+          return;
+        }
+
+        classes.forEach(c => {
+          const pill = document.createElement('span');
+          pill.className = 'code-studio-class-pill';
+          pill.textContent = `{ ${c} }`;
+          pill.addEventListener('click', () => {
+            if (this.activeLang === 'css' && this.editor) {
+              const doc = this.editor.getDoc();
+              const cursor = doc.getCursor();
+              doc.replaceRange(`\n${c} {\n  \n}\n`, cursor);
+              this.editor.focus();
+            }
+            copyToClipboard(c).catch(() => { });
+            showToast(`<i data-lucide="copy"></i> Copied selector "${c}"`);
+          });
+          container.appendChild(pill);
+        });
+      }
+
+      if (window.lucide) lucide.createIcons();
+    },
+
+    onEditorChange() {
+      this.syncCurrentToConfig();
+      this.updateCursorStatus();
+
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        syncLivePreview();
+      }, 100);
+    },
+
+    updateCursorStatus() {
+      if (!this.editor) return;
+      const cursor = this.editor.getCursor();
+      const posEl = el('code-studio-cursor-pos');
+      if (posEl) {
+        posEl.textContent = `Ln ${cursor.line + 1}, Col ${cursor.ch + 1}`;
+      }
+    },
+
+    async formatCurrentCode() {
+      if (!this.editor || !window.prettier) return;
+
+      const code = this.editor.getValue();
+      let parser = 'html';
+      let plugins = [prettierPlugins.html];
+
+      if (this.activeLang === 'css') {
+        parser = 'css';
+        plugins = [prettierPlugins.postcss];
+      } else if (this.activeLang === 'js') {
+        parser = 'babel';
+        plugins = [prettierPlugins.babel];
+      }
+
+      try {
+        const formatted = await prettier.format(code, {
+          parser,
+          plugins,
+          tabWidth: 2,
+          singleQuote: true,
+          printWidth: 80
+        });
+        this.editor.setValue(formatted);
+        this.syncCurrentToConfig();
+        syncLivePreview();
+        pulseEditorElement(this.editor);
+        showToast('<i data-lucide="check"></i> Code formatted', 'success');
+      } catch (err) {
+        console.warn('[Prettier] Formatting error:', err);
+        showToast('<i data-lucide="alert-triangle"></i> Format failed: ' + err.message.split('\n')[0], 'error');
+      }
+    },
+
+    resetCurrentCode() {
+      if (!this.editor) return;
+      let defaultCode = '';
+      if (this.activeWidget === 'alerts') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customJS;
+      } else if (this.activeWidget === 'goal') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customJS;
+      } else if (this.activeWidget === 'list') {
+        const activeList = currentListConfig();
+        const kind = (activeList && activeList.type === 'recent') ? 'recent' : 'leaderboard';
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customJS;
+      } else if (this.activeWidget === 'cycling') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customJS;
+      }
+
+      this.editor.setValue(defaultCode);
+      this.syncCurrentToConfig();
+      syncLivePreview();
+      pulseEditorElement(this.editor);
+      showToast('<i data-lucide="rotate-ccw"></i> Reset to default code');
+    },
+
+    togglePreview() {
+      this.previewVisible = !this.previewVisible;
+      const previewCol = el('code-studio-preview-column');
+      const editorCol = el('code-studio-editor-column');
+      const label = el('lbl-studio-preview-toggle');
+
+      if (previewCol) previewCol.classList.toggle('hidden', !this.previewVisible);
+      if (editorCol) editorCol.classList.toggle('full-width', !this.previewVisible);
+      if (label) label.textContent = this.previewVisible ? 'Hide Preview' : 'Show Preview';
+
+      setTimeout(() => {
+        if (this.editor) this.editor.refresh();
+      }, 250);
+    },
+
+    triggerTestInPreview() {
+      const iframe = el('code-studio-iframe');
+      if (!iframe || !iframe.contentWindow) return;
+
+      const loadedTemplate = currentTemplate();
+      const testData = {
+        ...sampleAlert(),
+        alertTemplateId: loadedTemplate ? loadedTemplate.id : null
+      };
+
+      iframe.contentWindow.postMessage({
+        type: 'TRIGGER_TEST_ALERT',
+        data: testData
+      }, '*');
+
+      showToast('<i data-lucide="zap"></i> Sent test event to preview sandbox');
+    }
+  };
 
   // Works in both HTTPS (navigator.clipboard) and plain HTTP / OBS browser sources (execCommand fallback).
   // Pass the originating button element as the second argument to get a visual "✓ Copied!" flash animation.
@@ -474,11 +950,12 @@ document.addEventListener('DOMContentLoaded', () => {
         positionY: tplAnchor.y,
         width: numVal('tpl-layout-width', template.layout.width)
       });
+      const prevTplCode = template.code || ConfigSchema.DEFAULT_CODE.alert;
       template.code = {
         enableCustomCode: checked('chk-enable-custom-code', false),
-        customHTML: val('input-custom-html', ''),
-        customCSS: val('input-custom-css', ''),
-        customJS: val('input-custom-js', '')
+        customHTML: (typeof prevTplCode.customHTML === 'string') ? prevTplCode.customHTML : ConfigSchema.DEFAULT_CODE.alert.customHTML,
+        customCSS: (typeof prevTplCode.customCSS === 'string') ? prevTplCode.customCSS : ConfigSchema.DEFAULT_CODE.alert.customCSS,
+        customJS: (typeof prevTplCode.customJS === 'string') ? prevTplCode.customJS : ConfigSchema.DEFAULT_CODE.alert.customJS
       };
     }
 
@@ -509,11 +986,12 @@ document.addEventListener('DOMContentLoaded', () => {
       fillColor2: val('input-goal-fill-color2-hex') || val('input-goal-fill-color2', goal.style.fillColor2),
       effect: val('select-goal-effect', goal.style.effect)
     });
+    const prevGoalCode = goal.code || ConfigSchema.DEFAULT_CODE.goal;
     goal.code = {
       enableCustomCode: checked('chk-enable-goal-custom-code', false),
-      customHTML: val('input-goal-custom-html', ''),
-      customCSS: val('input-goal-custom-css', ''),
-      customJS: val('input-goal-custom-js', '')
+      customHTML: (typeof prevGoalCode.customHTML === 'string') ? prevGoalCode.customHTML : ConfigSchema.DEFAULT_CODE.goal.customHTML,
+      customCSS: (typeof prevGoalCode.customCSS === 'string') ? prevGoalCode.customCSS : ConfigSchema.DEFAULT_CODE.goal.customCSS,
+      customJS: (typeof prevGoalCode.customJS === 'string') ? prevGoalCode.customJS : ConfigSchema.DEFAULT_CODE.goal.customJS
     };
 
     const activeList = currentListConfig();
@@ -547,11 +1025,13 @@ document.addEventListener('DOMContentLoaded', () => {
       activeList.layout = Object.assign({}, activeList.layout, {
         width: numVal('input-list-layout-width', activeList.layout?.width || 450)
       });
+      const listDefault = activeList.type === 'recent' ? ConfigSchema.DEFAULT_CODE.recent : ConfigSchema.DEFAULT_CODE.leaderboard;
+      const prevListCode = activeList.code || listDefault;
       activeList.code = {
         enableCustomCode: checked('chk-enable-list-custom-code', false),
-        customHTML: val('input-list-custom-html', ''),
-        customCSS: val('input-list-custom-css', ''),
-        customJS: val('input-list-custom-js', '')
+        customHTML: (typeof prevListCode.customHTML === 'string') ? prevListCode.customHTML : listDefault.customHTML,
+        customCSS: (typeof prevListCode.customCSS === 'string') ? prevListCode.customCSS : listDefault.customCSS,
+        customJS: (typeof prevListCode.customJS === 'string') ? prevListCode.customJS : listDefault.customJS
       };
 
       if (activeList.type === 'leaderboard') {
@@ -610,11 +1090,12 @@ document.addEventListener('DOMContentLoaded', () => {
       width: numVal('cycling-layout-width', 350)
     };
 
+    const prevCyclingCode = cycling.code || ConfigSchema.DEFAULT_CODE.cycling;
     cycling.code = {
       enableCustomCode: checked('chk-enable-cycling-custom-code', false),
-      customHTML: val('input-cycling-custom-html', ''),
-      customCSS: val('input-cycling-custom-css', ''),
-      customJS: val('input-cycling-custom-js', '')
+      customHTML: (typeof prevCyclingCode.customHTML === 'string') ? prevCyclingCode.customHTML : ConfigSchema.DEFAULT_CODE.cycling.customHTML,
+      customCSS: (typeof prevCyclingCode.customCSS === 'string') ? prevCyclingCode.customCSS : ConfigSchema.DEFAULT_CODE.cycling.customCSS,
+      customJS: (typeof prevCyclingCode.customJS === 'string') ? prevCyclingCode.customJS : ConfigSchema.DEFAULT_CODE.cycling.customJS
     };
 
     config.widgets.cycling = cycling;
@@ -693,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setVal('input-goal-bg-color', goal.style.backgroundColor);
     setVal('input-goal-bg-color-hex', goal.style.backgroundColor);
     setSelectVal('select-goal-effect', goal.style.effect);
-    el('goal-fill2-container').style.display = goal.style.useGradient ? 'block' : 'none';
+    el('goal-fill2-container').style.display = goal.style.useGradient ? 'flex' : 'none';
 
     writeTextStyle(TEXT_PREFIXES.goal, goal.text);
     writeCanvas(TEXT_PREFIXES.goal, goal.canvas);
@@ -795,7 +1276,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     suppressSync = false;
     syncLivePreview();
+    updateSavedBaseline();
   }
+
+  let lastSavedSnapshot = '';
+
+  function getSerializedState() {
+    readFormValues();
+    const cleanConfig = JSON.parse(JSON.stringify(config));
+    if (cleanConfig.widgets?.goal) cleanConfig.widgets.goal.currentAmount = 0;
+    if (cleanConfig.widgets?.leaderboard) cleanConfig.widgets.leaderboard.supporters = {};
+    if (cleanConfig.widgets?.recent) cleanConfig.widgets.recent.recentDonations = [];
+    return JSON.stringify(cleanConfig);
+  }
+
+  function updateSavedBaseline() {
+    lastSavedSnapshot = getSerializedState();
+  }
+
+  function hasUnsavedChanges() {
+    if (!lastSavedSnapshot) return false;
+    return getSerializedState() !== lastSavedSnapshot;
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges()) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Are you sure you want to reload?';
+      return e.returnValue;
+    }
+  });
 
   function syncLivePreview() {
     if (suppressSync) return;
@@ -804,6 +1314,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({ type: 'SETTINGS_UPDATED', payload: config }, '*');
       iframe.contentWindow.postMessage({ type: 'config', config: config }, '*');
+    }
+    const studioIframe = el('code-studio-iframe');
+    if (studioIframe && studioIframe.contentWindow) {
+      studioIframe.contentWindow.postMessage({ type: 'SETTINGS_UPDATED', payload: config }, '*');
+      studioIframe.contentWindow.postMessage({ type: 'config', config: config }, '*');
     }
   }
 
@@ -984,6 +1499,32 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveToServer(profileName) {
     console.log('[Server IO] Saving profile to server:', profileName);
     readFormValues();
+
+    // Validate that Custom HTML is not empty when Custom Code is enabled
+    const template = currentTemplate();
+    if (template && template.code && template.code.enableCustomCode && !template.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Custom HTML cannot be empty' };
+    }
+
+    const goal = config.widgets?.goal;
+    if (goal && goal.code && goal.code.enableCustomCode && !goal.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Goal Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Goal Custom HTML cannot be empty' };
+    }
+
+    const activeList = currentListConfig();
+    if (activeList && activeList.code && activeList.code.enableCustomCode && !activeList.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> List Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'List Custom HTML cannot be empty' };
+    }
+
+    const cycling = config.widgets?.cycling;
+    if (cycling && cycling.code && cycling.code.enableCustomCode && !cycling.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Cycling Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Cycling Custom HTML cannot be empty' };
+    }
+
     const targetName = profileName || getCurrentProfileName();
     try {
       const res = await fetch('/api/profiles/save', {
@@ -997,6 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
         config = ConfigMigration.migrate(data.settings);
         if (data.profiles) await loadProfilesList(data.activeProfile);
         await fetchAndRenderAnalytics();
+        updateSavedBaseline();
       }
       return data;
     } catch (err) {
@@ -1594,6 +2136,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const SNIPPETS = {
+    // Alert Snippets
     'html-default': ConfigSchema.DEFAULT_CODE.alert.customHTML,
     'html-badge': '<div class="alert-badge" style="background:var(--accent-color);color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;margin-bottom:6px;display:inline-block;">{{sourceApp}}</div>\n{{mediaHtml}}\n<div class="alert-title" style="font-size:26px;">{{sender}} → {{amount}}</div>',
     'css-no-border': '\n.alert-box {\n  border-left: none !important;\n}',
@@ -1601,10 +2144,22 @@ document.addEventListener('DOMContentLoaded', () => {
     'css-large-media': '\n.alert-media {\n  width: 100% !important;\n  max-width: 100% !important;\n  height: auto !important;\n}',
     'css-glow': '\n.alert-box {\n  box-shadow: 0 0 25px var(--accent-color), inset 0 0 15px var(--accent-color) !important;\n}',
     'js-log': '\nconsole.log("[Payment Alert]", notifData.sender, notifData.amount);',
-    'js-scale': '\nalertBox.style.transform = "scale(1.15)";\nsetTimeout(() => alertBox.style.transform = "scale(1)", 300);'
+    'js-scale': '\nalertBox.style.transform = "scale(1.15)";\nsetTimeout(() => alertBox.style.transform = "scale(1)", 300);',
+
+    // List & Leaderboard Snippets
+    'html-lb-default': ConfigSchema.DEFAULT_CODE.leaderboard.customHTML,
+    'html-recent-default': ConfigSchema.DEFAULT_CODE.recent.customHTML,
+    'css-lb-transparent': '\n.lb-card {\n  background: transparent !important;\n  box-shadow: none !important;\n}',
+    'css-lb-glow-ranks': '\n.rank-1 { box-shadow: 0 0 16px rgba(255, 183, 3, 0.4) !important; }\n.rank-2 { box-shadow: 0 0 14px rgba(213, 186, 255, 0.35) !important; }\n.rank-3 { box-shadow: 0 0 12px rgba(145, 70, 255, 0.3) !important; }',
+    'css-lb-no-row-bg': '\n.lb-row {\n  background: transparent !important;\n  border-color: rgba(255, 255, 255, 0.05) !important;\n}',
+    'js-lb-log': '\nconsole.log("[List Overlay Items]", items);'
   };
 
   function snippetTarget(key) {
+    if (key.startsWith('html-lb-') || key.startsWith('html-recent-')) return el('input-list-custom-html');
+    if (key.startsWith('css-lb-')) return el('input-list-custom-css');
+    if (key.startsWith('js-lb-')) return el('input-list-custom-js');
+
     if (key.startsWith('html-')) return el('input-custom-html');
     if (key.startsWith('css-')) return el('input-custom-css');
     return el('input-custom-js');
@@ -1722,7 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setupActionButtons() {
     on('chk-goal-use-gradient', 'change', (e) => {
-      el('goal-fill2-container').style.display = e.target.checked ? 'block' : 'none';
+      el('goal-fill2-container').style.display = e.target.checked ? 'flex' : 'none';
       syncLivePreview();
     });
 
@@ -1743,11 +2298,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.btn-format-code').forEach(btn => {
       btn.addEventListener('click', () => {
         const container = btn.closest('.code-editor-container');
-        const activeTab = container.querySelector('.code-tab-btn.active');
+        const activeTab = container ? container.querySelector('.code-tab-btn.active') : null;
         if (!activeTab) return;
         const panel = container.querySelector(`.code-tab-panel[data-code-panel="${activeTab.dataset.codeTab}"]`);
         const textarea = panel && panel.querySelector('textarea');
-        if (textarea && textarea.id) formatCode(textarea.id);
+        if (textarea && textarea.id) formatCode(textarea.id, btn);
       });
     });
 
@@ -1817,10 +2372,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Profiles
     on('select-profile', 'change', async (e) => {
+      const targetProfile = e.target.value;
+      if (hasUnsavedChanges()) {
+        const confirmLeave = await AppModal.show({
+          title: 'Unsaved Changes',
+          message: 'You have unsaved changes in this profile that will be discarded. Are you sure you want to switch profiles?',
+          confirmText: 'Discard & Switch',
+          cancelText: 'Stay on Profile'
+        });
+        if (!confirmLeave) {
+          e.target.value = getCurrentProfileName();
+          return;
+        }
+      }
       const res = await fetch('/api/profiles/switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: e.target.value })
+        body: JSON.stringify({ name: targetProfile })
       });
       const data = await res.json();
       if (data.ok) {
@@ -2111,7 +2679,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ['btn-reset-list-code', 'list', ['input-list-custom-html', 'input-list-custom-css', 'input-list-custom-js']],
     ['btn-reset-cycling-code', 'cycling', ['input-cycling-custom-html', 'input-cycling-custom-css', 'input-cycling-custom-js']]
     ].forEach(([btnId, kind, ids]) => {
-      on(btnId, 'click', () => {
+      const btn = el(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', () => {
         let defaults = ConfigSchema.DEFAULT_CODE[kind];
         if (kind === 'list') {
           const activeList = currentListConfig();
@@ -2122,6 +2692,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal(ids[0], defaults.customHTML);
         setVal(ids[1], defaults.customCSS);
         setVal(ids[2], defaults.customJS);
+        ids.forEach(id => {
+          if (editors[id]) pulseEditorElement(editors[id]);
+        });
+        flashButtonSuccess(btn, '<i data-lucide="check"></i> Restored!');
         syncLivePreview();
         showToast('<i data-lucide="rotate-ccw"></i> Code reset to defaults');
       });
@@ -3847,34 +4421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function setupCodeAutoSeeding() {
-    const configs = [
-      { id: 'chk-enable-custom-code', kind: 'alert', fields: ['input-custom-html', 'input-custom-css', 'input-custom-js'] },
-      { id: 'chk-enable-goal-custom-code', kind: 'goal', fields: ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js'] },
-      { id: 'chk-enable-lb-custom-code', kind: 'leaderboard', fields: ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js'] }
-    ];
 
-    configs.forEach(c => {
-      on(c.id, 'change', (e) => {
-        if (!e.target.checked) return;
-
-        // If HTML or CSS is empty, seed them with the default full source
-        const htmlEmpty = !val(c.fields[0], '').trim();
-        const cssEmpty = !val(c.fields[1], '').trim();
-
-        if (htmlEmpty || cssEmpty) {
-          const defaults = ConfigSchema.DEFAULT_CODE[c.kind];
-          if (htmlEmpty) setVal(c.fields[0], defaults.customHTML);
-          if (cssEmpty) setVal(c.fields[1], defaults.customCSS);
-          // Always seed JS if empty
-          if (!val(c.fields[2], '').trim()) setVal(c.fields[2], defaults.customJS);
-
-          showToast('<i data-lucide="sparkles"></i> Restored ' + c.kind + ' baseline code', 'info');
-          syncLivePreview();
-        }
-      });
-    });
-  }
 
   let activeIconInput = null;
   const LUCIDE_ICONS_LIST = [
@@ -3979,6 +4526,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initDashboard() {
     console.log('[Config] Starting dashboard boot sequence...');
     initCodeEditors();
+    CodeStudio.init();
     setupTabs();
     setupCodeEditorTabs();
     setupVariablePills();
@@ -3990,7 +4538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCyclingWidgetEditor();
     setupIconPicker();
     setupFileBrowsers();
-    setupCodeAutoSeeding();
     setupActionButtons();
     setupSimulator();
     setupNetworkAndSystem();
@@ -3998,7 +4545,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPanelResizer();
     attachInputListeners();
     setupUpdateListeners();
-    connectDashboardWebSocket();
 
     let activeProf = 'Default';
     try {

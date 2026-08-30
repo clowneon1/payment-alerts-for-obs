@@ -98,10 +98,8 @@
     container.innerHTML = '';
     if (activeAlertTimeout) clearTimeout(activeAlertTimeout);
 
-    const alertBox = document.createElement('div');
     const animType = resolved.animation.type || 'slide-up';
     const mediaPos = resolved.image.position || 'top';
-    alertBox.className = `alert-box media-pos-${mediaPos} anim-enter-${animType}`;
 
     const mediaUrl = resolved.image.gifUrl || resolved.image.imageUrl;
     const mediaHtml = mediaUrl
@@ -113,11 +111,24 @@
     const code = resolved.code || {};
     const isCodeEnabled = code.enableCustomCode !== false;
 
-    if (isCodeEnabled && code.customHTML && code.customHTML.trim()) {
-      alertBox.innerHTML = TemplateEngine.render(code.customHTML, {
-        ...notifData, mediaHtml, title: titleText, subtitle: subtitleText
+    let alertBoxNode = null;
+
+    if (isCodeEnabled) {
+      const customHtmlTrimmed = (typeof code.customHTML === 'string') ? code.customHTML.trim() : '';
+      if (!customHtmlTrimmed) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = TemplateEngine.render(customHtmlTrimmed, {
+        ...notifData,
+        mediaHtml,
+        title: titleText,
+        subtitle: subtitleText
       });
+      alertBoxNode = container.firstElementChild || container;
     } else {
+      const alertBox = document.createElement('div');
+      alertBox.className = `alert-box media-pos-${mediaPos} anim-enter-${animType}`;
       const messageHtml = notifData.message ? `<div class="alert-message">${TemplateEngine.escapeHtml(notifData.message)}</div>` : '';
       alertBox.innerHTML = `
         ${mediaHtml}
@@ -127,13 +138,13 @@
           ${messageHtml}
         </div>
       `;
+      container.appendChild(alertBox);
+      alertBoxNode = alertBox;
     }
-
-    container.appendChild(alertBox);
 
     if (isCodeEnabled && code.customJS && code.customJS.trim()) {
       try {
-        new Function('notifData', 'alertBox', 'settings', code.customJS)(notifData, alertBox, resolved);
+        new Function('notifData', 'alertBox', 'settings', code.customJS)(notifData, alertBoxNode, resolved);
       } catch (e) {
         console.warn('[Overlay] Custom JS execution error:', e.message);
       }
@@ -155,10 +166,12 @@
           }
         }, 30);
       }
-      alertBox.classList.remove(`anim-enter-${animType}`);
-      alertBox.classList.add(`anim-exit-${animType}`);
+      if (alertBoxNode) {
+        alertBoxNode.classList.remove(`anim-enter-${animType}`);
+        alertBoxNode.classList.add(`anim-exit-${animType}`);
+      }
       setTimeout(() => {
-        if (container.contains(alertBox)) container.removeChild(alertBox);
+        container.innerHTML = '';
       }, animDur);
     }, displayDur);
   }
