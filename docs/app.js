@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     {
       src: 'assets/earning-overview-dashboard.png',
       title: '📊 Earning Overview & Analytics Dashboard',
-      desc: 'Interactive revenue dashboard with daily timeline trends, payment app breakdowns (PhonePe, GPay, Paytm, Amazon Pay), and top supporter rankings.'
+      desc: 'Interactive revenue dashboard with daily timeline trends, payment app breakdowns (PhonePe, GPay, Amazon Pay), and top supporter rankings.'
     },
     {
       src: 'assets/live-alert-customizer.png',
@@ -156,9 +156,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     lightboxIndex = index;
     const item = galleryItems[lightboxIndex];
+    const lightboxFrame = document.getElementById('lightbox-frame');
     if (lightboxImg) lightboxImg.src = item.src;
     if (lightboxTitle) lightboxTitle.textContent = item.title;
     if (lightboxDesc) lightboxDesc.textContent = item.desc;
+
+    if (lightboxFrame) {
+      if (item.src.includes('native-desktop-app') || item.src.includes('mobile-')) {
+        lightboxFrame.classList.add('vertical-frame');
+      } else {
+        lightboxFrame.classList.remove('vertical-frame');
+      }
+    }
 
     lightbox.classList.add('active');
     lightbox.setAttribute('aria-hidden', 'false');
@@ -264,4 +273,70 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  // ── 6. Direct Binary Asset Download Links (ZIP & APK) ───────────────────
+  async function resolveLatestReleaseDownloads() {
+    const btnZip = document.getElementById('btn-download-portable');
+    const btnApk = document.getElementById('btn-download-apk');
+    const navDownload = document.querySelector('.nav-btn-primary');
+
+    // Default fallback URLs
+    const defaultReleaseUrl = 'https://github.com/clowneon1/streampe/releases/latest';
+
+    if (btnZip) {
+      btnZip.href = defaultReleaseUrl;
+    }
+    if (btnApk) {
+      btnApk.href = defaultReleaseUrl;
+    }
+
+    try {
+      const res = await fetch('https://api.github.com/repos/clowneon1/streampe/releases/latest');
+      if (!res.ok) return;
+      const release = await res.json();
+      if (!release) return;
+
+      const tag = release.tag_name || 'v2.2.6';
+      const cleanTag = tag.startsWith('v') ? tag : `v${tag}`;
+
+      // Dynamically update announcement bar & hero badge to match latest published GitHub release
+      const announcementText = document.getElementById('announcement-text');
+      const announcementLink = document.getElementById('announcement-link');
+      const badgeVersion = document.getElementById('badge-version');
+      if (announcementText) {
+        announcementText.textContent = `🎉 StreamPe ${cleanTag} Released with Live Payment Alerts & OBS Overlays!`;
+      }
+      if (announcementLink) {
+        announcementLink.textContent = `Get ${cleanTag}`;
+      }
+      if (badgeVersion) {
+        badgeVersion.textContent = `🚀 StreamPe ${cleanTag} Release Out Now`;
+      }
+
+      if (!Array.isArray(release.assets)) return;
+
+      const zipAsset = release.assets.find(a => a.name.toLowerCase().endsWith('.zip') || a.name.toLowerCase().includes('portable'));
+      const apkAsset = release.assets.find(a => a.name.toLowerCase().endsWith('.apk') || a.name.toLowerCase().includes('companion'));
+
+      if (zipAsset && btnZip) {
+        btnZip.href = zipAsset.browser_download_url;
+        btnZip.setAttribute('download', zipAsset.name);
+        const span = btnZip.querySelector('span');
+        if (span) span.textContent = `📦 Download ${zipAsset.name}`;
+      }
+      if (apkAsset && btnApk) {
+        btnApk.href = apkAsset.browser_download_url;
+        btnApk.setAttribute('download', apkAsset.name);
+        const span = btnApk.querySelector('span');
+        if (span) span.textContent = `📱 Download ${apkAsset.name}`;
+      }
+      if (zipAsset && navDownload) {
+        navDownload.href = zipAsset.browser_download_url;
+        navDownload.setAttribute('download', zipAsset.name);
+      }
+    } catch (err) {
+      console.warn('[ReleaseAPI] Fallback to direct download links:', err.message);
+    }
+  }
+  resolveLatestReleaseDownloads();
 });

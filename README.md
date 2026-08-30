@@ -23,6 +23,11 @@ A free, open-source, ultra-fast, and self-hosted solution to display real-time m
 | <img src="readme-assets/unified-list-widget.png" width="420" alt="Top Supporters & Recent List" /> | <img src="readme-assets/auto-cycling-widget.png" width="420" alt="Auto Cycling Widget" /> |
 | *Modular list widget system for Top Supporters and Recent Donations* | *Rotational info widget cycling through custom cards & recent alerts* |
 
+| ⚡ Native Tauri v2 Desktop Client | 🎛️ System Preferences & Storage Root |
+| :---: | :---: |
+| <img src="readme-assets/native-desktop-app.png" width="340" alt="Native Desktop Client" /> | <img src="readme-assets/native-system-tray.png" width="340" alt="System Tray Integration" /> |
+| *Ultra-compact desktop shell with live server status & 1-click URL copy* | *Auto-start on Windows boot, system tray minimizing & custom storage root* |
+
 ### 📱 Android Companion App Features
 
 | 📡 Server Auto-Discovery (mDNS) | 📋 3-Slide Permission Setup | 🎯 App Selector |

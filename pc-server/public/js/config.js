@@ -966,7 +966,6 @@ document.addEventListener('DOMContentLoaded', () => {
     goal.title = val('input-goal-title', goal.title);
     goal.targetAmount = numVal('input-goal-target', goal.targetAmount);
     goal.currentAmount = numVal('input-goal-current', prevGoalCurrent !== undefined ? prevGoalCurrent : 0);
-    goal.startAmount = numVal('input-goal-start', goal.startAmount);
     goal.endDate = val('input-goal-end-date', goal.endDate);
     goal.text = Object.assign(readTextStyle(TEXT_PREFIXES.goal, goal.text), {
       titleTemplate: val('input-goal-title', goal.text.titleTemplate)
@@ -1156,7 +1155,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setVal('input-goal-title', goal.text.titleTemplate || goal.title);
     setVal('input-goal-target', goal.targetAmount);
     setVal('input-goal-current', goal.currentAmount);
-    setVal('input-goal-start', goal.startAmount);
     setVal('input-goal-end-date', goal.endDate);
     setVal('input-goal-fill-color', goal.style.fillColor);
     setVal('input-goal-fill-color-hex', goal.style.fillColor);
@@ -2530,59 +2528,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('<i data-lucide="alert-triangle"></i> ' + err.message);
       }
       e.target.value = '';
-    });
-
-    // ── Goal Controls (Derived from CSV Single Source of Truth) ──
-    on('btn-goal-test-add', async () => {
-      try {
-        const activeProf = getCurrentProfileName();
-        const res = await fetch('/api/donations/record', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            profile: activeProf,
-            sender: 'Test Supporter',
-            amount: 100,
-            currency: 'INR',
-            sourceApp: 'Manual Test'
-          })
-        });
-        const data = await res.json();
-        if (data.ok) {
-          config.widgets.goal.currentAmount = data.metrics.goalAmount;
-          config.widgets.leaderboard.supporters = data.metrics.supporters;
-          config.widgets.recent.recentDonations = data.metrics.recentDonations;
-          populateForm(config);
-          showToast('<i data-lucide="zap"></i> Added ₹100 donation to Goal and CSV');
-        }
-      } catch (err) {
-        showToast('<i data-lucide="alert-triangle"></i> Failed to add amount: ' + err.message);
-      }
-    });
-
-    on('btn-goal-reset', async () => {
-      const confirmed = await AppModal.show({
-        title: 'Reset Stream Goal',
-        message: 'Reset active stream goal progress back to the start amount (₹0)? (Your past donation ledger records will remain safe).'
-      });
-      if (!confirmed) return;
-      try {
-        const activeProf = getCurrentProfileName();
-        const res = await fetch('/api/goal/reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profile: activeProf })
-        });
-        const data = await res.json();
-        if (data.ok) {
-          config.widgets.goal.currentAmount = data.currentAmount;
-          setVal('input-goal-current', data.currentAmount);
-          syncLivePreview();
-          showToast('<i data-lucide="rotate-ccw"></i> Goal progress reset to ₹' + data.currentAmount);
-        }
-      } catch (err) {
-        showToast('<i data-lucide="alert-triangle"></i> Failed to reset goal progress');
-      }
     });
 
     // ── Centralized Donations Data CSV Helpers ────────────────

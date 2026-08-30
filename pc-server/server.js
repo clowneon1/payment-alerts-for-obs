@@ -428,6 +428,38 @@ function getPrimaryIp() {
   return list.length > 0 ? list[0].address : '127.0.0.1';
 }
 
+function autoSyncWindowsStartupPath() {
+  if (process.platform !== 'win32') return;
+
+  exec('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "StreamPe"', (err, stdout) => {
+    if (err || !stdout) return; // Not enabled in startup, no action needed
+
+    const currentExe = getMainAppExePath();
+    if (!currentExe) return;
+
+    try {
+      const match = stdout.match(/StreamPe\s+REG_\w+\s+(.*)/i);
+      if (match && match[1]) {
+        const rawReg = match[1].trim().replace(/^"/, '').replace(/"$/, '').trim();
+        const currentResolved = path.resolve(currentExe);
+        const regResolved = path.resolve(rawReg);
+
+        if (currentResolved.toLowerCase() !== regResolved.toLowerCase() || !fs.existsSync(regResolved)) {
+          log.info('Startup', `Auto-syncing startup registration: updating path from "${rawReg}" -> "${currentResolved}"`);
+          const cmd = `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "StreamPe" /t REG_SZ /d "\"${currentResolved}\"" /f`;
+          exec(cmd, (regErr) => {
+            if (!regErr) {
+              log.info('Startup', `Successfully auto-re-registered Windows Startup to active portable binary: "${currentResolved}"`);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      log.warn('Startup', 'Auto-sync startup path check error: ' + e.message);
+    }
+  });
+}
+
 function isWindowsStartupEnabled(callback) {
   if (process.platform !== 'win32') return callback(false);
 
@@ -437,6 +469,12 @@ function isWindowsStartupEnabled(callback) {
     // Clean up legacy registry keys silently without forcing startup enabled
     if (!err && stdout && (stdout.includes('PaymentAlertsOBS') || stdout.includes('Payment Alerts') || stdout.includes('electron.app.Payment Alerts'))) {
       exec('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "PaymentAlertsOBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Payment Alerts for OBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "electron.app.Payment Alerts for OBS" /f 2>nul', () => { });
+    }
+
+    if (hasStreamPe) {
+      // Auto-heal path if portable folder was moved, renamed, or extracted to a new release directory
+      autoSyncWindowsStartupPath();
+      return callback(true);
     }
 
     try {
@@ -1234,10 +1272,10 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
       ? parseFloat(existingMeta.goal.currentAmount)
       : ((targetSettings.widgets?.goal?.currentAmount !== undefined)
           ? parseFloat(targetSettings.widgets.goal.currentAmount)
-          : startAmount);
+          : 0);
 
     metadata = {
-      goal: { currentAmount: isNaN(preservedGoalAmount) ? startAmount : preservedGoalAmount },
+      goal: { currentAmount: isNaN(preservedGoalAmount) ? 0 : preservedGoalAmount },
       leaderboard: { supporters: metrics.supporters },
       recent: { recentDonations: metrics.recentDonations }
     };
@@ -2221,15 +2259,14 @@ app.post('/api/goal/reset', (req, res) => {
   try {
     const profile = req.body?.profile || profilesStore.activeProfile;
     const targetSettings = profilesStore.profiles[profile] || alertSettings;
-    const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
 
     const meta = loadProfileMetadata(profile);
     if (!meta.goal) meta.goal = {};
-    meta.goal.currentAmount = startAmount;
+    meta.goal.currentAmount = 0;
     saveProfileMetadata(profile, meta);
 
     if (targetSettings.widgets?.goal) {
-      targetSettings.widgets.goal.currentAmount = startAmount;
+      targetSettings.widgets.goal.currentAmount = 0;
     }
     if (profile === profilesStore.activeProfile) {
       alertSettings = targetSettings;
@@ -2239,8 +2276,8 @@ app.post('/api/goal/reset', (req, res) => {
     saveProfilesStore(profilesStore);
     broadcastSettings(alertSettings);
 
-    log.info('Goal', `Reset stream goal for profile "${profile}" to startAmount=₹${startAmount}`);
-    res.json({ ok: true, profile, currentAmount: startAmount });
+    log.info('Goal', `Reset stream goal for profile "${profile}" to ₹0`);
+    res.json({ ok: true, profile, currentAmount: 0 });
   } catch (e) {
     log.error('Goal', 'Error resetting stream goal: ' + e.message);
     res.status(500).json({ ok: false, error: e.message });
@@ -3162,6 +3199,7 @@ function startServer(portIdx = 0) {
 
     saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
     ensureWindowsFirewallMdnsRule();
+    autoSyncWindowsStartupPath();
     startMdnsDiscovery(activeServerPort);
     startUdpBroadcastListener();
     startNetworkChangeListener();

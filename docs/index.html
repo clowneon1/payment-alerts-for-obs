@@ -20,8 +20,8 @@
 
   <!-- Top Announcement Bar -->
   <div class="announcement-bar">
-    <span id="announcement-text">🎉 StreamPe v2.2.5 Released with Goal Progress Decoupling & Fullscreen Code Studio!</span>
-    <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank">Get v2.2.5</a>
+    <span id="announcement-text">🎉 Free, Self-Hosted Mobile Payment Alerts & OBS Overlays for Streamers!</span>
+    <a href="https://github.com/clowneon1/streampe/releases/latest" id="announcement-link" target="_blank">Download Latest</a>
   </div>
 
   <!-- Navbar -->
@@ -51,21 +51,22 @@
 
   <!-- Hero Section -->
   <section class="hero">
-    <div class="badge" id="badge-version">🚀 StreamPe v2.2.5 Release Out Now</div>
+    <div class="badge" id="badge-version">🚀 StreamPe Stable Release Available</div>
     <h1 class="hero-title">
       Real-Time Mobile Payment Alerts for <span class="gradient-text">OBS Studio</span>
     </h1>
     <p class="hero-subtitle">
-      A free, open-source, ultra-fast, and self-hosted application to display live Google Pay, PhonePe, and Paytm
+      A free, open-source, ultra-fast, and self-hosted application to display live Google Pay, PhonePe, and Amazon Pay
       notifications, donation goal bars, top supporters, and cycling widgets on your live stream.
     </p>
 
     <div class="hero-ctas">
-      <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-primary"
+      <a href="https://github.com/clowneon1/streampe/releases/latest" class="btn btn-primary"
         id="btn-download-portable">
         <span>📦 Download Portable ZIP (PC)</span>
       </a>
-      <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-secondary">
+      <a href="https://github.com/clowneon1/streampe/releases/latest" class="btn btn-secondary"
+        id="btn-download-apk">
         <span>📱 Download Android APK</span>
       </a>
       <a href="faq.html#play-protect" class="btn btn-secondary" style="border-color: rgba(145, 70, 255, 0.4);">
@@ -179,8 +180,8 @@
         </div>
 
         <!-- Slide 7 -->
-        <div class="carousel-slide">
-          <img src="assets/native-desktop-app.png" alt="Ultra-Lightweight Tauri v2 Desktop App" />
+        <div class="carousel-slide vertical-slide" data-orientation="vertical">
+          <img src="assets/native-desktop-app.png" alt="Ultra-Lightweight Tauri v2 Desktop App" class="vertical-img" />
           <div class="carousel-caption">
             <span class="caption-title">⚡ Native Tauri v2 Desktop Shell</span>
             <span class="caption-desc">Compact desktop wrapper with system tray integration, start-on-boot support, and one-click URL copy.</span>
@@ -241,7 +242,7 @@
       <div class="feature-card">
         <div class="feature-icon">🏷️</div>
         <h3 class="feature-title">Canonical Donor Aliases</h3>
-        <p class="feature-desc">Map raw bank and UPI sender names to custom streamer aliases with smart canonical matching across PhonePe, GPay, Paytm, and BHIM.</p>
+        <p class="feature-desc">Map raw bank and UPI sender names to custom streamer aliases with smart canonical matching across PhonePe, GPay, and Amazon Pay.</p>
       </div>
 
       <div class="feature-card">
@@ -397,7 +398,9 @@
       <button class="lightbox-nav prev" id="lightbox-prev" aria-label="Previous image">❮</button>
       <button class="lightbox-nav next" id="lightbox-next" aria-label="Next image">❯</button>
       <div class="lightbox-content">
-        <img src="" alt="Screenshot" id="lightbox-img" class="lightbox-image" />
+        <div class="lightbox-frame" id="lightbox-frame">
+          <img src="" alt="Screenshot" id="lightbox-img" class="lightbox-image" />
+        </div>
         <div class="lightbox-info">
           <h4 id="lightbox-title" class="lightbox-title"></h4>
           <p id="lightbox-desc" class="lightbox-desc"></p>

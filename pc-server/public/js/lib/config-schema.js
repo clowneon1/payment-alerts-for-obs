@@ -389,7 +389,6 @@
       enabled: true,
       allowOverflow: false,
       title: 'Payment Goal',
-      startAmount: 0,
       currentAmount: 0,
       targetAmount: 5000,
       endDate: '2026-12-31',
@@ -776,7 +775,6 @@
       if (kind === 'goal') {
         widget.allowOverflow = bool(src.allowOverflow, defaults.allowOverflow || false);
         widget.title = str(src.title, defaults.title);
-        widget.startAmount = num(src.startAmount, defaults.startAmount);
         widget.currentAmount = num(src.currentAmount, defaults.currentAmount);
         widget.targetAmount = num(src.targetAmount, defaults.targetAmount);
         widget.endDate = str(src.endDate, defaults.endDate);

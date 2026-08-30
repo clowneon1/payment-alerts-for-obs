@@ -15,11 +15,9 @@
   }
 
   function applyGoalSettings(newSettings) {
-    if (newSettings && config && config.widgets && config.widgets.goal) {
-      if (newSettings.widgets && newSettings.widgets.goal && (newSettings.widgets.goal.currentAmount === undefined || newSettings.widgets.goal.currentAmount === 0)) {
-        if (config.widgets.goal.currentAmount > 0) {
-          newSettings.widgets.goal.currentAmount = config.widgets.goal.currentAmount;
-        }
+    if (newSettings && newSettings.widgets && newSettings.widgets.goal) {
+      if (newSettings.widgets.goal.currentAmount === undefined && config?.widgets?.goal?.currentAmount !== undefined) {
+        newSettings.widgets.goal.currentAmount = config.widgets.goal.currentAmount;
       }
     }
     config = StorageHelper.mergeWithDefaults(newSettings);
@@ -73,11 +71,11 @@
     if (goal.code.enableCustomCode === false || !goal.code.customJS || !goal.code.customJS.trim()) return;
 
     try {
-      const start = parseFloat(goal.startAmount) || 0;
-      const current = parseFloat(goal.currentAmount) || 0;
-      const target = Math.max(start + 1, parseFloat(goal.targetAmount) || 5000);
-      const range = Math.max(1, target - start);
-      const rawPercent = ((current - start) / range) * 100;
+      const rawCurrent = parseFloat(goal.currentAmount);
+      const current = Number.isFinite(rawCurrent) ? rawCurrent : 0;
+      const rawTarget = parseFloat(goal.targetAmount);
+      const target = Number.isFinite(rawTarget) ? rawTarget : 5000;
+      const rawPercent = target > 0 ? (current / target) * 100 : (current > 0 ? 100 : 0);
       const allowOverflow = !!goal.allowOverflow;
       const percent = allowOverflow
         ? Math.max(0, rawPercent)
@@ -87,7 +85,6 @@
         title: goal.title,
         targetAmount: target,
         currentAmount: current,
-        startAmount: start,
         percent: percent,
         endDate: goal.endDate || '',
         config: goal
@@ -109,11 +106,11 @@
       return;
     }
 
-    const start = parseFloat(goal.startAmount) || 0;
-    const current = parseFloat(goal.currentAmount) || 0;
-    const target = Math.max(start + 1, parseFloat(goal.targetAmount) || 5000);
-    const range = Math.max(1, target - start);
-    const rawPercent = ((current - start) / range) * 100;
+    const rawCurrent = parseFloat(goal.currentAmount);
+    const current = Number.isFinite(rawCurrent) ? rawCurrent : 0;
+    const rawTarget = parseFloat(goal.targetAmount);
+    const target = Number.isFinite(rawTarget) ? rawTarget : 5000;
+    const rawPercent = target > 0 ? (current / target) * 100 : (current > 0 ? 100 : 0);
     const allowOverflow = !!goal.allowOverflow;
     const percentNum = allowOverflow
       ? Math.max(0, rawPercent)

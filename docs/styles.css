@@ -396,11 +396,17 @@ a:hover {
 
 .carousel-container {
   position: relative;
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
   background: var(--surface-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
 }
 
 .carousel-container:hover {
@@ -418,8 +424,7 @@ a:hover {
 
 .carousel-slide {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   opacity: 0;
@@ -428,6 +433,10 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #050507;
+  overflow: hidden;
+  padding: 16px 20px 88px; /* Safe inset so image never overlaps caption or gets cut off */
+  box-sizing: border-box;
 }
 
 .carousel-slide.active {
@@ -436,10 +445,33 @@ a:hover {
 }
 
 .carousel-slide img {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
-  background: #000000;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+  margin: auto;
+  display: block;
+}
+
+/* Portrait / Compact slides (desktop app / mobile) adapt cleanly within 16:9 container */
+.carousel-slide.vertical-slide,
+.carousel-slide[data-orientation="vertical"] {
+  background: radial-gradient(circle at center, rgba(145, 70, 255, 0.15) 0%, #050507 80%);
+}
+
+.carousel-slide.vertical-slide img,
+.carousel-slide img.vertical-img {
+  max-height: 100%;
+  max-width: 90%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(145, 70, 255, 0.25);
 }
 
 .carousel-caption {
@@ -448,7 +480,7 @@ a:hover {
   left: 0;
   right: 0;
   background: linear-gradient(0deg, rgba(14, 14, 16, 0.96) 0%, rgba(14, 14, 16, 0.7) 60%, transparent 100%);
-  padding: 20px 24px;
+  padding: 18px 24px;
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -564,7 +596,8 @@ a:hover {
 .lightbox-container {
   position: relative;
   width: 90vw;
-  max-width: 1200px;
+  max-width: 1080px;
+  max-height: 90vh;
   z-index: 10001;
   display: flex;
   flex-direction: column;
@@ -640,25 +673,44 @@ a:hover {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.9);
 }
 
-/* Fixed 16:9 aspect-ratio frame prevents layout shifts across different images */
+/* Strictly fixed 16:9 aspect-ratio frame prevents layout shifts across different images */
 .lightbox-frame {
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-height: 75vh;
-  background: #000000;
+  max-height: 72vh;
+  background: #050507;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.lightbox-frame.vertical-frame {
+  background: radial-gradient(circle at center, rgba(145, 70, 255, 0.16) 0%, #050507 80%);
 }
 
 .lightbox-image {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   display: block;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+  margin: auto;
+}
+
+.lightbox-frame.vertical-frame .lightbox-image {
+  max-height: 100%;
+  max-width: 85%;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 24px rgba(145, 70, 255, 0.25);
 }
 
 .lightbox-info {
