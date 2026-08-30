@@ -1228,8 +1228,16 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     const transactions = decorateWithDisplayName(rawTransactions, targetSettings, profile);
     const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
 
+    // Preserve active goal's current progress rather than overwriting with all-time historical total revenue
+    const existingMeta = loadProfileMetadata(profile);
+    const preservedGoalAmount = (existingMeta?.goal?.currentAmount !== undefined)
+      ? parseFloat(existingMeta.goal.currentAmount)
+      : ((targetSettings.widgets?.goal?.currentAmount !== undefined)
+          ? parseFloat(targetSettings.widgets.goal.currentAmount)
+          : startAmount);
+
     metadata = {
-      goal: { currentAmount: metrics.goalAmount },
+      goal: { currentAmount: isNaN(preservedGoalAmount) ? startAmount : preservedGoalAmount },
       leaderboard: { supporters: metrics.supporters },
       recent: { recentDonations: metrics.recentDonations }
     };
@@ -2209,6 +2217,36 @@ app.post('/api/donations/clear', (req, res) => {
   }
 });
 
+app.post('/api/goal/reset', (req, res) => {
+  try {
+    const profile = req.body?.profile || profilesStore.activeProfile;
+    const targetSettings = profilesStore.profiles[profile] || alertSettings;
+    const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
+
+    const meta = loadProfileMetadata(profile);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = startAmount;
+    saveProfileMetadata(profile, meta);
+
+    if (targetSettings.widgets?.goal) {
+      targetSettings.widgets.goal.currentAmount = startAmount;
+    }
+    if (profile === profilesStore.activeProfile) {
+      alertSettings = targetSettings;
+    }
+    saveSettings(alertSettings);
+    profilesStore.profiles[profile] = targetSettings;
+    saveProfilesStore(profilesStore);
+    broadcastSettings(alertSettings);
+
+    log.info('Goal', `Reset stream goal for profile "${profile}" to startAmount=₹${startAmount}`);
+    res.json({ ok: true, profile, currentAmount: startAmount });
+  } catch (e) {
+    log.error('Goal', 'Error resetting stream goal: ' + e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/settings', (req, res) => {
   syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   res.json({ activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles), settings: alertSettings });
@@ -2216,6 +2254,13 @@ app.get('/api/settings', (req, res) => {
 
 app.post('/api/settings', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  const targetProf = profilesStore.activeProfile || 'Default';
+  if (req.body?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(targetProf);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(req.body.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(targetProf, meta);
+  }
   syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;
@@ -2256,6 +2301,12 @@ app.post('/api/profiles/save', (req, res) => {
   const { name, settings: newSettings } = req.body;
   if (!name) return res.status(400).json({ ok: false, error: 'Profile name required' });
   if (newSettings) alertSettings = ConfigMigration.migrate(newSettings);
+  if (newSettings?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(name);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(newSettings.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(name, meta);
+  }
   profilesStore.profiles[name] = alertSettings;
   profilesStore.activeProfile = name;
   syncDerivedMetricsToSettings(name, false);
@@ -2284,6 +2335,13 @@ app.get('/api/config', (req, res) => {
 });
 app.post('/api/config', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  const targetProf = profilesStore.activeProfile || 'Default';
+  if (req.body?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(targetProf);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(req.body.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(targetProf, meta);
+  }
   syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;

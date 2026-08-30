@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StreamPe Desktop & Remote Controller</title>
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="shortcut icon" type="image/png" href="assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-dark: #0e0e10;
+      --surface-card: #131315;
+      --surface-hover: #18181b;
+      --border-color: #26262c;
+      --border-hover: rgba(255, 255, 255, 0.16);
+      --accent: #9146ff;
+      --accent-hover: #7a26e7;
+      --accent-light: #d5baff;
+      --accent-glow: rgba(145, 70, 255, 0.35);
+      --text-main: #ffffff;
+      --text-muted: #adadb8;
+      --success: #00F593;
+      --radius-card: 8px;
+      --radius-btn: 6px;
+      --radius-badge: 4px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Geist', system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .header-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      background: var(--surface-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+    }
+
+    .app-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 6px;
+      box-shadow: 0 0 16px var(--accent-glow);
+      flex-shrink: 0;
+    }
+
+    .header-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+    }
+
+    .app-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .btn-dashboard {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 18px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-btn);
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-dashboard:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .control-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .url-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0e0e10;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-btn);
+      padding: 8px 12px;
+    }
+
+    .url-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 80px;
+    }
+
+    .url-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--accent-light);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .btn-copy {
+      background: var(--surface-hover);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-copy:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .back-home {
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .back-home a {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .back-home a:hover {
+      color: var(--accent-light);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="header-card">
+      <img src="assets/logo.png" alt="StreamPe" class="app-logo" />
+      <div class="header-info">
+        <span class="app-name">StreamPe v2.2.5</span>
+        <span class="status-badge">
+          <span class="status-dot"></span>
+          <span>Ready & Broadcasting (OBS Active)</span>
+        </span>
+      </div>
+    </div>
+
+    <a href="index.html" class="btn-dashboard">
+      <span>🖥️ Launch Web Control Panel</span>
+    </a>
+
+    <div class="control-card">
+      <span class="card-title">OBS Browser Source URLs</span>
+      
+      <div class="url-row">
+        <span class="url-label">Alert Overlay:</span>
+        <span class="url-val">http://localhost:2907/overlay/alerts</span>
+        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/alerts'); alert('Copied Alert Overlay URL!');">Copy</button>
+      </div>
+
+      <div class="url-row">
+        <span class="url-label">Goal Bar:</span>
+        <span class="url-val">http://localhost:2907/overlay/goal</span>
+        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/goal'); alert('Copied Goal Bar URL!');">Copy</button>
+      </div>
+
+      <div class="url-row">
+        <span class="url-label">Leaderboard:</span>
+        <span class="url-val">http://localhost:2907/overlay/list?id=top-supporters</span>
+        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/list?id=top-supporters'); alert('Copied Leaderboard URL!');">Copy</button>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <span class="card-title">Companion App (Android)</span>
+      <div class="url-row">
+        <span class="url-label">Local IP:</span>
+        <span class="url-val">http://192.168.1.100:2907</span>
+        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://192.168.1.100:2907'); alert('Copied Connection URL!');">Copy</button>
+      </div>
+    </div>
+
+    <div class="back-home">
+      <a href="index.html">← Back to StreamPe Home</a> • <a href="faq.html">FAQ & Help</a>
+    </div>
+  </div>
+</body>
+</html>

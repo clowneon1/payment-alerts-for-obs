@@ -965,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
     goal.allowOverflow = checked('chk-goal-allow-overflow', !!goal.allowOverflow);
     goal.title = val('input-goal-title', goal.title);
     goal.targetAmount = numVal('input-goal-target', goal.targetAmount);
-    goal.currentAmount = prevGoalCurrent !== undefined ? prevGoalCurrent : 0;
+    goal.currentAmount = numVal('input-goal-current', prevGoalCurrent !== undefined ? prevGoalCurrent : 0);
     goal.startAmount = numVal('input-goal-start', goal.startAmount);
     goal.endDate = val('input-goal-end-date', goal.endDate);
     goal.text = Object.assign(readTextStyle(TEXT_PREFIXES.goal, goal.text), {
@@ -2563,23 +2563,22 @@ document.addEventListener('DOMContentLoaded', () => {
     on('btn-goal-reset', async () => {
       const confirmed = await AppModal.show({
         title: 'Reset Stream Goal',
-        message: 'Reset current goal progress and clear donation records for this profile?'
+        message: 'Reset active stream goal progress back to the start amount (₹0)? (Your past donation ledger records will remain safe).'
       });
       if (!confirmed) return;
       try {
         const activeProf = getCurrentProfileName();
-        const res = await fetch('/api/donations/clear', {
+        const res = await fetch('/api/goal/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ profile: activeProf })
         });
         const data = await res.json();
         if (data.ok) {
-          config.widgets.goal.currentAmount = data.metrics.goalAmount;
-          config.widgets.leaderboard.supporters = data.metrics.supporters;
-          config.widgets.recent.recentDonations = data.metrics.recentDonations;
-          populateForm(config);
-          showToast('<i data-lucide="rotate-ccw"></i> Goal progress reset');
+          config.widgets.goal.currentAmount = data.currentAmount;
+          setVal('input-goal-current', data.currentAmount);
+          syncLivePreview();
+          showToast('<i data-lucide="rotate-ccw"></i> Goal progress reset to ₹' + data.currentAmount);
         }
       } catch (err) {
         showToast('<i data-lucide="alert-triangle"></i> Failed to reset goal progress');
