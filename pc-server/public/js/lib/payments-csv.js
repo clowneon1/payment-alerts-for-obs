@@ -17,11 +17,22 @@
     'date',
     'time',
     'sender',
+    'canonicalSender',
     'amount',
     'currency',
     'sourceApp',
     'message'
   ];
+
+  function canonicalDonorKey(name) {
+    return String(name || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\.\-_,]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   const CURRENCY_SYMBOLS = {
     INR: '₹',
@@ -123,6 +134,8 @@
     const d = new Date(ts);
     const dateStr = tx.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '');
     const timeStr = tx.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
+    const rawName = tx.rawSender || tx.sender || 'Unknown';
+    const canonicalName = tx.canonicalSender || canonicalDonorKey(rawName);
     const amtNum = parseFloat(tx.amount);
     const effectiveAmount = isFinite(amtNum) ? amtNum.toFixed(2) : '0.00';
     const currCode = (tx.currency ? String(tx.currency).trim().toUpperCase() : 'INR') || 'INR';
@@ -132,7 +145,8 @@
       escapeCsvField(ts),
       escapeCsvField(dateStr),
       escapeCsvField(timeStr),
-      escapeCsvField(tx.rawSender || tx.sender || 'Unknown'),
+      escapeCsvField(rawName),
+      escapeCsvField(canonicalName),
       effectiveAmount,
       escapeCsvField(currCode),
       escapeCsvField(tx.sourceApp || 'Unknown'),
@@ -193,6 +207,7 @@
       date: headerRow.findIndex(h => h === 'date'),
       time: headerRow.findIndex(h => h === 'time'),
       sender: headerRow.findIndex(h => h === 'sender' || h === 'name' || h === 'donor' || h === 'username'),
+      canonicalSender: headerRow.findIndex(h => h === 'canonicalsender' || h === 'canonicalkey' || h === 'canonicalname'),
       amount: headerRow.findIndex(h => h === 'amount' || h === 'amt' || h === 'value'),
       currency: headerRow.findIndex(h => h === 'currency' || h === 'curr' || h === 'iso'),
       rawAmount: headerRow.findIndex(h => h === 'rawamount' || h === 'rawamt' || h === 'amountformatted'),
@@ -239,13 +254,17 @@
 
       const simVal = get(fieldIndex.simulated, 'false').toLowerCase();
       const isSimulated = simVal === 'true' || simVal === '1' || simVal === 'yes';
+      const rawSenderName = get(fieldIndex.sender, 'Unknown').trim() || 'Unknown';
+      const canonicalName = get(fieldIndex.canonicalSender, '').trim() || canonicalDonorKey(rawSenderName);
 
       transactions.push({
         id: get(fieldIndex.id, `evt_${ts}_${Math.random().toString(36).slice(2, 6)}`),
         timestamp: ts,
         date: get(fieldIndex.date, new Date(ts).toISOString().split('T')[0]),
         time: get(fieldIndex.time, new Date(ts).toTimeString().split(' ')[0]),
-        sender: get(fieldIndex.sender, 'Unknown').trim() || 'Unknown',
+        sender: rawSenderName,
+        canonicalSender: canonicalName,
+        rawSender: rawSenderName,
         amount: parsedAmount,
         currency: currencyVal,
         rawAmount: formatCurrency(parsedAmount, currencyVal),
@@ -616,20 +635,36 @@
     const filteredTxs = filterTransactions(validTxs, options.filters || {});
 
     let totalRevenue = 0;
-    const supportersMap = {};
+    const canonicalSupporters = {}; // canonicalKey -> { name, total, count }
     const appBreakdown = {};
-    const donorCounts = {};
 
     filteredTxs.forEach(tx => {
       const amt = parseFloat(tx.amount) || 0;
       totalRevenue += amt;
 
-      const sender = (tx.displayName || tx.sender || 'Unknown').trim() || 'Unknown';
-      supportersMap[sender] = (supportersMap[sender] || 0) + amt;
-      donorCounts[sender] = (donorCounts[sender] || 0) + 1;
+      const rawName = (tx.displayName || tx.sender || 'Unknown').trim() || 'Unknown';
+      const cKey = tx.canonicalSender || canonicalDonorKey(rawName) || 'unknown';
+
+      if (!canonicalSupporters[cKey]) {
+        canonicalSupporters[cKey] = { name: rawName, total: 0, count: 0 };
+      }
+      canonicalSupporters[cKey].total += amt;
+      canonicalSupporters[cKey].count += 1;
+
+      // Prefer display alias / non-punctuated cleaner name
+      if (tx.displayName && canonicalSupporters[cKey].name !== tx.displayName) {
+        canonicalSupporters[cKey].name = tx.displayName;
+      }
 
       const app = (tx.sourceApp || 'Other').trim() || 'Other';
       appBreakdown[app] = (appBreakdown[app] || 0) + amt;
+    });
+
+    const supportersMap = {};
+    const donorCounts = {};
+    Object.values(canonicalSupporters).forEach(entry => {
+      supportersMap[entry.name] = entry.total;
+      donorCounts[entry.name] = entry.count;
     });
 
     const sortedLeaderboard = Object.entries(supportersMap)
@@ -694,6 +729,7 @@
     CSV_HEADERS,
     CURRENCY_SYMBOLS,
     PROVIDER_METADATA,
+    canonicalDonorKey,
     getProviderMeta,
     normalizeProviderKey,
     getCurrencySymbol,

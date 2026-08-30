@@ -231,12 +231,15 @@ function sanitizeAllLedgerFiles(dataDir) {
   try {
     const years = fs.readdirSync(dataDir).filter(f => /^\d{4}$/.test(f));
     let cleanedCount = 0;
+    let upgradedCount = 0;
     for (const yr of years) {
       const yrPath = path.join(dataDir, yr);
       const months = fs.readdirSync(yrPath).filter(f => /^\d{2}\.csv$/.test(f));
       for (const m of months) {
         const filePath = path.join(yrPath, m);
         const rawContent = fs.readFileSync(filePath, 'utf8');
+        const firstLine = (rawContent.split(/\r?\n/)[0] || '').toLowerCase();
+        const needsHeaderUpgrade = !firstLine.includes('canonicalsender');
         const rawTxs = PaymentsCsv.parseCsv(rawContent);
         const seen = new Set();
         const cleanTxs = [];
@@ -247,12 +250,21 @@ function sanitizeAllLedgerFiles(dataDir) {
             cleanTxs.push(t);
           }
         }
-        if (rawTxs.length > cleanTxs.length) {
+        if (rawTxs.length > cleanTxs.length || needsHeaderUpgrade) {
           fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(cleanTxs), 'utf8');
-          cleanedCount += (rawTxs.length - cleanTxs.length);
-          console.log(`[Storage] 🧹 Sanitized ${rawTxs.length - cleanTxs.length} duplicate(s) in ${yr}/${m}`);
+          if (needsHeaderUpgrade) {
+            upgradedCount++;
+            console.log(`[Storage] 📦 Upgraded ${yr}/${m}.csv to 10-column canonical schema on disk`);
+          }
+          if (rawTxs.length > cleanTxs.length) {
+            cleanedCount += (rawTxs.length - cleanTxs.length);
+            console.log(`[Storage] 🧹 Sanitized ${rawTxs.length - cleanTxs.length} duplicate(s) in ${yr}/${m}`);
+          }
         }
       }
+    }
+    if (upgradedCount > 0) {
+      console.log(`[Storage] 🚀 Migrated ${upgradedCount} historical CSV file(s) to 10-column canonical schema.`);
     }
     if (cleanedCount > 0) {
       console.log(`[Storage] ✅ Startup Ledger Sanity Check: cleaned ${cleanedCount} duplicate transaction(s).`);

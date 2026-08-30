@@ -2,16 +2,30 @@
  * StreamPe — Donor Aliases CSV Store
  *
  * Manages donor alias mappings stored in `data/<profile>/aliases.csv` (sender,alias,updatedAt).
- * Maintains an in-memory O(1) case-insensitive lookup table for fast substitution
+ * Maintains an in-memory O(1) canonical lookup table for fast substitution
  * during live alerts and WebSocket payloads.
  */
 
 const fs = require('fs');
 const path = require('path');
+const PaymentsCsv = require('./public/js/lib/payments-csv');
 
 let baseDataDir = '';
 // Per-profile cache: profileName -> { nameToAlias: Map, aliasToName: Map }
 const profileStores = new Map();
+
+function canonicalDonorKey(name) {
+  if (PaymentsCsv && typeof PaymentsCsv.canonicalDonorKey === 'function') {
+    return PaymentsCsv.canonicalDonorKey(name);
+  }
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\.\-_,]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function escapeCsvField(val) {
   if (val === null || val === undefined) return '';
@@ -110,8 +124,8 @@ function loadAliasesForProfile(profileName) {
 
         if (sender && alias) {
           const entry = { sender, alias, updatedAt };
-          store.nameToAlias.set(sender.toLowerCase(), entry);
-          store.aliasToName.set(alias.toLowerCase(), sender);
+          store.nameToAlias.set(canonicalDonorKey(sender), entry);
+          store.aliasToName.set(canonicalDonorKey(alias), sender);
         }
       }
     }
@@ -146,7 +160,7 @@ function getAlias(senderName, profileName = 'Default') {
   if (!senderName) return '';
   const prof = profileName || 'Default';
   const store = getStoreForProfile(prof);
-  const entry = store.nameToAlias.get(String(senderName).trim().toLowerCase());
+  const entry = store.nameToAlias.get(canonicalDonorKey(senderName));
   return entry ? entry.alias : '';
 }
 
@@ -160,7 +174,7 @@ function setAlias(senderName, alias, profileOrNote = 'Default', maybeProfile) {
   }
 
   const store = getStoreForProfile(prof);
-  const senderKey = String(senderName).trim().toLowerCase();
+  const senderKey = canonicalDonorKey(senderName);
   const entry = {
     sender: String(senderName).trim(),
     alias: String(alias).trim(),
@@ -168,7 +182,7 @@ function setAlias(senderName, alias, profileOrNote = 'Default', maybeProfile) {
   };
 
   store.nameToAlias.set(senderKey, entry);
-  store.aliasToName.set(entry.alias.toLowerCase(), entry.sender);
+  store.aliasToName.set(canonicalDonorKey(entry.alias), entry.sender);
   saveAliasesForProfile(prof);
   return true;
 }
@@ -177,11 +191,11 @@ function deleteAlias(senderName, profileName = 'Default') {
   if (!senderName) return false;
   const prof = profileName || 'Default';
   const store = getStoreForProfile(prof);
-  const senderKey = String(senderName).trim().toLowerCase();
+  const senderKey = canonicalDonorKey(senderName);
   const entry = store.nameToAlias.get(senderKey);
 
   if (entry) {
-    store.aliasToName.delete(entry.alias.toLowerCase());
+    store.aliasToName.delete(canonicalDonorKey(entry.alias));
     store.nameToAlias.delete(senderKey);
     saveAliasesForProfile(prof);
     return true;
@@ -230,6 +244,7 @@ function getAliases(profileName = 'Default') {
 }
 
 module.exports = {
+  canonicalDonorKey,
   initAliasesStore,
   getAlias,
   setAlias,
