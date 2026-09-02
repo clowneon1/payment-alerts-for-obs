@@ -10,7 +10,8 @@ const tests = [
   { name: 'Profile Aliases & ZIP Backup Engine Tests', file: 'tests/test-alias-zip-workflow.js' },
   { name: 'Canonical Donor Matching & Leaderboard Aggregation Tests', file: 'tests/test-canonical-donor-matching.js' },
   { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' },
-  { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' }
+  { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' },
+  { name: 'Month CSV Sharding & Multi-Month Persistence Tests', file: 'tests/test-month-sharding-persistence.js' }
 ];
 
 let failed = false;

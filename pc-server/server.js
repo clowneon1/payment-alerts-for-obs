@@ -1091,19 +1091,6 @@ function saveDonations(profileName, transactions) {
       groups[ym].push(rawTx);
     });
 
-    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith('ledger_'));
-    cacheKeys.forEach(k => delete donationsCache[k]);
-
-    const existingMonths = getAvailableProfileMonths();
-    existingMonths.forEach(ym => {
-      if (!groups[ym]) {
-        const filePath = getDonationsCsvPath(ym);
-        if (fs.existsSync(filePath)) {
-          try { fs.unlinkSync(filePath); } catch (_) { }
-        }
-      }
-    });
-
     for (const [ym, txs] of Object.entries(groups)) {
       const filePath = getDonationsCsvPath(ym);
       const fileDir = path.dirname(filePath);
@@ -1145,7 +1132,9 @@ function appendDonation(profileName, tx) {
     const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
 
     if (!fs.existsSync(filePath)) {
-      saveDonations(null, [tx]);
+      const content = PaymentsCsv.serializeCsv([rawTx]);
+      fs.writeFileSync(filePath, content, 'utf8');
+      donationsCache[cacheKey] = [tx];
     } else {
       fs.appendFileSync(filePath, row, 'utf8');
       if (donationsCache[cacheKey]) {
