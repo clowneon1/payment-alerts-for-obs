@@ -31,8 +31,11 @@ if (!fs.existsSync(serverJs)) {
   process.exit(1);
 }
 
-console.log('Compiling server.js with bun (stamping Windows metadata & icon)...');
-const cmd = `"${bunExe}" build "${serverJs}" --compile --target bun-windows-x64 --windows-title "StreamPe" --windows-publisher "clowneon1" --windows-description "StreamPe Server" --windows-copyright "Copyright (c) 2026 clowneon1" --windows-version "2.2.8.0" --windows-icon "${iconIco}" --windows-hide-console --outfile "${outExe}"`;
+const { APP_VERSION } = require('../constants');
+const winVer = APP_VERSION.split('.').length === 3 ? `${APP_VERSION}.0` : APP_VERSION;
+
+console.log(`Compiling server.js (v${APP_VERSION}) with bun (stamping Windows metadata & icon)...`);
+const cmd = `"${bunExe}" build "${serverJs}" --compile --target bun-windows-x64 --windows-title "StreamPe" --windows-publisher "clowneon1" --windows-description "StreamPe Server" --windows-copyright "Copyright (c) 2026 clowneon1" --windows-version "${winVer}" --windows-icon "${iconIco}" --windows-hide-console --outfile "${outExe}"`;
 console.log('>', cmd);
 
 try {

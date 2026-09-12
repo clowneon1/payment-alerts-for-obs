@@ -1,7 +1,7 @@
 /**
- * StreamPe — Donor Aliases CSV Store
+ * StreamPe — Centralized Donor Aliases CSV Store
  *
- * Manages donor alias mappings stored in `data/<profile>/aliases.csv` (sender,alias,updatedAt).
+ * Manages donor alias mappings stored centrally in `data/aliases.csv` (sender,alias,updatedAt).
  * Maintains an in-memory O(1) canonical lookup table for fast substitution
  * during live alerts and WebSocket payloads.
  */
@@ -11,8 +11,11 @@ const path = require('path');
 const PaymentsCsv = require('./public/js/lib/payments-csv');
 
 let baseDataDir = '';
-// Per-profile cache: profileName -> { nameToAlias: Map, aliasToName: Map }
-const profileStores = new Map();
+// Centralized in-memory store
+const centralStore = {
+  nameToAlias: new Map(),
+  aliasToName: new Map()
+};
 
 function canonicalDonorKey(name) {
   if (PaymentsCsv && typeof PaymentsCsv.canonicalDonorKey === 'function') {
@@ -61,55 +64,16 @@ function parseCsvLine(line) {
   return result;
 }
 
-function getAliasesFilePath(profileName) {
-  const prof = profileName || 'Default';
-  return path.join(baseDataDir, prof, 'aliases.csv');
+function getAliasesFilePath(_profileName) {
+  return path.join(baseDataDir, 'aliases.csv');
 }
 
-function getStoreForProfile(profileName) {
-  const prof = profileName || 'Default';
-  if (!profileStores.has(prof)) {
-    profileStores.set(prof, {
-      nameToAlias: new Map(),
-      aliasToName: new Map()
-    });
-    loadAliasesForProfile(prof);
-  }
-  return profileStores.get(prof);
+function getStoreForProfile(_profileName) {
+  return centralStore;
 }
 
-function initAliasesStore(dataDir) {
-  baseDataDir = dataDir;
-  if (!fs.existsSync(baseDataDir)) {
-    fs.mkdirSync(baseDataDir, { recursive: true });
-  }
-  // Pre-load all existing profile aliases from disk
-  try {
-    const entries = fs.readdirSync(baseDataDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const aliasFile = path.join(baseDataDir, entry.name, 'aliases.csv');
-        if (fs.existsSync(aliasFile)) {
-          loadAliasesForProfile(entry.name);
-        }
-      }
-    }
-  } catch (_) {}
-}
-
-function loadAliasesForProfile(profileName) {
-  const prof = profileName || 'Default';
-  let store = profileStores.get(prof);
-  if (!store) {
-    store = { nameToAlias: new Map(), aliasToName: new Map() };
-    profileStores.set(prof, store);
-  }
-  store.nameToAlias.clear();
-  store.aliasToName.clear();
-
-  const filePath = getAliasesFilePath(prof);
+function loadAliasesFromFile(filePath) {
   if (!fs.existsSync(filePath)) return;
-
   try {
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
@@ -124,56 +88,89 @@ function loadAliasesForProfile(profileName) {
 
         if (sender && alias) {
           const entry = { sender, alias, updatedAt };
-          store.nameToAlias.set(canonicalDonorKey(sender), entry);
-          store.aliasToName.set(canonicalDonorKey(alias), sender);
+          centralStore.nameToAlias.set(canonicalDonorKey(sender), entry);
+          centralStore.aliasToName.set(canonicalDonorKey(alias), sender);
         }
       }
     }
   } catch (err) {
-    console.error(`[AliasesStore] Error loading aliases for profile ${prof}:`, err.message);
+    console.error(`[AliasesStore] Error loading aliases from ${filePath}:`, err.message);
   }
 }
 
-function saveAliasesForProfile(profileName) {
-  const prof = profileName || 'Default';
-  const store = getStoreForProfile(prof);
-
-  const targetDir = path.join(baseDataDir, prof);
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true });
+function initAliasesStore(dataDir) {
+  baseDataDir = dataDir;
+  if (!fs.existsSync(baseDataDir)) {
+    fs.mkdirSync(baseDataDir, { recursive: true });
   }
-  const filePath = path.join(targetDir, 'aliases.csv');
+
+  centralStore.nameToAlias.clear();
+  centralStore.aliasToName.clear();
+
+  // 1. Load centralized aliases.csv if present
+  const mainAliasFile = path.join(baseDataDir, 'aliases.csv');
+  if (fs.existsSync(mainAliasFile)) {
+    loadAliasesFromFile(mainAliasFile);
+  }
+
+  // 2. Backward compatibility: auto-migrate any legacy profile folders (data/<profile>/aliases.csv)
+  try {
+    const entries = fs.readdirSync(baseDataDir, { withFileTypes: true });
+    let migratedLegacy = false;
+    for (const entry of entries) {
+      if (entry.isDirectory() && !/^\d{4}$/.test(entry.name)) {
+        const legacyFile = path.join(baseDataDir, entry.name, 'aliases.csv');
+        if (fs.existsSync(legacyFile)) {
+          loadAliasesFromFile(legacyFile);
+          migratedLegacy = true;
+        }
+      }
+    }
+    if (migratedLegacy && centralStore.nameToAlias.size > 0) {
+      saveAliases();
+    }
+  } catch (_) {}
+}
+
+function loadAliasesForProfile(_profileName) {
+  const mainAliasFile = path.join(baseDataDir, 'aliases.csv');
+  if (fs.existsSync(mainAliasFile)) {
+    loadAliasesFromFile(mainAliasFile);
+  }
+}
+
+function saveAliases() {
+  if (!baseDataDir) return;
+  if (!fs.existsSync(baseDataDir)) {
+    fs.mkdirSync(baseDataDir, { recursive: true });
+  }
+  const filePath = path.join(baseDataDir, 'aliases.csv');
 
   let csv = 'sender,alias,updatedAt\n';
-  for (const entry of store.nameToAlias.values()) {
+  for (const entry of centralStore.nameToAlias.values()) {
     csv += `${escapeCsvField(entry.sender)},${escapeCsvField(entry.alias)},${escapeCsvField(entry.updatedAt)}\n`;
   }
 
   try {
     fs.writeFileSync(filePath, csv, 'utf8');
   } catch (err) {
-    console.error(`[AliasesStore] Error saving aliases for profile ${prof}:`, err.message);
+    console.error(`[AliasesStore] Error saving centralized aliases:`, err.message);
   }
 }
 
-function getAlias(senderName, profileName = 'Default') {
+function saveAliasesForProfile(_profileName) {
+  saveAliases();
+}
+
+function getAlias(senderName, _profileName) {
   if (!senderName) return '';
-  const prof = profileName || 'Default';
-  const store = getStoreForProfile(prof);
-  const entry = store.nameToAlias.get(canonicalDonorKey(senderName));
+  const entry = centralStore.nameToAlias.get(canonicalDonorKey(senderName));
   return entry ? entry.alias : '';
 }
 
-function setAlias(senderName, alias, profileOrNote = 'Default', maybeProfile) {
+function setAlias(senderName, alias, _profileOrNote, _maybeProfile) {
   if (!senderName || !alias) return false;
-  let prof = 'Default';
-  if (typeof maybeProfile === 'string' && maybeProfile) {
-    prof = maybeProfile;
-  } else if (typeof profileOrNote === 'string' && profileOrNote) {
-    prof = profileOrNote;
-  }
 
-  const store = getStoreForProfile(prof);
   const senderKey = canonicalDonorKey(senderName);
   const entry = {
     sender: String(senderName).trim(),
@@ -181,38 +178,37 @@ function setAlias(senderName, alias, profileOrNote = 'Default', maybeProfile) {
     updatedAt: new Date().toISOString()
   };
 
-  store.nameToAlias.set(senderKey, entry);
-  store.aliasToName.set(canonicalDonorKey(entry.alias), entry.sender);
-  saveAliasesForProfile(prof);
+  const oldEntry = centralStore.nameToAlias.get(senderKey);
+  if (oldEntry && oldEntry.alias) {
+    centralStore.aliasToName.delete(canonicalDonorKey(oldEntry.alias));
+  }
+
+  centralStore.nameToAlias.set(senderKey, entry);
+  centralStore.aliasToName.set(canonicalDonorKey(entry.alias), entry.sender);
+  saveAliases();
   return true;
 }
 
-function deleteAlias(senderName, profileName = 'Default') {
+function deleteAlias(senderName, _profileName) {
   if (!senderName) return false;
-  const prof = profileName || 'Default';
-  const store = getStoreForProfile(prof);
   const senderKey = canonicalDonorKey(senderName);
-  const entry = store.nameToAlias.get(senderKey);
+  const entry = centralStore.nameToAlias.get(senderKey);
 
   if (entry) {
-    store.aliasToName.delete(canonicalDonorKey(entry.alias));
-    store.nameToAlias.delete(senderKey);
-    saveAliasesForProfile(prof);
+    centralStore.aliasToName.delete(canonicalDonorKey(entry.alias));
+    centralStore.nameToAlias.delete(senderKey);
+    saveAliases();
     return true;
   }
   return false;
 }
 
-function formatDonorName(rawName, settings = {}, profileName = 'Default') {
+function formatDonorName(rawName, settings = {}, _profileName) {
   let name = String(rawName || 'Anonymous').trim();
   if (!name) return 'Anonymous';
 
-  const prof = profileName || 'Default';
   if (settings.enableAliases !== false) {
-    let alias = getAlias(name, prof);
-    if (!alias && prof !== 'Default') {
-      alias = getAlias(name, 'Default');
-    }
+    const alias = getAlias(name);
     if (alias) {
       name = alias;
     }
@@ -238,9 +234,13 @@ function formatDonorName(rawName, settings = {}, profileName = 'Default') {
   return name;
 }
 
-function getAliases(profileName = 'Default') {
-  const store = getStoreForProfile(profileName);
-  return Array.from(store.nameToAlias.values());
+function getRawSenderFromAlias(alias, _profileName) {
+  if (!alias) return '';
+  return centralStore.aliasToName.get(canonicalDonorKey(alias)) || '';
+}
+
+function getAliases(_profileName) {
+  return Array.from(centralStore.nameToAlias.values());
 }
 
 module.exports = {
@@ -249,9 +249,12 @@ module.exports = {
   getAlias,
   setAlias,
   deleteAlias,
+  getRawSenderFromAlias,
   formatDonorName,
   getAliases,
+  getStoreForProfile,
   loadAliasesForProfile,
   saveAliasesForProfile,
+  saveAliases,
   getAliasesFilePath
 };

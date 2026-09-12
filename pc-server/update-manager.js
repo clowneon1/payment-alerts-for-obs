@@ -2,7 +2,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { getDefaultAppDataDir } = require('./constants');
+const { getDefaultAppDataDir, APP_VERSION } = require('./constants');
 
 const GITHUB_REPO = 'clowneon1/streampe';
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -78,7 +78,7 @@ function fetchLatestReleaseFromGitHub() {
       path: url.pathname,
       method: 'GET',
       headers: {
-        'User-Agent': 'StreamPe-UpdateManager/2.2.0',
+        'User-Agent': `StreamPe-UpdateManager/${APP_VERSION || '2.2.8'}`,
         'Accept': 'application/vnd.github.v3+json'
       },
       timeout: 10000
@@ -86,7 +86,7 @@ function fetchLatestReleaseFromGitHub() {
 
     const req = https.request(options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return https.get(res.headers.location, { headers: { 'User-Agent': 'StreamPe-UpdateManager/2.2.0' } }, (redRes) => {
+        return https.get(res.headers.location, { headers: { 'User-Agent': `StreamPe-UpdateManager/${APP_VERSION || '2.2.8'}` } }, (redRes) => {
           let redData = '';
           redRes.on('data', chunk => { redData += chunk; });
           redRes.on('end', () => {
@@ -126,7 +126,7 @@ function fetchLatestReleaseFromGitHub() {
 /**
  * Checks for updates against currentVersion
  */
-async function checkForUpdates(currentVersion = '2.1.0', forceRefresh = false) {
+async function checkForUpdates(currentVersion = APP_VERSION, forceRefresh = false) {
   const now = Date.now();
   let releaseData = cachedRelease;
 

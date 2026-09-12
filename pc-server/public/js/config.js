@@ -1185,7 +1185,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeList = currentListConfig();
     if (activeList) {
       setChecked('chk-enable-list', activeList.enabled);
-      setVal('input-list-name', activeList.name);
       setVal('select-list-type', activeList.type);
       setVal('input-list-title', activeList.text.titleTemplate || activeList.title);
       const listPresets = ['3', '5', '10', '20'];
@@ -3057,8 +3056,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const active = currentListConfig();
       copyOverlayUrl(`/overlay/list?id=${active.id || 'top-supporters'}`, `List (${active.name || 'Active'}) Overlay`, e.currentTarget);
     });
-    on('btn-copy-lb-url', 'click', (e) => copyOverlayUrl('/overlay/leaderboard', 'Leaderboard Overlay', e.currentTarget));
-    on('btn-copy-recent-url', 'click', (e) => copyOverlayUrl('/overlay/recent', 'Recent Overlay', e.currentTarget));
     on('btn-copy-cycling-url', 'click', (e) => copyOverlayUrl('/overlay/cycling-widget', 'Cycling Overlay', e.currentTarget));
 
     on('btn-copy-current-url', 'click', (e) => {
@@ -4193,6 +4190,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const da = String(now.getDate()).padStart(2, '0');
       const hr = String(now.getHours()).padStart(2, '0');
       const mn = String(now.getMinutes()).padStart(2, '0');
+      const sc = String(now.getSeconds()).padStart(2, '0');
 
       if (el('input-manual-edit-id')) el('input-manual-edit-id').value = '';
       if (el('input-manual-donor')) el('input-manual-donor').value = 'Anonymous Donor';
@@ -4200,7 +4198,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (el('input-manual-amount')) el('input-manual-amount').value = '500';
       if (el('select-manual-provider')) el('select-manual-provider').value = 'Manual Entry';
       if (el('input-manual-date')) el('input-manual-date').value = `${yr}-${mo}-${da}`;
-      if (el('input-manual-time')) el('input-manual-time').value = `${hr}:${mn}`;
+      if (el('input-manual-time')) el('input-manual-time').value = `${hr}:${mn}:${sc}`;
       if (el('input-manual-note')) el('input-manual-note').value = '';
 
       if (el('modal-manual-title-text')) el('modal-manual-title-text').textContent = 'Record Manual Payment';
@@ -4249,7 +4247,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const amount = parseFloat(val('input-manual-amount', '0')) || 0;
       const source = val('select-manual-provider', 'Manual Entry');
       const dateVal = val('input-manual-date', '');
-      const timeVal = val('input-manual-time', '');
+      let timeVal = val('input-manual-time', '');
+      if (timeVal && /^\d{2}:\d{2}$/.test(timeVal)) {
+        timeVal += ':00';
+      }
       const note = val('input-manual-note', '').trim();
       const activeProf = getCurrentProfileName();
 
@@ -4263,10 +4264,10 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetch('/api/aliases', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sender: donor, alias: aliasVal })
+              body: JSON.stringify({ sender: donor, alias: aliasVal, profile: activeProf })
             });
           } else {
-            await fetch(`/api/aliases/${encodeURIComponent(donor)}`, { method: 'DELETE' });
+            await fetch(`/api/aliases/${encodeURIComponent(donor)}?profile=${encodeURIComponent(activeProf)}`, { method: 'DELETE' });
           }
         } catch (_) { }
       }

@@ -11,7 +11,8 @@ const tests = [
   { name: 'Canonical Donor Matching & Leaderboard Aggregation Tests', file: 'tests/test-canonical-donor-matching.js' },
   { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' },
   { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' },
-  { name: 'Month CSV Sharding & Multi-Month Persistence Tests', file: 'tests/test-month-sharding-persistence.js' }
+  { name: 'Month CSV Sharding & Multi-Month Persistence Tests', file: 'tests/test-month-sharding-persistence.js' },
+  { name: 'Bug Bounty Remediation Verification Tests', file: 'tests/test-bug-bounty-fixes.js' }
 ];
 
 let failed = false;

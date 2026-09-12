@@ -104,6 +104,8 @@ if (isCompiled) {
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+const obsClients = new Set();
+const androidClients = new Set();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -209,14 +211,14 @@ function consolidateLegacyProfileData(dataDir) {
                 try {
                   fs.copyFileSync(srcCsv, archiveDst);
                   fs.unlinkSync(srcCsv);
-                } catch (__) {}
+                } catch (__) { }
               }
             }
             try {
               if (fs.readdirSync(yearDir).length === 0) {
                 fs.rmdirSync(yearDir);
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         }
       }
@@ -567,14 +569,17 @@ function ensureWindowsFirewallRule(callback) {
     if (callback) callback(false, 'Not Windows');
     return;
   }
-  exec('netsh advfirewall firewall show rule name="PaymentAlertsOBS"', (err, stdout) => {
-    if (err || !stdout || stdout.includes('No rules match')) {
-      const psCmd = 'powershell -Command "Start-Process netsh -ArgumentList \'advfirewall firewall add rule name=\\\"PaymentAlertsOBS\\\" protocol=TCP dir=in localport=2907 action=allow\' -Verb RunAs -WindowStyle Hidden"';
+  const targetPort = activeServerPort || DEFAULT_PORT || 2907;
+  exec('netsh advfirewall firewall show rule name="StreamPe Server"', (err, stdout) => {
+    if (err || !stdout || stdout.includes('No rules match') || stdout.includes('No rules found')) {
+      const psCmd = `powershell -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\\\"StreamPe Server\\\" protocol=TCP dir=in localport=${targetPort} action=allow' -Verb RunAs -WindowStyle Hidden"`;
       exec(psCmd, (psErr) => {
         if (psErr) log.warn('Firewall', 'Firewall auto-rule error:', psErr.message);
-        else log.info('Firewall', 'Windows Firewall rule for port 2907 created successfully');
+        else log.info('Firewall', `Windows Firewall rule for port ${targetPort} created successfully`);
         if (callback) callback(!psErr, psErr ? psErr.message : null);
       });
+    } else {
+      if (callback) callback(true, null);
     }
   });
 }
@@ -1038,7 +1043,7 @@ function loadDonations(profileName, monthKey, options = {}) {
           try {
             fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(txs), 'utf8');
             log.info('DonationsCSV', `🧹 Auto-sanitized ${rawTxs.length - txs.length} duplicate row(s) in ${filePath}`);
-          } catch (_) {}
+          } catch (_) { }
         }
         donationsCache[cacheKey] = txs;
         if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
@@ -1061,6 +1066,35 @@ function loadDonations(profileName, monthKey, options = {}) {
   }
   allTxs.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
   return allTxs;
+}
+
+function clearAllDonationLedgers() {
+  try {
+    if (fs.existsSync(DATA_DIR)) {
+      const years = fs.readdirSync(DATA_DIR).filter(f => /^\d{4}$/.test(f));
+      for (const yr of years) {
+        const yrPath = path.join(DATA_DIR, yr);
+        try {
+          const files = fs.readdirSync(yrPath).filter(f => f.endsWith('.csv'));
+          for (const file of files) {
+            try { fs.unlinkSync(path.join(yrPath, file)); } catch (_) { }
+          }
+          if (fs.readdirSync(yrPath).length === 0) {
+            try { fs.rmdirSync(yrPath); } catch (_) { }
+          }
+        } catch (_) { }
+      }
+    }
+    // Flush all in-memory ledger caches
+    Object.keys(donationsCache).forEach(k => {
+      if (k.startsWith('ledger_')) delete donationsCache[k];
+    });
+    historicalCacheKeys.length = 0;
+    return true;
+  } catch (err) {
+    log.error('DonationsCSV', 'Error clearing donation ledgers: ' + err.message);
+    return false;
+  }
 }
 
 function saveDonations(profileName, transactions) {
@@ -1260,8 +1294,8 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     const preservedGoalAmount = (existingMeta?.goal?.currentAmount !== undefined)
       ? parseFloat(existingMeta.goal.currentAmount)
       : ((targetSettings.widgets?.goal?.currentAmount !== undefined)
-          ? parseFloat(targetSettings.widgets.goal.currentAmount)
-          : 0);
+        ? parseFloat(targetSettings.widgets.goal.currentAmount)
+        : 0);
 
     metadata = {
       goal: { currentAmount: isNaN(preservedGoalAmount) ? 0 : preservedGoalAmount },
@@ -2065,7 +2099,12 @@ app.post('/api/donations/import', (req, res) => {
     }
 
     let finalTxs = importedTxs;
-    if (importedTxs.length > 0) {
+    if (mode === 'replace') {
+      clearAllDonationLedgers();
+      if (importedTxs.length > 0) {
+        saveDonations(profile, finalTxs);
+      }
+    } else if (importedTxs.length > 0) {
       if (mode === 'merge') {
         const existing = loadDonations(profile);
         const existingMap = new Map(existing.map(t => [t.id, t]));
@@ -2084,48 +2123,16 @@ app.post('/api/donations/import', (req, res) => {
   }
 });
 
-// ── In-App Auto-Update & Version Check API ───────────────────────
+// ── In-App Version & Update Check API ───────────────────────
 app.get(['/api/updates/check', '/api/version/check'], async (req, res) => {
   try {
     const forceRefresh = req.query.force === 'true' || req.query.refresh === '1';
-    const currentVer = req.query.currentVersion || req.query.version || APP_VERSION || '2.1.0';
+    const currentVer = req.query.currentVersion || req.query.version || APP_VERSION;
     const result = await updateManager.checkForUpdates(currentVer, forceRefresh);
     res.json(result);
   } catch (err) {
     log.error('UpdateManager', 'Check updates error: ' + err.message);
-    res.status(500).json({ ok: false, error: err.message, currentVersion: APP_VERSION || '2.1.0' });
-  }
-});
-
-app.post('/api/updates/download', async (req, res) => {
-  try {
-    const customUrl = req.body && req.body.url ? req.body.url : null;
-    log.info('UpdateManager', 'Starting background update download...');
-    // Start asynchronous download
-    updateManager.downloadAndStageUpdate(customUrl).then(info => {
-      log.info('UpdateManager', `Update staged successfully at: ${info.stagedDir}`);
-    }).catch(err => {
-      log.error('UpdateManager', `Update download error: ${err.message}`);
-    });
-    res.json({ ok: true, message: 'Update download started' });
-  } catch (err) {
-    log.error('UpdateManager', 'Download initiation error: ' + err.message);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.get('/api/updates/status', (req, res) => {
-  res.json(updateManager.getUpdateProgress());
-});
-
-app.post('/api/updates/apply', (req, res) => {
-  try {
-    log.info('UpdateManager', 'Applying staged update and restarting StreamPe...');
-    const result = updateManager.applyUpdateAndRestart();
-    res.json(result);
-  } catch (err) {
-    log.error('UpdateManager', 'Apply update error: ' + err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({ ok: false, error: err.message, currentVersion: APP_VERSION });
   }
 });
 
@@ -2140,11 +2147,14 @@ app.post('/api/donations/record', (req, res) => {
     const d = new Date(now);
 
     const currencyCode = (body.currency || 'INR').toUpperCase();
+    let timeStr = body.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
+    if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) timeStr += ':00';
+
     const tx = {
       id: body.id || `manual_${now}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: now,
       date: body.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : ''),
-      time: body.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : ''),
+      time: timeStr,
       sender: (body.sender || 'Anonymous').trim(),
       amount: amountNum,
       currency: currencyCode,
@@ -2185,6 +2195,9 @@ app.put('/api/donations/:id', (req, res) => {
     const currencyCode = (body.currency || currentTxs[idx].currency || 'INR').toUpperCase();
     const now = body.timestamp || currentTxs[idx].timestamp || Date.now();
 
+    let timeVal = body.time !== undefined ? body.time : currentTxs[idx].time;
+    if (timeVal && /^\d{1,2}:\d{2}$/.test(timeVal)) timeVal += ':00';
+
     currentTxs[idx] = {
       ...currentTxs[idx],
       sender: (body.sender !== undefined ? body.sender : currentTxs[idx].sender).trim(),
@@ -2193,7 +2206,7 @@ app.put('/api/donations/:id', (req, res) => {
       rawAmount: PaymentsCsv.formatCurrency(amountNum, currencyCode),
       sourceApp: (body.sourceApp !== undefined ? body.sourceApp : currentTxs[idx].sourceApp).trim(),
       date: body.date !== undefined ? body.date : currentTxs[idx].date,
-      time: body.time !== undefined ? body.time : currentTxs[idx].time,
+      time: timeVal,
       message: (body.message !== undefined ? body.message : currentTxs[idx].message).trim()
     };
 
@@ -2229,15 +2242,10 @@ app.delete('/api/donations/:id', (req, res) => {
 app.post('/api/donations/clear', (req, res) => {
   try {
     const profile = req.body?.profile || profilesStore.activeProfile;
-    const profileDir = path.join(DATA_DIR, profile.replace(/[^a-zA-Z0-9_-]/g, '_'));
-    if (fs.existsSync(profileDir)) {
-      try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { }
-    }
-    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
-    cacheKeys.forEach(k => delete donationsCache[k]);
+    clearAllDonationLedgers();
 
     const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
-    log.info('DonationsCSV', `Cleared all transactions and directories for ${profile}`);
+    log.info('DonationsCSV', `Cleared all transactions and monthly ledgers for ${profile}`);
     res.json({ ok: true, profile, count: 0, metrics });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -2714,26 +2722,6 @@ app.get('/api/logs/live', (req, res) => {
   }
 });
 
-// ── In-App Update Checker ──────────────────────────────────────────
-app.get('/api/updates/check', async (req, res) => {
-  try {
-    const force = req.query.force === 'true' || req.query.force === '1';
-    const result = await updateManager.checkForUpdates(APP_VERSION, force);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.get('/api/version/check', async (req, res) => {
-  try {
-    const force = req.query.force === 'true' || req.query.force === '1';
-    const result = await updateManager.checkForUpdates(APP_VERSION, force);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
 
 app.post('/api/logs/clear', (req, res) => {
   try {
@@ -2802,20 +2790,6 @@ app.post('/api/test', (req, res) => {
   });
   res.json({ ok: true, sent: result.count, template: result.templateName, templateId: result.templateId, simulated: isSimulated });
 });
-
-// ── WebSocket Helpers ───────────────────────────────────────────────────
-const obsClients = new Set();
-const androidClients = new Set();
-
-function getActiveWsCount(clientSet) {
-  if (!clientSet) return 0;
-  for (const client of clientSet) {
-    if (!client || client.readyState === 2 || client.readyState === 3) {
-      clientSet.delete(client);
-    }
-  }
-  return clientSet.size;
-}
 
 // Fix: use getActiveWsCount() so /health never reports stale/dead sockets
 app.get('/health', (req, res) =>
@@ -2966,7 +2940,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     app: 'StreamPe',
-    version: '2.2.0',
+    version: APP_VERSION,
     hostname: os.hostname(),
     port: activeServerPort || PREFERRED_PORT,
     sessionToken: SESSION_TOKEN,
@@ -2997,7 +2971,7 @@ function startUdpBroadcastListener() {
         const reply = JSON.stringify({
           type: 'STREAMPE_RESPONSE',
           app: 'StreamPe',
-          version: '2.2.0',
+          version: APP_VERSION,
           hostname: os.hostname(),
           port: activeServerPort,
           primaryIp: getPrimaryIp()
@@ -3100,7 +3074,7 @@ function startMdnsDiscovery(port, retryCount = 0) {
       port: port,
       probe: false,
       txt: {
-        version: '2.2.0',
+        version: APP_VERSION,
         server: 'streampe',
         hostname: hostName,
         os: os.platform(),

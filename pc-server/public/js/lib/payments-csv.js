@@ -133,7 +133,8 @@
     const ts = Number(tx.timestamp) || Date.now();
     const d = new Date(ts);
     const dateStr = tx.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '');
-    const timeStr = tx.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
+    let timeStr = tx.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
+    if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) timeStr += ':00';
     const rawName = tx.rawSender || tx.sender || 'Unknown';
     const canonicalName = tx.canonicalSender || canonicalDonorKey(rawName);
     const amtNum = parseFloat(tx.amount);
@@ -342,16 +343,18 @@
       if (filters.search) {
         const q = filters.search.toLowerCase().trim();
         const sMatch = (tx.sender || '').toLowerCase().includes(q);
+        const rMatch = (tx.rawSender || '').toLowerCase().includes(q);
         const dMatch = (tx.displayName || '').toLowerCase().includes(q);
         const mMatch = (tx.message || '').toLowerCase().includes(q);
         const idMatch = (tx.id || '').toLowerCase().includes(q);
-        if (!sMatch && !dMatch && !mMatch && !idMatch) return false;
+        if (!sMatch && !rMatch && !dMatch && !mMatch && !idMatch) return false;
       }
 
       if (filters.alias) {
         const q = filters.alias.toLowerCase().trim();
+        const sMatch = (tx.sender || '').toLowerCase().includes(q);
         const dMatch = (tx.displayName || '').toLowerCase().includes(q);
-        if (!dMatch) return false;
+        if (!sMatch && !dMatch) return false;
       }
 
       if (filters.minAmount !== undefined && filters.minAmount !== null && filters.minAmount !== '') {
@@ -643,7 +646,7 @@
       totalRevenue += amt;
 
       const rawName = (tx.displayName || tx.sender || 'Unknown').trim() || 'Unknown';
-      const cKey = tx.canonicalSender || canonicalDonorKey(rawName) || 'unknown';
+      const cKey = tx.canonicalSender || canonicalDonorKey(tx.rawSender || rawName) || 'unknown';
 
       if (!canonicalSupporters[cKey]) {
         canonicalSupporters[cKey] = { name: rawName, total: 0, count: 0 };
@@ -652,8 +655,8 @@
       canonicalSupporters[cKey].count += 1;
 
       // Prefer display alias / non-punctuated cleaner name
-      if (tx.displayName && canonicalSupporters[cKey].name !== tx.displayName) {
-        canonicalSupporters[cKey].name = tx.displayName;
+      if (rawName && canonicalSupporters[cKey].name !== rawName) {
+        canonicalSupporters[cKey].name = rawName;
       }
 
       const app = (tx.sourceApp || 'Other').trim() || 'Other';

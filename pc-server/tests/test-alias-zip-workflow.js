@@ -33,21 +33,21 @@ try {
   const formattedNoAlias = aliasesStore.formatDonorName(rawName, {}, 'TestProfileA');
   assert(formattedNoAlias === 'Rahul Kumar', 'When aliases.csv does not exist, formatDonorName returns rawSender ("Rahul Kumar")');
 
-  const aliasPathBefore = aliasesStore.getAliasesFilePath('TestProfileA');
+  const aliasPathBefore = aliasesStore.getAliasesFilePath();
   assert(!fs.existsSync(aliasPathBefore), 'aliases.csv file does NOT exist on disk prior to setting first alias');
 
-  // ── TEST 2: Profile Isolation & Lazy File Creation ────────────────────
-  console.log('\n--- Test 2: Profile Isolation & Lazy File Creation ---');
-  aliasesStore.setAlias('Rahul Kumar', 'Big Boss Rahul 👑', 'TestProfileA');
+  // ── TEST 2: Centralized Alias Storage & File Creation ────────────────────
+  console.log('\n--- Test 2: Centralized Alias Storage & File Creation ---');
+  aliasesStore.setAlias('Rahul Kumar', 'Big Boss Rahul 👑');
 
-  const aliasPathAfter = aliasesStore.getAliasesFilePath('TestProfileA');
-  assert(fs.existsSync(aliasPathAfter), 'data/TestProfileA/aliases.csv is lazily created on disk after setAlias()');
+  const aliasPathAfter = aliasesStore.getAliasesFilePath();
+  assert(fs.existsSync(aliasPathAfter), 'data/aliases.csv is created on disk after setAlias()');
 
   const formattedProfileA = aliasesStore.formatDonorName('Rahul Kumar', {}, 'TestProfileA');
-  assert(formattedProfileA === 'Big Boss Rahul 👑', 'ProfileA resolves alias to "Big Boss Rahul 👑"');
+  assert(formattedProfileA === 'Big Boss Rahul 👑', 'Resolves alias to "Big Boss Rahul 👑" in ProfileA');
 
   const formattedProfileB = aliasesStore.formatDonorName('Rahul Kumar', {}, 'TestProfileB');
-  assert(formattedProfileB === 'Rahul Kumar', 'ProfileB (isolated) falls back to rawSender "Rahul Kumar"');
+  assert(formattedProfileB === 'Big Boss Rahul 👑', 'Centralized alias also resolves to "Big Boss Rahul 👑" in ProfileB');
 
   // ── TEST 3: Raw CSV Disk Storage Isolation ────────────────────────────
   console.log('\n--- Test 3: Raw CSV Disk Storage Isolation ---');
@@ -163,9 +163,9 @@ try {
 
   // ── TEST 6: Deleted / Non-Existent File Export Resilience ─────────────
   console.log('\n--- Test 6: Non-Existent File & Empty Export Resilience ---');
-  const emptyProfile = 'NonExistentProfile_99';
-  const emptyAliases = aliasesStore.getAliases(emptyProfile);
-  assert(Array.isArray(emptyAliases) && emptyAliases.length === 0, 'getAliases for non-existent profile returns empty array [] without throwing');
+  aliasesStore.deleteAlias('Rahul Kumar');
+  const emptyAliases = aliasesStore.getAliases();
+  assert(Array.isArray(emptyAliases) && emptyAliases.length === 0, 'getAliases after deleting alias returns empty array [] without throwing');
 
   let emptyCsvAliases = 'sender,alias,note,updatedAt\n';
   for (const entry of emptyAliases) {
