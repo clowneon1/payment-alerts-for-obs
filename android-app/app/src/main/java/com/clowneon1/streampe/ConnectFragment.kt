@@ -121,11 +121,13 @@ class ConnectFragment : Fragment() {
     }
 
     private fun updateDiscoveredServersUI() {
+        if (!isAdded) return
+        val ctx = context ?: return
         layoutDiscoveredList.removeAllViews()
         val servers = discoveryManager.getDiscoveredServers()
 
         if (servers.isEmpty()) {
-            val emptyTv = TextView(requireContext()).apply {
+            val emptyTv = TextView(ctx).apply {
                 text = "No PC servers detected on local Wi-Fi"
                 textSize = 11f
                 setTextColor(Color.parseColor("#71717a"))
@@ -136,7 +138,7 @@ class ConnectFragment : Fragment() {
         }
 
         servers.forEach { srv ->
-            val card = LinearLayout(requireContext()).apply {
+            val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setBackgroundColor(Color.parseColor("#18181b"))
                 setPadding(12, 8, 12, 8)
@@ -148,18 +150,18 @@ class ConnectFragment : Fragment() {
                 layoutParams = params
             }
 
-            val titleTv = TextView(requireContext()).apply {
+            val titleTv = TextView(ctx).apply {
                 text = "${srv.serviceName} (${srv.httpUrl})"
                 textSize = 12f
                 setTextColor(Color.parseColor("#d5baff"))
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
 
-            val connectBtn = Button(requireContext()).apply {
+            val connectBtn = Button(ctx).apply {
                 text = "Connect"
                 textSize = 11f
                 setTextColor(Color.WHITE)
-                backgroundTintList = ContextCompat.getColorStateList(requireContext(), R.color.accent)
+                backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.accent)
                 setPadding(12, 0, 12, 0)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -179,6 +181,8 @@ class ConnectFragment : Fragment() {
     }
 
     private fun renderRecentChips() {
+        if (!isAdded) return
+        val ctx = context ?: return
         layoutRecentChips.removeAllViews()
         val saved = prefs.savedServers
 
@@ -189,7 +193,7 @@ class ConnectFragment : Fragment() {
 
         layoutRecentServersContainer.visibility = View.VISIBLE
         saved.forEach { url ->
-            val chip = LinearLayout(requireContext()).apply {
+            val chip = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setBackgroundColor(Color.parseColor("#18181b"))
@@ -201,7 +205,7 @@ class ConnectFragment : Fragment() {
                 layoutParams = params
             }
 
-            val label = TextView(requireContext()).apply {
+            val label = TextView(ctx).apply {
                 text = url.replace("http://", "").replace("https://", "")
                 textSize = 11f
                 setTextColor(Color.parseColor("#d5baff"))
@@ -211,7 +215,7 @@ class ConnectFragment : Fragment() {
                 }
             }
 
-            val removeBtn = TextView(requireContext()).apply {
+            val removeBtn = TextView(ctx).apply {
                 text = " ✕"
                 textSize = 11f
                 setTextColor(Color.parseColor("#71717a"))

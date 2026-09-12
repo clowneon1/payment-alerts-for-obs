@@ -17,7 +17,7 @@ data class DiscoveredServer(
     val ipAddress: String,
     val httpUrl: String,
     val wsUrl: String,
-    val version: String = "2.2.0"
+    val version: String = AppConstants.APP_VERSION
 )
 
 class ServerDiscoveryManager(private val context: Context) {
@@ -47,7 +47,7 @@ class ServerDiscoveryManager(private val context: Context) {
 
     var listener: DiscoveryListener? = null
 
-    private val discoveredServers = mutableMapOf<String, DiscoveredServer>()
+    private val discoveredServers = java.util.concurrent.ConcurrentHashMap<String, DiscoveredServer>()
 
     fun getDiscoveredServers(): List<DiscoveredServer> = discoveredServers.values.toList()
 

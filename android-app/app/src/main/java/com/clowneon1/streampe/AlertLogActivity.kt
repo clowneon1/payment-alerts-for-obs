@@ -132,7 +132,22 @@ class AlertLogAdapter(
         }
 
         holder.btnRetrig.setOnClickListener {
-            WebSocketManager.send(entry.fullJson)
+            val payloadStr = if (entry.fullJson.isNotBlank()) {
+                entry.fullJson
+            } else {
+                org.json.JSONObject().apply {
+                    put("alertId", java.util.UUID.randomUUID().toString())
+                    put("source", entry.source)
+                    put("appName", entry.appName)
+                    put("sender", entry.sender)
+                    put("amount", entry.amount)
+                    put("title", entry.title)
+                    put("text", entry.text)
+                    put("bigText", entry.bigText)
+                    put("timestamp", entry.timestamp)
+                }.toString()
+            }
+            WebSocketManager.send(payloadStr)
             Toast.makeText(it.context, "Retriggered alert", Toast.LENGTH_SHORT).show()
         }
 

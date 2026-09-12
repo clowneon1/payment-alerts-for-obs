@@ -25,6 +25,7 @@ class AppSelectorFragment : Fragment() {
         "com.google.android.apps.nbu.paisa.user",
         "in.amazon.mShop.android.shopping",
         "com.amazon.mShop.android.shopping",
+        "com.amazon.pay.android",
         "com.whatsapp",
         "com.whatsapp.w4b"
     )

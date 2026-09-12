@@ -37,6 +37,12 @@ class NotificationForwarderService : Service() {
         )
         acquireWakeLock()
         keepAliveHandler.postDelayed(keepAliveRunnable, keepAliveInterval)
+
+        WebSocketManager.onServerUrlChanged = { newUrl ->
+            try {
+                AppPrefs(this).serverUrl = newUrl
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -49,7 +55,8 @@ class NotificationForwarderService : Service() {
         if (prefs.serverUrl.isNotBlank() && prefs.isConnected) {
             val wsUrl = prefs.serverUrl
                 .replace("http://", "ws://")
-                .replace("https://", "wss://") + "/android"
+                .replace("https://", "wss://")
+                .trimEnd('/') + "/android"
             WebSocketManager.connectIfNeeded(wsUrl)
         }
 
@@ -58,19 +65,24 @@ class NotificationForwarderService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val restartIntent = Intent(applicationContext, NotificationForwarderService::class.java)
-        val pending = PendingIntent.getService(
-            applicationContext, 1, restartIntent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
-        alarm.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 2000, pending)
+        try {
+            val restartIntent = Intent(applicationContext, NotificationForwarderService::class.java)
+            val pending = PendingIntent.getService(
+                applicationContext, 1, restartIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+            alarm.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 2000, pending)
+        } catch (_: Exception) {}
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         keepAliveHandler.removeCallbacks(keepAliveRunnable)
-        wakeLock?.release()
+        if (wakeLock?.isHeld == true) {
+            try { wakeLock?.release() } catch (_: Exception) {}
+        }
+        wakeLock = null
         super.onDestroy()
     }
 
@@ -81,7 +93,11 @@ class NotificationForwarderService : Service() {
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "StreamPe::NotificationWakeLock"
-        ).also { it.acquire(10 * 60 * 1000L) }
+        ).also {
+            try {
+                it.acquire(10 * 60 * 1000L)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun buildNotification(): Notification {

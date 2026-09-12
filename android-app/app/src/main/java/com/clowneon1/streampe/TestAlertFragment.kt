@@ -131,12 +131,17 @@ class TestAlertFragment : Fragment() {
 
             val alertId = UUID.randomUUID().toString()
 
+            val parsed = PaymentParser.parse(title, text, bigTextVal, pkgVal, appName)
+
             val json = JSONObject().apply {
                 put("alertId",     alertId)
                 put("source",      "tester")
                 put("simulated",   true)
                 put("packageName", pkgVal)
                 put("appName",     appName)
+                put("sender",      parsed?.sender ?: "")
+                put("amount",      parsed?.amount ?: "")
+                put("message",     parsed?.message ?: "")
                 put("title",       title)
                 put("text",        text)
                 put("bigText",     bigTextVal)

@@ -43,6 +43,29 @@ class NotificationService : NotificationListenerService() {
 
         if (title.isBlank() && text.isBlank()) return
 
+        val appName: String = try {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(pkg, PackageManager.GET_META_DATA)
+            ).toString()
+        } catch (e: Exception) { pkg }
+
+        val isTestApp = pkg.contains("whatsapp", ignoreCase = true) || appName.contains("whatsapp", ignoreCase = true)
+
+        // Parse notification through PaymentParser rules
+        val parsed = PaymentParser.parse(
+            title = title,
+            text = text,
+            bigText = bigText,
+            packageName = pkg,
+            appName = appName
+        )
+
+        // Filter out non-payment noise (OTPs, promos, cashbacks) unless it's a test event
+        if (!isTestApp && parsed == null) {
+            Log.d(TAG, "Filtered out non-payment notification from $pkg: title='$title' text='$text'")
+            return
+        }
+
         val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
         val linesArray = JSONArray()
         textLines?.forEach { linesArray.put(it?.toString() ?: "") }
@@ -50,16 +73,8 @@ class NotificationService : NotificationListenerService() {
         val actionsArray = JSONArray()
         notif.actions?.forEach { actionsArray.put(it.title?.toString() ?: "") }
 
-        val appName: String = try {
-            packageManager.getApplicationLabel(
-                packageManager.getApplicationInfo(pkg, PackageManager.GET_META_DATA)
-            ).toString()
-        } catch (e: Exception) { pkg }
-
         val alertId = UUID.randomUUID().toString()
-        val isTestApp = pkg.contains("whatsapp", ignoreCase = true) || appName.contains("whatsapp", ignoreCase = true)
 
-        // Send all raw notification fields — parsing happens on the server
         val payload = JSONObject().apply {
             put("alertId",     alertId)
             put("source",      if (isTestApp) "tester" else "notification")
@@ -67,6 +82,9 @@ class NotificationService : NotificationListenerService() {
             put("isTestEvent", isTestApp)
             put("packageName", pkg)
             put("appName",     appName)
+            put("sender",      parsed?.sender ?: "")
+            put("amount",      parsed?.amount ?: "")
+            put("message",     parsed?.message ?: "")
             put("timestamp",   sbn.postTime)
             put("notifId",     sbn.id)
             put("key",         sbn.key)
@@ -90,7 +108,7 @@ class NotificationService : NotificationListenerService() {
 
         AlertLog.add(AlertLog.fromJson(payload))
 
-        Log.d(TAG, "Forwarding [$appName] alertId=$alertId title=$title text=$text")
+        Log.d(TAG, "Forwarding [$appName] alertId=$alertId sender='${parsed?.sender}' amount='${parsed?.amount}'")
         WebSocketManager.send(payload.toString())
     }
 

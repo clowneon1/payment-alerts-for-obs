@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import okhttp3.*
+import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,6 +35,8 @@ object WebSocketManager {
     private val isReconnecting        = AtomicBoolean(false)
     private val messageQueue          = ArrayDeque<String>(MAX_QUEUE)
     private val handler               = Handler(Looper.getMainLooper())
+
+    var onServerUrlChanged: ((String) -> Unit)? = null
 
     fun isConnected(): Boolean = isConnected.get()
 
@@ -76,8 +79,9 @@ object WebSocketManager {
     }
 
     fun send(message: String) {
+        if (message.isBlank()) return
         if (isConnected.get() && webSocket != null) {
-            val sent = webSocket!!.send(message)
+            val sent = webSocket?.send(message) ?: false
             if (!sent) {
                 queueMessage(message)
                 if (shouldAutoReconnect) scheduleReconnect()
@@ -91,8 +95,10 @@ object WebSocketManager {
     }
 
     private fun queueMessage(message: String) {
-        if (messageQueue.size >= MAX_QUEUE) messageQueue.removeFirst()
-        messageQueue.addLast(message)
+        synchronized(messageQueue) {
+            if (messageQueue.size >= MAX_QUEUE) messageQueue.removeFirst()
+            messageQueue.addLast(message)
+        }
     }
 
     fun ping() {
@@ -119,7 +125,9 @@ object WebSocketManager {
         isReconnecting.set(false)
         try { oldWs?.close(1000, "User disconnected") } catch (_: Exception) {}
         try { oldWs?.cancel() } catch (_: Exception) {}
-        messageQueue.clear()
+        synchronized(messageQueue) {
+            messageQueue.clear()
+        }
         notifyState(false, "Disconnected by user")
     }
 
@@ -145,8 +153,10 @@ object WebSocketManager {
                 isReconnecting.set(false)
                 notifyState(true, "Connected to PC Server")
 
-                while (messageQueue.isNotEmpty()) {
-                    ws.send(messageQueue.removeFirst())
+                synchronized(messageQueue) {
+                    while (messageQueue.isNotEmpty()) {
+                        ws.send(messageQueue.removeFirst())
+                    }
                 }
             }
 
@@ -157,9 +167,12 @@ object WebSocketManager {
                         val newIp = json.optString("primaryIp")
                         if (newIp.isNotBlank() && serverUrl.isNotBlank() && shouldAutoReconnect) {
                             val uri = java.net.URI(serverUrl)
-                            val newUrl = "ws://$newIp:${if (uri.port > 0) uri.port else 2907}/android"
+                            val port = if (uri.port > 0) uri.port else 2907
+                            val newUrl = "ws://$newIp:$port/android"
+                            val newHttpUrl = "http://$newIp:$port"
                             Log.d(TAG, "🌐 PC Server IP changed mid-session: reconnecting to $newUrl")
                             serverUrl = newUrl
+                            onServerUrlChanged?.invoke(newHttpUrl)
                             openSocket()
                         }
                     }
