@@ -73,14 +73,6 @@ function syncAndBumpVersion(bumpArg = 'patch') {
     fs.writeFileSync(tauriPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8');
   }
 
-  // 5. Sync android-app/app/build.gradle if present
-  const gradlePath = path.join(rootDir, 'android-app', 'app', 'build.gradle');
-  if (fs.existsSync(gradlePath)) {
-    let gradle = fs.readFileSync(gradlePath, 'utf8');
-    gradle = gradle.replace(/versionName\s+"[^"]+"/m, `versionName "${targetVer}"`);
-    fs.writeFileSync(gradlePath, gradle, 'utf8');
-  }
-
   return targetVer;
 }
 

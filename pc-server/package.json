@@ -19,7 +19,7 @@
     "bun:build": "node scripts/build-bun-sidecar.js",
     "app:dev": "node scripts/build-bun-sidecar.js && tauri dev",
     "app:dist": "node scripts/package-release.js",
-    "version": "node scripts/sync-version.js && git add src-tauri/Cargo.toml src-tauri/tauri.conf.json constants.js ../android-app/app/build.gradle"
+    "version": "node scripts/sync-version.js && git add src-tauri/Cargo.toml src-tauri/tauri.conf.json constants.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
