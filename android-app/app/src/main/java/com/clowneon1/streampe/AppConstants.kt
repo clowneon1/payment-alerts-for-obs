@@ -10,7 +10,7 @@ object AppConstants {
     const val MAX_RECENT_SERVERS = 3
     val FALLBACK_PORTS = listOf(DEFAULT_PORT, 8876, 2708, 9091, 1001)
 
-    const val APP_VERSION = "2.2.0"
+    const val APP_VERSION = "2.3.0"
     const val DEFAULT_FALLBACK_URL = "http://192.168.1.100:2907"
     const val DISCORD_URL = "https://partially-practical.codepenguin.in"
     const val WEBSITE_URL = "https://partially-practical.codepenguin.in"

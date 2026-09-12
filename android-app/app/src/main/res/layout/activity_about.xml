@@ -79,7 +79,7 @@
                     android:id="@+id/tvAboutVersion"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="v2.2.0"
+                    android:text="v2.3.0"
                     android:textSize="13sp"
                     android:textColor="@color/accentLight"
                     android:layout_marginBottom="10dp" />
