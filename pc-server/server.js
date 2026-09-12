@@ -1111,7 +1111,7 @@ function saveDonations(profileName, transactions) {
       };
       delete rawTx.rawSender;
 
-      let ym = PaymentsCsv.getMonthKey(rawTx.timestamp || rawTx.date);
+      let ym = PaymentsCsv.getMonthKey(rawTx.date || rawTx.timestamp);
       if (!ym) ym = getTodayYearMonth();
       if (!groups[ym]) groups[ym] = [];
       groups[ym].push(rawTx);
@@ -1154,7 +1154,7 @@ function saveDonations(profileName, transactions) {
 function appendDonation(profileName, tx) {
   if (tx.simulated) return;
 
-  let ym = PaymentsCsv.getMonthKey(tx.timestamp || tx.date);
+  let ym = PaymentsCsv.getMonthKey(tx.date || tx.timestamp);
   if (!ym) ym = getTodayYearMonth();
 
   const filePath = getDonationsCsvPath(ym);

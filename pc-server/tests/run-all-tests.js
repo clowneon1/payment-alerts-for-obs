@@ -12,7 +12,11 @@ const tests = [
   { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' },
   { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' },
   { name: 'Month CSV Sharding & Multi-Month Persistence Tests', file: 'tests/test-month-sharding-persistence.js' },
-  { name: 'Bug Bounty Remediation Verification Tests', file: 'tests/test-bug-bounty-fixes.js' }
+  { name: 'Bug Bounty Remediation Verification Tests', file: 'tests/test-bug-bounty-fixes.js' },
+  { name: 'Payment Parsers, Template Helpers & Rules Tests', file: 'tests/test-payment-parser-rules.js' },
+  { name: 'WebSocket Live Pipeline & Broadcast Tests', file: 'tests/test-websocket-live-pipeline.js' },
+  { name: 'REST API Endpoints Integration Tests', file: 'tests/test-api-endpoints.js' },
+  { name: 'UI DOM Contract & Element ID Integrity Tests', file: 'tests/test-ui-dom-contract.js' }
 ];
 
 let failed = false;
