@@ -538,9 +538,14 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCursorStatus() {
       if (!this.editor) return;
       const cursor = this.editor.getCursor();
-      const posEl = el('code-studio-cursor-pos');
+      const posEl = el('code-studio-cursor-info') || el('code-studio-cursor-pos');
       if (posEl) {
         posEl.textContent = `Ln ${cursor.line + 1}, Col ${cursor.ch + 1}`;
+      }
+      const charEl = el('code-studio-char-info');
+      if (charEl) {
+        const val = this.editor.getValue() || '';
+        charEl.textContent = `${val.length} chars`;
       }
     },
 

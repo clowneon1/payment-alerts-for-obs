@@ -119,14 +119,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
 });
 
-app.get('/config', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'config.html'));
-});
-
-app.get('/app', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'app.html'));
-});
-
 // ── Path Config Bootstrapping ──
 const PATH_CONFIG_FILE = path.join(writableBaseDir, 'path-config.json');
 let customPaths = { storageRootDir: '' };
@@ -1124,6 +1116,24 @@ function saveDonations(profileName, transactions) {
       if (!groups[ym]) groups[ym] = [];
       groups[ym].push(rawTx);
     });
+
+    // Clean up any historical month shards that exist on disk but now have 0 transactions
+    const existingMonths = getAvailableProfileMonths();
+    for (const ym of existingMonths) {
+      if (!groups[ym]) {
+        const filePath = getDonationsCsvPath(ym);
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath); } catch (_) { }
+        }
+        const fileDir = path.dirname(filePath);
+        try {
+          if (fs.existsSync(fileDir) && fs.readdirSync(fileDir).length === 0) {
+            fs.rmdirSync(fileDir);
+          }
+        } catch (_) { }
+        delete donationsCache[`ledger_${ym}`];
+      }
+    }
 
     for (const [ym, txs] of Object.entries(groups)) {
       const filePath = getDonationsCsvPath(ym);
@@ -2784,11 +2794,6 @@ app.post('/api/test', (req, res) => {
   res.json({ ok: true, sent: result.count, template: result.templateName, templateId: result.templateId, simulated: isSimulated });
 });
 
-// Fix: use getActiveWsCount() so /health never reports stale/dead sockets
-app.get('/health', (req, res) =>
-  res.json({ status: 'ok', androidClients: getActiveWsCount(androidClients), obsClients: getActiveWsCount(obsClients) })
-);
-
 // ── WebSocket Handler ───────────────────────────────────────────────────
 wss.on('connection', (ws, req) => {
   const url = req.url ? req.url.split('?')[0] : '/';
@@ -2938,7 +2943,9 @@ app.get('/health', (req, res) => {
     port: activeServerPort || PREFERRED_PORT,
     sessionToken: SESSION_TOKEN,
     primaryIp: getPrimaryIp(),
-    wsPath: '/android'
+    wsPath: '/android',
+    androidClients: getActiveWsCount(androidClients),
+    obsClients: getActiveWsCount(obsClients)
   });
 });
 

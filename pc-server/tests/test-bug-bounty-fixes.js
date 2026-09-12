@@ -84,6 +84,71 @@ const overlayJsContent = fs.readFileSync(path.join(__dirname, '../public/js/over
 assert.ok(overlayJsContent.includes('/obs'), 'overlay.js must connect to /obs endpoint');
 console.log('  ✅ PASS: overlay.js WebSocket endpoint verified as /obs.');
 
+// ── Test 6: Orphan Month Shard Cleanup on Transaction Deletion ──
+console.log('\n--- Test 6: Orphan Month Shard Cleanup on Transaction Deletion ---');
+const isolatedDataDir = path.join(testTempDir, 'orphan-test-data');
+fs.mkdirSync(path.join(isolatedDataDir, '2026'), { recursive: true });
+
+// Create a single-transaction month
+const singleTxFile = path.join(isolatedDataDir, '2026', '07.csv');
+const singleTxContent = PaymentsCsv.serializeCsv([{
+  id: 'tx_solo_july',
+  date: '2026-07-15',
+  time: '12:00:00',
+  sender: 'Solo Donor',
+  amount: 500,
+  currency: 'INR',
+  timestamp: 1784000000000
+}]);
+fs.writeFileSync(singleTxFile, singleTxContent, 'utf8');
+assert.ok(fs.existsSync(singleTxFile), '2026/07.csv created');
+
+// Simulate saveDonations with remaining transactions having 0 items for July
+const remainingTxs = [{
+  id: 'tx_august_active',
+  date: '2026-08-10',
+  time: '14:00:00',
+  sender: 'August Donor',
+  amount: 250,
+  currency: 'INR',
+  timestamp: 1786500000000
+}];
+
+// Group and clean orphan
+const groups = {};
+remainingTxs.forEach(t => {
+  const ym = PaymentsCsv.getMonthKey(t.timestamp || t.date);
+  if (!groups[ym]) groups[ym] = [];
+  groups[ym].push(t);
+});
+
+// Scan existing months in isolated dir
+const existingYears = fs.readdirSync(isolatedDataDir).filter(f => /^\d{4}$/.test(f));
+for (const yr of existingYears) {
+  const yrP = path.join(isolatedDataDir, yr);
+  const files = fs.readdirSync(yrP).filter(f => /^\d{2}\.csv$/.test(f));
+  for (const f of files) {
+    const ym = `${yr}-${f.replace('.csv', '')}`;
+    if (!groups[ym]) {
+      fs.unlinkSync(path.join(yrP, f));
+      if (fs.readdirSync(yrP).length === 0) fs.rmdirSync(yrP);
+    }
+  }
+}
+
+assert.ok(!fs.existsSync(singleTxFile), 'Orphaned 2026/07.csv must be unlinked');
+console.log('  ✅ PASS: Orphaned month shard deleted when its last transaction is deleted.');
+
+// ── Test 7: Unified Health Endpoint Verification ──
+console.log('\n--- Test 7: Unified Health Endpoint Verification ---');
+const serverJsContent = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+const healthMatches = serverJsContent.match(/app\.get\(['"]\/health['"]/g);
+assert.strictEqual(healthMatches ? healthMatches.length : 0, 1, 'Only exactly 1 app.get("/health") handler must exist');
+assert.ok(serverJsContent.includes('androidClients: getActiveWsCount(androidClients)'), 'Health route must return androidClients count');
+assert.ok(serverJsContent.includes('obsClients: getActiveWsCount(obsClients)'), 'Health route must return obsClients count');
+assert.ok(serverJsContent.includes('version: APP_VERSION'), 'Health route must return APP_VERSION');
+console.log('  ✅ PASS: Single unified /health endpoint verified.');
+
 // Cleanup temp test directory
 try {
   fs.rmSync(testTempDir, { recursive: true, force: true });

@@ -255,3 +255,59 @@
 - [x] **19.** Clean up dead legacy `select-lb-max` / `select-recent-max` event listeners in `config.js`.
 - [x] **20.** Standardize WebSocket URL in `overlay.js` to `/obs`.
 - [x] **21.** Use `APP_VERSION` from `constants.js` in `scripts/package-release.js`.
+
+---
+
+## 🔍 Iteration 3: Deep-Dive Code Audit Findings
+
+> Additional edge cases, shadow routes, zombie data persistence, and UI element ID mismatches identified in third-pass code audit.
+
+| # | Severity | Component / File | Issue Description |
+| :-: | :--- | :--- | :--- |
+| **22** | **HIGH** | `server.js:2788, 2932` | Duplicate `/health` route registration where the top handler shadows companion app metadata (`version`, `hostname`, `port`, `sessionToken`, `primaryIp`). |
+| **23** | **HIGH** | `server.js:1128-1135, 2215` | Deleting the last transaction of a month leaves the orphan CSV file on disk, causing the deleted transaction to resurrect upon reload. |
+| **24** | **MEDIUM** | `public/js/config.js:541` & `config.html:2779` | Code Studio status bar ID mismatch (`code-studio-cursor-pos` vs `code-studio-cursor-info`) prevents cursor position and character count updates. |
+| **25** | **LOW** | `server.js:122-128, 1508` | Redundant top-level `/config` and `/app` route registrations duplicated in main route block. |
+
+---
+
+### 22. Duplicate `/health` Route Registration Shadowing System Metadata (High Severity)
+- **Location:** [`pc-server/server.js:2788` and `pc-server/server.js:2932`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/server.js#L2788)
+- **Problem:** `app.get('/health')` is declared twice in `server.js`.
+  - First handler (line 2788) returns `{ status: 'ok', androidClients, obsClients }` and terminates the response.
+  - Second handler (line 2932) contains vital metadata for the Android companion app and discovery handshake (`version: APP_VERSION`, `hostname`, `port`, `sessionToken`, `primaryIp`, `wsPath`), but is completely shadowed and never executed.
+- **Consequences:** Probing `/health` omits app version and connection metadata, causing companion apps and discovery diagnostics to receive incomplete payloads.
+- **Fix:** Unify both handlers into a single comprehensive `/health` endpoint returning both server metadata and live socket counts.
+
+---
+
+### 23. Orphan Month Shard & Zombie Transaction Resurrected on Deletion (High Severity)
+- **Location:** [`pc-server/server.js:1128-1135` and `pc-server/server.js:2215-2234`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/server.js#L1128-L1135)
+- **Problem:** When a transaction is deleted via `DELETE /api/donations/:id`, `saveDonations(profile, filteredTxs)` is called. `saveDonations` iterates `Object.entries(groups)` to overwrite files. If the deleted transaction was the only transaction in that historical month (e.g. `data/2026/07.csv`), `groups` will have no key for `2026-07`. The CSV file on disk is never removed or rewritten, and `donationsCache['ledger_2026-07']` is not cleared.
+- **Consequences:** The deleted transaction remains on disk and resurrects as a "zombie" record whenever `loadDonations()` or `/api/donations/months` is invoked.
+- **Fix:** In `saveDonations`, inspect all existing on-disk months; if an existing month no longer has any transactions in `groups`, unlink the orphaned monthly CSV file, remove the parent year directory if empty, and evict the cache key.
+
+---
+
+### 24. Code Studio Cursor Status & Character Count ID Mismatch (Medium Severity)
+- **Location:** [`pc-server/public/js/config.js:541`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/public/js/config.js#L541) and [`pc-server/public/config.html:2779-2781`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/public/config.html#L2779-L2781)
+- **Problem:** `config.html` defines `<span id="code-studio-cursor-info">` and `<span id="code-studio-char-info">`, but `config.js` attempts to query `el('code-studio-cursor-pos')`.
+- **Consequences:** Moving the cursor or editing custom code in Code Studio never updates the line/column position or character count in the bottom status bar.
+- **Fix:** Update `CodeStudio.updateCursorStatus()` to target `code-studio-cursor-info` and update `code-studio-char-info` with code character length.
+
+---
+
+### 25. Duplicate Route Handler Registrations for `/config` and `/app` (Low Severity / Cleanup)
+- **Location:** [`pc-server/server.js:122-128`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/server.js#L122-L128) and [`pc-server/server.js:1508-1509`](file:///d:/xwork/projects/payment-alerts-for-obs/pc-server/server.js#L1508-L1509)
+- **Problem:** Early bootstrapping routes register `app.get('/config')` and `app.get('/app')`, which are redundantly registered again in the main HTTP routes block.
+- **Fix:** Remove the duplicate early route declarations and keep all page routes consolidated in the main route section.
+
+---
+
+## 🎯 Iteration 3 Remediation Checklist
+
+- [x] **22.** Merge duplicate `GET /health` route handlers in `server.js` into one unified endpoint returning both system metadata and live socket counts.
+- [x] **23.** Fix `saveDonations` to unlink orphaned month CSV files and prune cache when a month's last transaction is deleted.
+- [x] **24.** Fix Code Studio cursor and character status bar updates in `config.js`.
+- [x] **25.** Remove duplicate `/config` and `/app` route declarations at lines 122-128 in `server.js`.
+- [x] **26.** Add automated tests for orphan month cleanup on deletion and unified health endpoint verification.
