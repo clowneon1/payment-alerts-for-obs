@@ -235,19 +235,19 @@
       <div class="url-row">
         <span class="url-label">Alert Overlay:</span>
         <span class="url-val">http://localhost:2907/overlay/alerts</span>
-        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/alerts'); alert('Copied Alert Overlay URL!');">Copy</button>
+        <button class="btn-copy" onclick="copyUrl(this, 'http://localhost:2907/overlay/alerts')">Copy</button>
       </div>
 
       <div class="url-row">
         <span class="url-label">Goal Bar:</span>
         <span class="url-val">http://localhost:2907/overlay/goal</span>
-        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/goal'); alert('Copied Goal Bar URL!');">Copy</button>
+        <button class="btn-copy" onclick="copyUrl(this, 'http://localhost:2907/overlay/goal')">Copy</button>
       </div>
 
       <div class="url-row">
         <span class="url-label">Leaderboard:</span>
         <span class="url-val">http://localhost:2907/overlay/list?id=top-supporters</span>
-        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://localhost:2907/overlay/list?id=top-supporters'); alert('Copied Leaderboard URL!');">Copy</button>
+        <button class="btn-copy" onclick="copyUrl(this, 'http://localhost:2907/overlay/list?id=top-supporters')">Copy</button>
       </div>
     </div>
 
@@ -256,9 +256,25 @@
       <div class="url-row">
         <span class="url-label">Local IP:</span>
         <span class="url-val">http://192.168.1.100:2907</span>
-        <button class="btn-copy" onclick="navigator.clipboard.writeText('http://192.168.1.100:2907'); alert('Copied Connection URL!');">Copy</button>
+        <button class="btn-copy" onclick="copyUrl(this, 'http://192.168.1.100:2907')">Copy</button>
       </div>
     </div>
+
+    <script>
+      function copyUrl(btn, text) {
+        navigator.clipboard.writeText(text).then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          btn.style.background = 'var(--success)';
+          btn.style.color = '#000000';
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.style.background = '';
+            btn.style.color = '';
+          }, 1500);
+        }).catch(() => {});
+      }
+    </script>
 
     <div class="back-home">
       <a href="index.html">← Back to StreamPe Home</a> • <a href="faq.html">FAQ & Help</a>
