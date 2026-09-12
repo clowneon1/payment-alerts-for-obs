@@ -4243,10 +4243,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const aliasVal = val('input-manual-alias', '').trim();
       const amount = parseFloat(val('input-manual-amount', '0')) || 0;
       const source = val('select-manual-provider', 'Manual Entry');
-      const dateVal = val('input-manual-date', '');
-      let timeVal = val('input-manual-time', '');
-      if (timeVal && /^\d{2}:\d{2}$/.test(timeVal)) {
+      let dateVal = (val('input-manual-date', '') || '').trim();
+      let timeVal = (val('input-manual-time', '') || '').trim();
+      const curNow = new Date();
+      if (!timeVal) {
+        const hr = String(curNow.getHours()).padStart(2, '0');
+        const mn = String(curNow.getMinutes()).padStart(2, '0');
+        const sc = String(curNow.getSeconds()).padStart(2, '0');
+        timeVal = `${hr}:${mn}:${sc}`;
+      } else if (window.PaymentsCsv && window.PaymentsCsv.normalizeTime) {
+        timeVal = window.PaymentsCsv.normalizeTime(timeVal);
+      } else if (/^\d{1,2}:\d{2}$/.test(timeVal)) {
         timeVal += ':00';
+      }
+      if (!dateVal) {
+        const yr = curNow.getFullYear();
+        const mo = String(curNow.getMonth() + 1).padStart(2, '0');
+        const da = String(curNow.getDate()).padStart(2, '0');
+        dateVal = `${yr}-${mo}-${da}`;
+      } else if (window.PaymentsCsv && window.PaymentsCsv.normalizeDate) {
+        dateVal = window.PaymentsCsv.normalizeDate(dateVal);
       }
       const note = val('input-manual-note', '').trim();
       const activeProf = getCurrentProfileName();

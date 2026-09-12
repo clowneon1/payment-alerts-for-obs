@@ -171,19 +171,31 @@ app.post('/api/donations/record', (req, res) => {
   const amountNum = parseFloat(body.amount) || 0;
   if (amountNum <= 0) return res.status(400).json({ ok: false, error: 'Valid amount required' });
 
-  let timeStr = body.time || '12:00:00';
-  if (timeStr.length === 5) timeStr += ':00';
+  const now = new Date();
+  const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const dateVal = PaymentsCsv.normalizeDate(body.date, body.timestamp || now.getTime()) || curDateStr;
+  const timeVal = (body.time && String(body.time).trim())
+    ? PaymentsCsv.normalizeTime(body.time, body.timestamp || now.getTime())
+    : curTimeStr;
+
+  let ts = Number(body.timestamp);
+  if (!ts || isNaN(ts)) {
+    const parsedDt = new Date(`${dateVal}T${timeVal}`);
+    ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : now.getTime();
+  }
 
   const tx = {
-    id: body.id || `tx_${Date.now()}`,
-    timestamp: Date.now(),
-    date: body.date || '2026-09-12',
-    time: timeStr,
-    sender: body.sender || 'Anonymous',
+    id: body.id || `tx_${ts}`,
+    timestamp: ts,
+    date: dateVal,
+    time: timeVal,
+    sender: (body.sender || 'Anonymous').trim(),
     amount: amountNum,
     currency: 'INR',
-    sourceApp: body.sourceApp || 'PhonePe',
-    message: body.message || ''
+    sourceApp: (body.sourceApp || 'PhonePe').trim(),
+    message: (body.message || '').trim()
   };
 
   const current = loadDonations();
@@ -278,15 +290,16 @@ async function runTests() {
           id: 'api_tx_1',
           amount: 500,
           sender: 'VIP Player',
-          date: '2026-08-15',
-          time: '14:30',
+          date: '15/08/2026', // Old DD/MM/YYYY date format
+          // time omitted to test defaulting to current time
           sourceApp: 'GPay'
         })
       });
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.data.ok, true);
       assert.strictEqual(res.data.transaction.sender, 'VIP Player');
-      assert.strictEqual(res.data.transaction.time, '14:30:00');
+      assert.strictEqual(res.data.transaction.date, '2026-08-15', 'Date must be sanitized to YYYY-MM-DD');
+      assert.ok(/^\d{2}:\d{2}:\d{2}$/.test(res.data.transaction.time), 'Time must default to current time HH:mm:ss when omitted');
 
       assert.ok(fs.existsSync(path.join(dataDir, '2026', '08.csv')), '2026/08.csv must exist');
     });

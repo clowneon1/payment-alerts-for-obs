@@ -226,6 +226,7 @@ function sanitizeAllLedgerFiles(dataDir) {
     const years = fs.readdirSync(dataDir).filter(f => /^\d{4}$/.test(f));
     let cleanedCount = 0;
     let upgradedCount = 0;
+    let normalizedFilesCount = 0;
     for (const yr of years) {
       const yrPath = path.join(dataDir, yr);
       const months = fs.readdirSync(yrPath).filter(f => /^\d{2}\.csv$/.test(f));
@@ -244,8 +245,13 @@ function sanitizeAllLedgerFiles(dataDir) {
             cleanTxs.push(t);
           }
         }
-        if (rawTxs.length > cleanTxs.length || needsHeaderUpgrade) {
-          fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(cleanTxs), 'utf8');
+        const cleanContent = PaymentsCsv.serializeCsv(cleanTxs);
+        const rawNormalized = rawContent.replace(/\r\n/g, '\n').trim();
+        const cleanNormalized = cleanContent.replace(/\r\n/g, '\n').trim();
+        const contentChanged = rawNormalized !== cleanNormalized;
+
+        if (rawTxs.length > cleanTxs.length || needsHeaderUpgrade || contentChanged) {
+          fs.writeFileSync(filePath, cleanContent, 'utf8');
           if (needsHeaderUpgrade) {
             upgradedCount++;
             console.log(`[Storage] 📦 Upgraded ${yr}/${m}.csv to 10-column canonical schema on disk`);
@@ -253,6 +259,10 @@ function sanitizeAllLedgerFiles(dataDir) {
           if (rawTxs.length > cleanTxs.length) {
             cleanedCount += (rawTxs.length - cleanTxs.length);
             console.log(`[Storage] 🧹 Sanitized ${rawTxs.length - cleanTxs.length} duplicate(s) in ${yr}/${m}`);
+          }
+          if (contentChanged && rawTxs.length === cleanTxs.length && !needsHeaderUpgrade) {
+            normalizedFilesCount++;
+            console.log(`[Storage] 📅 Normalized dates and formatting in ${yr}/${m}.csv`);
           }
         }
       }
@@ -262,6 +272,9 @@ function sanitizeAllLedgerFiles(dataDir) {
     }
     if (cleanedCount > 0) {
       console.log(`[Storage] ✅ Startup Ledger Sanity Check: cleaned ${cleanedCount} duplicate transaction(s).`);
+    }
+    if (normalizedFilesCount > 0) {
+      console.log(`[Storage] 📅 Startup Ledger Sanity Check: normalized date/time format in ${normalizedFilesCount} file(s).`);
     }
   } catch (err) {
     console.warn('[Storage] Ledger sanitization notice:', err.message);
@@ -1034,10 +1047,20 @@ function loadDonations(profileName, monthKey, options = {}) {
             txs.push(t);
           }
         }
-        if (rawTxs.length > txs.length) {
+        const cleanContent = PaymentsCsv.serializeCsv(txs);
+        const rawNormalized = content.replace(/\r\n/g, '\n').trim();
+        const cleanNormalized = cleanContent.replace(/\r\n/g, '\n').trim();
+        const contentChanged = rawNormalized !== cleanNormalized;
+
+        if (rawTxs.length > txs.length || contentChanged) {
           try {
-            fs.writeFileSync(filePath, PaymentsCsv.serializeCsv(txs), 'utf8');
-            log.info('DonationsCSV', `🧹 Auto-sanitized ${rawTxs.length - txs.length} duplicate row(s) in ${filePath}`);
+            fs.writeFileSync(filePath, cleanContent, 'utf8');
+            if (rawTxs.length > txs.length) {
+              log.info('DonationsCSV', `🧹 Auto-sanitized ${rawTxs.length - txs.length} duplicate row(s) in ${filePath}`);
+            }
+            if (contentChanged && rawTxs.length === txs.length) {
+              log.info('DonationsCSV', `📅 Auto-sanitized dates/formatting in ${filePath}`);
+            }
           } catch (_) { }
         }
         donationsCache[cacheKey] = txs;
@@ -2149,18 +2172,28 @@ app.post('/api/donations/record', (req, res) => {
     const amountNum = parseFloat(TemplateMatcher.parseAmount(body.amount)) || 0;
     if (amountNum <= 0) return res.status(400).json({ ok: false, error: 'Valid amount is required' });
 
-    const now = Number(body.timestamp) || Date.now();
-    const d = new Date(now);
+    const now = new Date();
+    const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    const dateVal = PaymentsCsv.normalizeDate(body.date, body.timestamp || now.getTime()) || curDateStr;
+    const timeVal = (body.time && String(body.time).trim())
+      ? PaymentsCsv.normalizeTime(body.time, body.timestamp || now.getTime())
+      : curTimeStr;
+
+    let ts = Number(body.timestamp);
+    if (!ts || isNaN(ts)) {
+      const parsedDt = new Date(`${dateVal}T${timeVal}`);
+      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : now.getTime();
+    }
 
     const currencyCode = (body.currency || 'INR').toUpperCase();
-    let timeStr = body.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
-    if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) timeStr += ':00';
 
     const tx = {
-      id: body.id || `manual_${now}_${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: now,
-      date: body.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : ''),
-      time: timeStr,
+      id: body.id || `manual_${ts}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: ts,
+      date: dateVal,
+      time: timeVal,
       sender: (body.sender || 'Anonymous').trim(),
       amount: amountNum,
       currency: currencyCode,
@@ -2199,20 +2232,31 @@ app.put('/api/donations/:id', (req, res) => {
     if (amountNum <= 0) return res.status(400).json({ ok: false, error: 'Valid amount is required' });
 
     const currencyCode = (body.currency || currentTxs[idx].currency || 'INR').toUpperCase();
-    const now = body.timestamp || currentTxs[idx].timestamp || Date.now();
+    const existingTs = currentTxs[idx].timestamp || Date.now();
+    const updatedDate = body.date !== undefined ? PaymentsCsv.normalizeDate(body.date, existingTs) : currentTxs[idx].date;
+    let updatedTime = currentTxs[idx].time;
+    if (body.time !== undefined) {
+      updatedTime = (body.time && String(body.time).trim())
+        ? PaymentsCsv.normalizeTime(body.time, existingTs)
+        : currentTxs[idx].time;
+    }
 
-    let timeVal = body.time !== undefined ? body.time : currentTxs[idx].time;
-    if (timeVal && /^\d{1,2}:\d{2}$/.test(timeVal)) timeVal += ':00';
+    let ts = Number(body.timestamp) || currentTxs[idx].timestamp;
+    if (!ts || isNaN(ts)) {
+      const parsedDt = new Date(`${updatedDate}T${updatedTime}`);
+      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : Date.now();
+    }
 
     currentTxs[idx] = {
       ...currentTxs[idx],
+      timestamp: ts,
       sender: (body.sender !== undefined ? body.sender : currentTxs[idx].sender).trim(),
       amount: amountNum,
       currency: currencyCode,
       rawAmount: PaymentsCsv.formatCurrency(amountNum, currencyCode),
       sourceApp: (body.sourceApp !== undefined ? body.sourceApp : currentTxs[idx].sourceApp).trim(),
-      date: body.date !== undefined ? body.date : currentTxs[idx].date,
-      time: timeVal,
+      date: updatedDate,
+      time: updatedTime,
       message: (body.message !== undefined ? body.message : currentTxs[idx].message).trim()
     };
 

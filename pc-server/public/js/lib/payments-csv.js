@@ -113,13 +113,103 @@
     return str;
   }
 
+  function normalizeDate(val, fallbackTs) {
+    if (val !== undefined && val !== null) {
+      const str = String(val).trim();
+      if (str) {
+        // 1. YYYY-MM-DD or YYYY-M-D (with optional ISO/time suffix e.g. "2026-08-15T14:30:00Z" or "2026-08-15 14:30")
+        const isoMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
+        if (isoMatch) {
+          const yr = isoMatch[1];
+          const mo = String(isoMatch[2]).padStart(2, '0');
+          const da = String(isoMatch[3]).padStart(2, '0');
+          return `${yr}-${mo}-${da}`;
+        }
+        // 2. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (with optional time suffix)
+        const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[T\s].*)?$/);
+        if (dmyMatch) {
+          const p1 = parseInt(dmyMatch[1], 10);
+          const p2 = parseInt(dmyMatch[2], 10);
+          const yr = dmyMatch[3];
+          let da = p1;
+          let mo = p2;
+          if (p1 <= 12 && p2 > 12) {
+            // MM-DD-YYYY format
+            mo = p1;
+            da = p2;
+          }
+          return `${yr}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+        }
+        // 3. Textual dates e.g. "15 Aug 2026", "August 15, 2026", "15-Aug-2026"
+        const parsed = new Date(str);
+        if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 1970 && parsed.getFullYear() < 3000) {
+          const yr = parsed.getFullYear();
+          const mo = String(parsed.getMonth() + 1).padStart(2, '0');
+          const da = String(parsed.getDate()).padStart(2, '0');
+          return `${yr}-${mo}-${da}`;
+        }
+        // 4. Numeric epoch string
+        const num = Number(str);
+        if (!isNaN(num) && num > 0) {
+          const d = new Date(num < 1e11 ? num * 1000 : num);
+          if (!isNaN(d.getTime())) {
+            const yr = d.getFullYear();
+            const mo = String(d.getMonth() + 1).padStart(2, '0');
+            const da = String(d.getDate()).padStart(2, '0');
+            return `${yr}-${mo}-${da}`;
+          }
+        }
+      }
+    }
+    const tsNum = Number(fallbackTs);
+    const d = (tsNum && !isNaN(tsNum)) ? new Date(tsNum) : new Date();
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  }
+
+  function normalizeTime(val, fallbackTs) {
+    if (val !== undefined && val !== null) {
+      const str = String(val).trim();
+      if (str) {
+        // 12-hour AM/PM format (e.g. "02:30 PM", "2:30:15 pm", "12:00 am")
+        const ampmMatch = str.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)$/i);
+        if (ampmMatch) {
+          let h = parseInt(ampmMatch[1], 10);
+          const m = String(ampmMatch[2]).padStart(2, '0');
+          const s = String(ampmMatch[3] || '00').padStart(2, '0');
+          const ampm = ampmMatch[4].toLowerCase();
+          if (ampm === 'pm' && h < 12) h += 12;
+          if (ampm === 'am' && h === 12) h = 0;
+          return `${String(h).padStart(2, '0')}:${m}:${s}`;
+        }
+        // 24-hour HH:mm:ss or HH:mm or H:m:s
+        const time24Match = str.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+        if (time24Match) {
+          const h = String(time24Match[1]).padStart(2, '0');
+          const m = String(time24Match[2]).padStart(2, '0');
+          const s = String(time24Match[3] || '00').padStart(2, '0');
+          return `${h}:${m}:${s}`;
+        }
+      }
+    }
+    const tsNum = Number(fallbackTs);
+    const d = (tsNum && !isNaN(tsNum)) ? new Date(tsNum) : new Date();
+    const hr = String(d.getHours()).padStart(2, '0');
+    const mn = String(d.getMinutes()).padStart(2, '0');
+    const sc = String(d.getSeconds()).padStart(2, '0');
+    return `${hr}:${mn}:${sc}`;
+  }
+
   function getMonthKey(tsOrDate) {
     if (!tsOrDate) {
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     }
-    if (typeof tsOrDate === 'string' && /^\d{4}-\d{2}/.test(tsOrDate)) {
-      return tsOrDate.substring(0, 7);
+    const norm = normalizeDate(tsOrDate, typeof tsOrDate === 'number' ? tsOrDate : null);
+    if (norm && /^\d{4}-\d{2}/.test(norm)) {
+      return norm.substring(0, 7);
     }
     const d = new Date(Number(tsOrDate) || tsOrDate);
     if (isNaN(d.getTime())) {
@@ -130,11 +220,14 @@
   }
 
   function formatCsvRow(tx) {
-    const ts = Number(tx.timestamp) || Date.now();
-    const d = new Date(ts);
-    const dateStr = tx.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '');
-    let timeStr = tx.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '');
-    if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr)) timeStr += ':00';
+    const rawTs = Number(tx.timestamp);
+    const dateStr = normalizeDate(tx.date, rawTs);
+    const timeStr = normalizeTime(tx.time, rawTs);
+    let ts = rawTs;
+    if (!ts || isNaN(ts)) {
+      const parsedDt = new Date(`${dateStr}T${timeStr}`);
+      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : Date.now();
+    }
     const rawName = tx.rawSender || tx.sender || 'Unknown';
     const canonicalName = tx.canonicalSender || canonicalDonorKey(rawName);
     const amtNum = parseFloat(tx.amount);
@@ -242,15 +335,13 @@
       }
 
       let ts = Number(get(fieldIndex.timestamp, ''));
+      const rawDateStr = get(fieldIndex.date, '');
+      const rawTimeStr = get(fieldIndex.time, '');
+      const normalizedDate = normalizeDate(rawDateStr, ts || null);
+      const normalizedTime = normalizeTime(rawTimeStr, ts || null);
       if (!ts || isNaN(ts)) {
-        const dStr = get(fieldIndex.date, '');
-        const tStr = get(fieldIndex.time, '');
-        if (dStr) {
-          const parsedDate = new Date(`${dStr} ${tStr}`.trim());
-          ts = !isNaN(parsedDate.getTime()) ? parsedDate.getTime() : Date.now();
-        } else {
-          ts = Date.now();
-        }
+        const parsedDate = new Date(`${normalizedDate}T${normalizedTime}`);
+        ts = !isNaN(parsedDate.getTime()) ? parsedDate.getTime() : Date.now();
       }
 
       const simVal = get(fieldIndex.simulated, 'false').toLowerCase();
@@ -261,8 +352,8 @@
       transactions.push({
         id: get(fieldIndex.id, `evt_${ts}_${Math.random().toString(36).slice(2, 6)}`),
         timestamp: ts,
-        date: get(fieldIndex.date, new Date(ts).toISOString().split('T')[0]),
-        time: get(fieldIndex.time, new Date(ts).toTimeString().split(' ')[0]),
+        date: normalizedDate,
+        time: normalizedTime,
         sender: rawSenderName,
         canonicalSender: canonicalName,
         rawSender: rawSenderName,
@@ -294,18 +385,7 @@
 
   function getTxLocalDate(tx) {
     if (!tx) return '';
-    if (tx.date && /^\d{4}-\d{2}-\d{2}$/.test(tx.date)) {
-      return tx.date;
-    }
-    const ts = Number(tx.timestamp);
-    if (ts && !isNaN(ts)) {
-      const d = new Date(ts);
-      const yr = d.getFullYear();
-      const mo = String(d.getMonth() + 1).padStart(2, '0');
-      const da = String(d.getDate()).padStart(2, '0');
-      return `${yr}-${mo}-${da}`;
-    }
-    return '';
+    return normalizeDate(tx.date, tx.timestamp);
   }
 
   /**
@@ -746,6 +826,8 @@
     getCurrencySymbol,
     formatCurrency,
     formatCompactCurrency,
+    normalizeDate,
+    normalizeTime,
     getMonthKey,
     escapeCsvField,
     formatCsvRow,
