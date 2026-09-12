@@ -99,6 +99,10 @@ const widgetConfig = path.join(pcServerDir, 'widget-config.json');
 if (fs.existsSync(widgetConfig)) {
   fs.copyFileSync(widgetConfig, path.join(portableDir, 'widget-config.json'));
 }
+const paymentRules = path.join(pcServerDir, 'payment-rules.json');
+if (fs.existsSync(paymentRules)) {
+  fs.copyFileSync(paymentRules, path.join(portableDir, 'payment-rules.json'));
+}
 
 // Create ZIP from portable folder using PowerShell Compress-Archive
 const zipDstName = `StreamPe-v${version}-Portable.zip`;

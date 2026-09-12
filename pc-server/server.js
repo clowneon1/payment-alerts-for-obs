@@ -627,7 +627,10 @@ function normaliseAmountNumber(raw) {
 }
 
 // Load declarative payment-rules.json
-const PAYMENT_RULES_PATH = path.join(__dirname, 'payment-rules.json');
+let PAYMENT_RULES_PATH = path.join(baseDir, 'payment-rules.json');
+if (!fs.existsSync(PAYMENT_RULES_PATH)) {
+  PAYMENT_RULES_PATH = path.join(__dirname, 'payment-rules.json');
+}
 let paymentRulesStore = { version: '1.0.0', apps: [] };
 
 try {
