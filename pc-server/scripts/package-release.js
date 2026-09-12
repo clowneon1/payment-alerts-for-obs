@@ -10,9 +10,82 @@ const path = require('path');
 const pcServerDir = path.resolve(__dirname, '..');
 const rootDir = path.resolve(pcServerDir, '..');
 const artifactsDir = path.join(rootDir, 'artifacts');
-const { APP_VERSION } = require('../constants.js');
-const pkg = JSON.parse(fs.readFileSync(path.join(pcServerDir, 'package.json'), 'utf8'));
-const version = pkg.version || APP_VERSION;
+
+// ── Auto Version Bumping & Multi-File Sync ──────────────────────
+function syncAndBumpVersion(bumpArg = 'patch') {
+  const pkgPath = path.join(pcServerDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const currentVer = pkg.version || '2.0.0';
+  let targetVer = currentVer;
+
+  const arg = (bumpArg || 'patch').toLowerCase().trim();
+
+  if (arg === 'none' || arg === 'current' || arg === 'no-bump' || arg === '--no-bump') {
+    console.log(`ℹ️ [Version] Retaining current version: v${currentVer}`);
+    targetVer = currentVer;
+  } else if (/^\d+\.\d+\.\d+/.test(arg)) {
+    targetVer = arg;
+    console.log(`⬆️ [Version] Setting explicit version: v${currentVer} ➔ v${targetVer}`);
+  } else {
+    const parts = currentVer.split('.').map(n => parseInt(n, 10) || 0);
+    while (parts.length < 3) parts.push(0);
+
+    if (arg === 'major') {
+      parts[0] += 1;
+      parts[1] = 0;
+      parts[2] = 0;
+    } else if (arg === 'minor') {
+      parts[1] += 1;
+      parts[2] = 0;
+    } else {
+      // Default: 'patch'
+      parts[2] += 1;
+    }
+    targetVer = parts.join('.');
+    console.log(`⬆️ [Version Bump] Automatically bumped (${arg}): v${currentVer} ➔ v${targetVer}`);
+  }
+
+  // 1. Sync package.json
+  pkg.version = targetVer;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+
+  // 2. Sync constants.js
+  const constantsPath = path.join(pcServerDir, 'constants.js');
+  if (fs.existsSync(constantsPath)) {
+    let constants = fs.readFileSync(constantsPath, 'utf8');
+    constants = constants.replace(/APP_VERSION\s*=\s*['"][^'"]+['"]/m, `APP_VERSION = '${targetVer}'`);
+    fs.writeFileSync(constantsPath, constants, 'utf8');
+  }
+
+  // 3. Sync Cargo.toml
+  const cargoPath = path.join(pcServerDir, 'src-tauri', 'Cargo.toml');
+  if (fs.existsSync(cargoPath)) {
+    let cargo = fs.readFileSync(cargoPath, 'utf8');
+    cargo = cargo.replace(/^version\s*=\s*"[^"]+"/m, `version = "${targetVer}"`);
+    fs.writeFileSync(cargoPath, cargo, 'utf8');
+  }
+
+  // 4. Sync tauri.conf.json
+  const tauriPath = path.join(pcServerDir, 'src-tauri', 'tauri.conf.json');
+  if (fs.existsSync(tauriPath)) {
+    const tauriConf = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+    tauriConf.version = targetVer;
+    fs.writeFileSync(tauriPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8');
+  }
+
+  // 5. Sync android-app/app/build.gradle if present
+  const gradlePath = path.join(rootDir, 'android-app', 'app', 'build.gradle');
+  if (fs.existsSync(gradlePath)) {
+    let gradle = fs.readFileSync(gradlePath, 'utf8');
+    gradle = gradle.replace(/versionName\s+"[^"]+"/m, `versionName "${targetVer}"`);
+    fs.writeFileSync(gradlePath, gradle, 'utf8');
+  }
+
+  return targetVer;
+}
+
+const requestedBump = process.argv[2] || 'patch';
+const version = syncAndBumpVersion(requestedBump);
 
 console.log(`\n🚀 [Release Builder] Building StreamPe v${version} (Portable Only)`);
 console.log('─────────────────────────────────────────────────────────────────');

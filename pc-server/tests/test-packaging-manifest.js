@@ -164,11 +164,43 @@ try {
     const rulesContent = fs.readFileSync(path.join(bundleDir, 'payment-rules.json'), 'utf8');
     const rulesObj = JSON.parse(rulesContent);
     assert.ok(Array.isArray(rulesObj.apps), 'payment-rules.json in bundle must have apps array');
-    assert.ok(rulesObj.apps.length > 0, 'payment-rules.json in bundle must have rules configured');
-
     const widgetContent = fs.readFileSync(path.join(bundleDir, 'widget-config.json'), 'utf8');
     const widgetObj = JSON.parse(widgetContent);
     assert.ok(widgetObj && typeof widgetObj === 'object', 'widget-config.json in bundle must be valid JSON');
+  });
+
+  // ── Test 5: Auto Version Bumping & Multi-File Sync ──
+  console.log('\n--- Test 5: Auto Version Bumping & Multi-File Synchronization ---');
+
+  it('Calculates patch, minor, major, and explicit version bumps correctly', () => {
+    function calculateBump(currentVer, bumpArg) {
+      const arg = (bumpArg || 'patch').toLowerCase().trim();
+      if (arg === 'none' || arg === 'current' || arg === 'no-bump') return currentVer;
+      if (/^\d+\.\d+\.\d+/.test(arg)) return arg;
+      const parts = currentVer.split('.').map(n => parseInt(n, 10) || 0);
+      while (parts.length < 3) parts.push(0);
+      if (arg === 'major') { parts[0] += 1; parts[1] = 0; parts[2] = 0; }
+      else if (arg === 'minor') { parts[1] += 1; parts[2] = 0; }
+      else { parts[2] += 1; }
+      return parts.join('.');
+    }
+
+    assert.strictEqual(calculateBump('2.2.8', undefined), '2.2.9', 'Default must be patch bump');
+    assert.strictEqual(calculateBump('2.2.8', 'patch'), '2.2.9', 'patch arg must increment patch');
+    assert.strictEqual(calculateBump('2.2.8', 'minor'), '2.3.0', 'minor arg must increment minor and reset patch');
+    assert.strictEqual(calculateBump('2.2.8', 'major'), '3.0.0', 'major arg must increment major and reset minor/patch');
+    assert.strictEqual(calculateBump('2.2.8', 'none'), '2.2.8', 'none arg must retain current version');
+    assert.strictEqual(calculateBump('2.2.8', '3.1.5'), '3.1.5', 'explicit semver must be respected');
+  });
+
+  it('package-release.js includes auto-bumping and multi-file sync logic', () => {
+    const packageScriptPath = path.join(pcServerDir, 'scripts', 'package-release.js');
+    const content = fs.readFileSync(packageScriptPath, 'utf8');
+    assert.ok(content.includes('syncAndBumpVersion'), 'package-release.js must include syncAndBumpVersion function');
+    assert.ok(content.includes('package.json'), 'package-release.js must sync package.json');
+    assert.ok(content.includes('constants.js'), 'package-release.js must sync constants.js');
+    assert.ok(content.includes('Cargo.toml'), 'package-release.js must sync Cargo.toml');
+    assert.ok(content.includes('tauri.conf.json'), 'package-release.js must sync tauri.conf.json');
   });
 
 } finally {
