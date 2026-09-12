@@ -65,6 +65,25 @@ const pkg = require('../package.json');
 assert.strictEqual(APP_VERSION, pkg.version, `Constants APP_VERSION (${APP_VERSION}) must match package.json (${pkg.version})`);
 console.log(`  ✅ PASS: Constants APP_VERSION (${APP_VERSION}) matches package.json (${pkg.version}).`);
 
+// ── Test 4: Date Range Normalization for YYYY-MM strings ──
+console.log('\n--- Test 4: Date Range Normalization (YYYY-MM bounds) ---');
+const dateTestTxs = [
+  { id: '1', date: '2026-08-01', amount: 100, timestamp: 1000 },
+  { id: '2', date: '2026-08-15', amount: 200, timestamp: 2000 },
+  { id: '3', date: '2026-08-31', amount: 300, timestamp: 3000 },
+  { id: '4', date: '2026-09-01', amount: 400, timestamp: 4000 }
+];
+
+const augFiltered = PaymentsCsv.filterTransactions(dateTestTxs, { startDate: '2026-08', endDate: '2026-08' });
+assert.strictEqual(augFiltered.length, 3, `Expected all 3 August transactions to be included, got ${augFiltered.length}`);
+console.log('  ✅ PASS: YYYY-MM startDate/endDate properly normalized and includes end-of-month transactions.');
+
+// ── Test 5: Overlay WebSocket URL uses /obs ──
+console.log('\n--- Test 5: Overlay WebSocket Path Standardized ---');
+const overlayJsContent = fs.readFileSync(path.join(__dirname, '../public/js/overlay.js'), 'utf8');
+assert.ok(overlayJsContent.includes('/obs'), 'overlay.js must connect to /obs endpoint');
+console.log('  ✅ PASS: overlay.js WebSocket endpoint verified as /obs.');
+
 // Cleanup temp test directory
 try {
   fs.rmSync(testTempDir, { recursive: true, force: true });

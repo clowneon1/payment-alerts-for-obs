@@ -328,11 +328,19 @@
       }
 
       if (filters.startDate) {
-        if (txDate && txDate < filters.startDate) return false;
+        let sBound = filters.startDate;
+        if (sBound.length === 7) sBound = `${sBound}-01`;
+        if (txDate && txDate < sBound) return false;
       }
 
       if (filters.endDate) {
-        if (txDate && txDate > filters.endDate) return false;
+        let eBound = filters.endDate;
+        if (eBound.length === 7) {
+          const [yr, mo] = eBound.split('-').map(Number);
+          const lastD = new Date(yr, mo, 0).getDate();
+          eBound = `${eBound}-${String(lastD).padStart(2, '0')}`;
+        }
+        if (txDate && txDate > eBound) return false;
       }
 
       if (filters.provider && filters.provider !== 'all') {

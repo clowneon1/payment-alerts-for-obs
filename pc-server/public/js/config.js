@@ -3079,14 +3079,6 @@ document.addEventListener('DOMContentLoaded', () => {
       window.open(url, '_blank');
     });
 
-    // ── Custom Max Entry Toggles
-    ['lb', 'recent'].forEach(key => {
-      on(`select-${key}-max`, 'change', (e) => {
-        el(`input-${key}-max-custom`).style.display = e.target.value === 'custom' ? 'block' : 'none';
-        syncLivePreview();
-      });
-    });
-
     on('btn-clear-logs', 'click', async () => {
       try {
         const dateVal = val('select-log-date', '');

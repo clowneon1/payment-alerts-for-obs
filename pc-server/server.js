@@ -1540,8 +1540,7 @@ app.get('/api/analytics', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  const startDate = req.query.startDate || '';
-  const endDate = req.query.endDate || '';
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
 
   const filterOptions = {
     month,
@@ -1593,8 +1592,7 @@ app.get('/api/donations/query', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  const startDate = req.query.startDate || '';
-  const endDate = req.query.endDate || '';
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
   const sort = (req.query.sort || 'desc').toLowerCase();
   const sortBy = (req.query.sortBy || 'date').toLowerCase();
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -1755,6 +1753,20 @@ app.delete('/api/aliases/:sender', (req, res) => {
   res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });
 });
 
+function normalizeDateBounds(startDateStr, endDateStr) {
+  let startDate = startDateStr || '';
+  if (startDate && startDate.length === 7) {
+    startDate = `${startDate}-01`;
+  }
+  let endDate = endDateStr || '';
+  if (endDate && endDate.length === 7) {
+    const [year, monthVal] = endDate.split('-').map(Number);
+    const lastDay = new Date(year, monthVal, 0).getDate();
+    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
+  }
+  return { startDate, endDate };
+}
+
 function getMonthsInRange(startDateStr, endDateStr) {
   if (!startDateStr || !endDateStr) return [];
   const start = new Date(startDateStr);
@@ -1782,18 +1794,7 @@ app.get('/api/donations/csv', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  let startDate = req.query.startDate || '';
-  let endDate = req.query.endDate || '';
-
-  // Normalize YYYY-MM inputs to full YYYY-MM-DD bounds so string comparisons are inclusive
-  if (startDate && startDate.length === 7) {
-    startDate = `${startDate}-01`;
-  }
-  if (endDate && endDate.length === 7) {
-    const [year, monthVal] = endDate.split('-').map(Number);
-    const lastDay = new Date(year, monthVal, 0).getDate();
-    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
-  }
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
 
   let transactions = [];
   if (startDate && endDate) {
@@ -1988,15 +1989,7 @@ app.get('/api/donations/export-zip', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  let startDate = req.query.startDate || '';
-  let endDate = req.query.endDate || '';
-
-  if (startDate && startDate.length === 7) startDate = `${startDate}-01`;
-  if (endDate && endDate.length === 7) {
-    const [year, monthVal] = endDate.split('-').map(Number);
-    const lastDay = new Date(year, monthVal, 0).getDate();
-    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
-  }
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
 
   let transactions = [];
   if (startDate && endDate) {

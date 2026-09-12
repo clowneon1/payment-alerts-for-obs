@@ -251,7 +251,7 @@
 
 ## 🎯 Iteration 2 Remediation Checklist
 
-- [ ] **18.** Add `YYYY-MM` date normalization in `/api/donations/query` and `/api/analytics`.
-- [ ] **19.** Clean up dead legacy `select-lb-max` / `select-recent-max` event listeners in `config.js`.
-- [ ] **20.** Standardize WebSocket URL in `overlay.js` to `/obs`.
-- [ ] **21.** Use `APP_VERSION` from `constants.js` in `scripts/package-release.js`.
+- [x] **18.** Add `YYYY-MM` date normalization in `/api/donations/query` and `/api/analytics`.
+- [x] **19.** Clean up dead legacy `select-lb-max` / `select-recent-max` event listeners in `config.js`.
+- [x] **20.** Standardize WebSocket URL in `overlay.js` to `/obs`.
+- [x] **21.** Use `APP_VERSION` from `constants.js` in `scripts/package-release.js`.

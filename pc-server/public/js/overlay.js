@@ -181,7 +181,7 @@
   function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     try {
-      ws = new WebSocket(`${protocol}//${location.host}`);
+      ws = new WebSocket(`${protocol}//${location.host}/obs`);
       ws.onopen = () => console.log('[Overlay] Connected to WebSocket');
       ws.onclose = () => {
         console.warn('[Overlay] WebSocket disconnected, reconnecting in 3s...');

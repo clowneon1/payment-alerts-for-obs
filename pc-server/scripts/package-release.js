@@ -10,8 +10,9 @@ const path = require('path');
 const pcServerDir = path.resolve(__dirname, '..');
 const rootDir = path.resolve(pcServerDir, '..');
 const artifactsDir = path.join(rootDir, 'artifacts');
+const { APP_VERSION } = require('../constants.js');
 const pkg = JSON.parse(fs.readFileSync(path.join(pcServerDir, 'package.json'), 'utf8'));
-const version = pkg.version || '2.2.0';
+const version = pkg.version || APP_VERSION;
 
 console.log(`\n🚀 [Release Builder] Building StreamPe v${version} (Portable Only)`);
 console.log('─────────────────────────────────────────────────────────────────');
