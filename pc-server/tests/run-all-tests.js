@@ -16,7 +16,9 @@ const tests = [
   { name: 'Payment Parsers, Template Helpers & Rules Tests', file: 'tests/test-payment-parser-rules.js' },
   { name: 'WebSocket Live Pipeline & Broadcast Tests', file: 'tests/test-websocket-live-pipeline.js' },
   { name: 'REST API Endpoints Integration Tests', file: 'tests/test-api-endpoints.js' },
-  { name: 'UI DOM Contract & Element ID Integrity Tests', file: 'tests/test-ui-dom-contract.js' }
+  { name: 'UI DOM Contract & Element ID Integrity Tests', file: 'tests/test-ui-dom-contract.js' },
+  { name: 'Release Packaging Manifest & Runtime Path Tests', file: 'tests/test-packaging-manifest.js' },
+  { name: 'Config Schema & Multi-Generation Migration Tests', file: 'tests/test-config-schema-migration.js' }
 ];
 
 let failed = false;
