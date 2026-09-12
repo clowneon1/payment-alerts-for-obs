@@ -221,6 +221,40 @@ it('saveDonations for single month does not prune other historical months', () =
   assert.deepStrictEqual(allMonths, ['2026-10', '2026-09', '2026-08']);
 });
 
+console.log('\n--- Test 4: New Year Rollover (2026 -> 2027) does NOT delete previous year ---');
+it('Appends donation for new year (2027-01) creating data/2027/01.csv without touching 2026 data', () => {
+  const txNewYear = {
+    id: 'tx_jan_2027',
+    timestamp: 1798761600000, // 2027-01-01
+    date: '2027-01-01',
+    time: '00:01:00',
+    sender: 'Celebrator',
+    amount: 1000,
+    currency: 'INR',
+    sourceApp: 'GPay',
+    message: 'Happy New Year 2027'
+  };
+  appendDonation(null, txNewYear);
+
+  const aug2026 = path.join(DATA_DIR, '2026', '08.csv');
+  const sep2026 = path.join(DATA_DIR, '2026', '09.csv');
+  const oct2026 = path.join(DATA_DIR, '2026', '10.csv');
+  const jan2027 = path.join(DATA_DIR, '2027', '01.csv');
+
+  assert(fs.existsSync(aug2026), '2026/08.csv must still exist');
+  assert(fs.existsSync(sep2026), '2026/09.csv must still exist');
+  assert(fs.existsSync(oct2026), '2026/10.csv must still exist');
+  assert(fs.existsSync(jan2027), '2027/01.csv must be created');
+
+  const allMonths = getAvailableProfileMonths();
+  assert.deepStrictEqual(allMonths, ['2027-01', '2026-10', '2026-09', '2026-08']);
+
+  const allTxs = loadDonations();
+  assert.strictEqual(allTxs.length, 4, 'Total transactions across all years/months must be 4');
+  assert(allTxs.some(t => t.id === 'tx_jan_2027'), '2027 transaction present');
+  assert(allTxs.some(t => t.id === 'tx_aug_1'), '2026 August transaction preserved');
+});
+
 // Cleanup temp test directory
 try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
 
