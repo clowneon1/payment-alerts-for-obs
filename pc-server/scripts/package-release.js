@@ -115,7 +115,7 @@ function safeCleanDir(dir) {
 const pcServerDist = path.join(pcServerDir, 'dist');
 const rootDist = path.join(rootDir, 'dist');
 
-safeCleanDir(pcServerDist);
+if (!fs.existsSync(pcServerDist)) fs.mkdirSync(pcServerDist, { recursive: true });
 safeCleanDir(rootDist);
 if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
 
