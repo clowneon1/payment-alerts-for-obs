@@ -29,8 +29,8 @@
     root.style.setProperty('--cycling-padding', (widget.style.padding ?? 16) + 'px');
     root.style.setProperty('--cycling-width', (widget.layout.width ?? 350) + 'px');
     root.style.setProperty('--cycling-font-size', (widget.text.fontSize ?? 18) + (widget.text.fontSizeUnit || 'px'));
-    root.style.setProperty('--cycling-position-x', widget.layout.positionX ?? 10);
-    root.style.setProperty('--cycling-position-y', widget.layout.positionY ?? 90);
+    root.style.setProperty('--cycling-position-x', widget.layout.positionX ?? 50);
+    root.style.setProperty('--cycling-position-y', widget.layout.positionY ?? 50);
 
     // Media properties
     root.style.setProperty('--cycling-media-size', (widget.style.mediaSize ?? 32) + 'px');
@@ -50,8 +50,8 @@
     root.style.setProperty('--cycling-out-duration', outDur + 'ms');
 
     // Dynamic transform calculation based on position coordinates
-    const posX = widget.layout.positionX ?? 10;
-    const posY = widget.layout.positionY ?? 90;
+    const posX = widget.layout.positionX ?? 50;
+    const posY = widget.layout.positionY ?? 50;
     const transX = posX === 50 ? '-50%' : (posX > 50 ? '-100%' : '0%');
     const transY = posY === 50 ? '-50%' : (posY > 50 ? '-100%' : '0%');
     root.style.setProperty('--cycling-transform', `translate(${transX}, ${transY})`);
@@ -94,9 +94,13 @@
         .sort((a, b) => b.amount - a.amount);
 
       if (sorted.length > 0) {
-        return { name: sorted[0].name, amount: `₹${sorted[0].amount.toLocaleString('en-IN')}` };
+        return {
+          name: sorted[0].name,
+          amount: sorted[0].amount,
+          formattedAmount: `₹${sorted[0].amount.toLocaleString('en-IN')}`
+        };
       }
-      return { name: 'No Top Supporter', amount: '₹0' };
+      return { name: 'No Top Supporter', amount: 0, formattedAmount: '₹0' };
     }
 
     if (type === 'recent_donation') {
@@ -104,10 +108,18 @@
       if (recent.length > 0) {
         const first = recent[0];
         const sender = first.sender || 'Donor';
-        const amtVal = parseFloat(first.amountValue || first.amount || 0);
-        return { name: sender, amount: `₹${amtVal.toLocaleString('en-IN')}` };
+        const rawAmt = first.amountValue !== undefined ? first.amountValue : first.amount;
+        const amtVal = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]/g, '')) || 0;
+        const formatted = (typeof first.amount === 'string' && first.amount.includes('₹'))
+          ? first.amount
+          : `₹${amtVal.toLocaleString('en-IN')}`;
+        return {
+          name: sender,
+          amount: amtVal,
+          formattedAmount: formatted
+        };
       }
-      return { name: 'No Recent Donations', amount: '₹0' };
+      return { name: 'No Recent Donations', amount: 0, formattedAmount: '₹0' };
     }
 
     return null;
@@ -131,9 +143,16 @@
     let imageUrl = item.imageUrl || '';
     let mediaType = item.mediaType || (imageUrl ? 'image' : 'icon');
 
+    let name = '';
+    let amount = '';
+    let formattedAmount = '';
+
     if (item.type === 'top_supporter' || item.type === 'recent_donation') {
       const data = getLiveData(item.type);
-      text = `${data.name} ${data.amount}`;
+      name = data.name;
+      amount = data.amount;
+      formattedAmount = data.formattedAmount;
+      text = `${data.name} ${data.formattedAmount}`;
     }
 
     let mediaHtml = '';
@@ -145,14 +164,19 @@
 
     const inEffect = widget.transitionIn || widget.transitionEffect || 'slide-up';
 
-    if (widget.code && widget.code.enableCustomCode !== false && widget.code.customHTML && widget.code.customHTML.trim()) {
-      const rendered = TemplateEngine.render(widget.code.customHTML, {
-        label: TemplateEngine.escapeHtml(label),
-        text: TemplateEngine.escapeHtml(text),
-        transitionEffect: inEffect,
-        transitionIn: inEffect,
-        mediaHtml
-      });
+    if (widget.code && widget.code.enableCustomCode !== false) {
+      const rendered = (typeof widget.code.customHTML === 'string' && widget.code.customHTML)
+        ? TemplateEngine.render(widget.code.customHTML, {
+            label: TemplateEngine.escapeHtml(label),
+            text: TemplateEngine.escapeHtml(text),
+            name: TemplateEngine.escapeHtml(name),
+            amount: TemplateEngine.escapeHtml(amount),
+            formattedAmount: TemplateEngine.escapeHtml(formattedAmount),
+            transitionEffect: inEffect,
+            transitionIn: inEffect,
+            mediaHtml
+          })
+        : '';
       container.innerHTML = rendered;
     } else {
       container.innerHTML = `

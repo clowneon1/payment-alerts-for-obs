@@ -48,6 +48,8 @@ When `android`, `mobile`, or `apk` is targetted, update:
 1. **[`android-app/app/build.gradle`](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/build.gradle)**
    * `versionName "X.Y.Z"`
    * `versionCode N` (increment integer `N` by 1)
+2. **[`android-app/app/src/main/java/com/clowneon1/streampe/AppConstants.kt`](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/src/main/java/com/clowneon1/streampe/AppConstants.kt)**
+   * `const val APP_VERSION = "X.Y.Z"`
 
 ---
 

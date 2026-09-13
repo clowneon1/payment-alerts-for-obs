@@ -1,0 +1,44 @@
+const { execSync } = require('child_process');
+const path = require('path');
+
+console.log('========================================');
+console.log('🚀 Running StreamPe Complete Test Suite');
+console.log('========================================\n');
+
+const tests = [
+  { name: 'Database & CSV Storage Engine Tests', file: 'scripts/test-database.js' },
+  { name: 'Profile Aliases & ZIP Backup Engine Tests', file: 'tests/test-alias-zip-workflow.js' },
+  { name: 'Canonical Donor Matching & Leaderboard Aggregation Tests', file: 'tests/test-canonical-donor-matching.js' },
+  { name: 'In-App Auto-Update & Semver Tests', file: 'tests/test-update-checker.js' },
+  { name: 'Lazy Month CSV Reader & RAM Eviction Tests', file: 'tests/test-lazy-csv-reader.js' },
+  { name: 'Month CSV Sharding & Multi-Month Persistence Tests', file: 'tests/test-month-sharding-persistence.js' },
+  { name: 'Bug Bounty Remediation Verification Tests', file: 'tests/test-bug-bounty-fixes.js' },
+  { name: 'Payment Parsers, Template Helpers & Rules Tests', file: 'tests/test-payment-parser-rules.js' },
+  { name: 'WebSocket Live Pipeline & Broadcast Tests', file: 'tests/test-websocket-live-pipeline.js' },
+  { name: 'REST API Endpoints Integration Tests', file: 'tests/test-api-endpoints.js' },
+  { name: 'UI DOM Contract & Element ID Integrity Tests', file: 'tests/test-ui-dom-contract.js' },
+  { name: 'Release Packaging Manifest & Runtime Path Tests', file: 'tests/test-packaging-manifest.js' },
+  { name: 'Config Schema & Multi-Generation Migration Tests', file: 'tests/test-config-schema-migration.js' }
+];
+
+let failed = false;
+
+for (const t of tests) {
+  console.log(`▶ Running ${t.name} (${t.file})...`);
+  try {
+    execSync(`node "${path.join(__dirname, '..', t.file)}"`, { stdio: 'inherit' });
+  } catch (err) {
+    console.error(`❌ Test suite failed: ${t.name}`);
+    failed = true;
+    break;
+  }
+}
+
+if (failed) {
+  console.error('\n💥 TEST RUN FAILED!');
+  process.exit(1);
+} else {
+  console.log('\n========================================');
+  console.log('🎉 ALL STREAMPE TEST SUITES PASSED CLEANLY!');
+  console.log('========================================\n');
+}

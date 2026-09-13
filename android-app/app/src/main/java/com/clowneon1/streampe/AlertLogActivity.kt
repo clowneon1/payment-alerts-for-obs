@@ -73,11 +73,12 @@ class AlertLogAdapter(
         val tvTime      : TextView  = view.findViewById(R.id.tvLogTime)
         val tvApp       : TextView  = view.findViewById(R.id.tvLogApp)
         val tvTestBadge : TextView  = view.findViewById(R.id.tvTestBadge)
+        val tvTitle     : TextView  = view.findViewById(R.id.tvLogTitle)
+        val tvText      : TextView  = view.findViewById(R.id.tvLogText)
+        val tvSubText   : TextView  = view.findViewById(R.id.tvLogSubText)
         val layoutChips : LinearLayout = view.findViewById(R.id.layoutChips)
         val tvSender    : TextView  = view.findViewById(R.id.tvLogSender)
         val tvAmount    : TextView  = view.findViewById(R.id.tvLogAmount)
-        val tvTitle     : TextView  = view.findViewById(R.id.tvLogTitle)
-        val tvText      : TextView  = view.findViewById(R.id.tvLogText)
         val btnRetrig   : Button    = view.findViewById(R.id.btnRetrigger)
         val btnDelete   : Button    = view.findViewById(R.id.btnDeleteEntry)
     }
@@ -90,32 +91,69 @@ class AlertLogAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) {
         val entry = items[position]
 
-        holder.tvTime.text  = sdf.format(Date(entry.timestamp))
-        holder.tvApp.text   = entry.appName
-        holder.tvTitle.text = entry.title
-        holder.tvText.text  = entry.text
+        holder.tvTime.text = sdf.format(Date(entry.timestamp))
+        holder.tvApp.text  = entry.appName
+
+        // Exact Raw Title
+        if (entry.title.isNotBlank()) {
+            holder.tvTitle.text = entry.title
+            holder.tvTitle.visibility = View.VISIBLE
+        } else {
+            holder.tvTitle.visibility = View.GONE
+        }
+
+        // Exact Raw Notification Body / Big Text
+        val bodyText = when {
+            entry.bigText.isNotBlank() -> entry.bigText
+            entry.text.isNotBlank()    -> entry.text
+            else -> "(No text content)"
+        }
+        holder.tvText.text = bodyText
+
+        // Exact Subtext
+        if (entry.subText.isNotBlank()) {
+            holder.tvSubText.text = entry.subText
+            holder.tvSubText.visibility = View.VISIBLE
+        } else {
+            holder.tvSubText.visibility = View.GONE
+        }
 
         // TEST badge
         val isTest = entry.appName.contains("test", ignoreCase = true) ||
-                     entry.source == "test"
+                     entry.source == "test" || entry.source == "tester"
         holder.tvTestBadge.visibility = if (isTest) View.VISIBLE else View.GONE
 
         // Sender + amount chips
         val hasParsed = entry.sender.isNotBlank() || entry.amount.isNotBlank()
         holder.layoutChips.visibility = if (hasParsed) View.VISIBLE else View.GONE
         if (hasParsed) {
-            holder.tvSender.text = if (entry.sender.isNotBlank()) "\uD83D\uDC64 ${entry.sender}" else "Unknown"
+            holder.tvSender.text = if (entry.sender.isNotBlank()) entry.sender else "Unknown"
             holder.tvAmount.text = if (entry.amount.isNotBlank()) entry.amount else "--"
         }
 
         holder.btnRetrig.setOnClickListener {
-            WebSocketManager.send(entry.fullJson)
-            Toast.makeText(it.context, "\uD83D\uDD04 Retriggered!", Toast.LENGTH_SHORT).show()
+            val payloadStr = if (entry.fullJson.isNotBlank()) {
+                entry.fullJson
+            } else {
+                org.json.JSONObject().apply {
+                    put("alertId", java.util.UUID.randomUUID().toString())
+                    put("source", entry.source)
+                    put("appName", entry.appName)
+                    put("sender", entry.sender)
+                    put("amount", entry.amount)
+                    put("title", entry.title)
+                    put("text", entry.text)
+                    put("bigText", entry.bigText)
+                    put("timestamp", entry.timestamp)
+                }.toString()
+            }
+            WebSocketManager.send(payloadStr)
+            Toast.makeText(it.context, "Retriggered alert", Toast.LENGTH_SHORT).show()
         }
 
         holder.btnDelete.setOnClickListener {
             onDelete(entry)
-            Toast.makeText(it.context, "\u2715 Entry deleted", Toast.LENGTH_SHORT).show()
+            Toast.makeText(it.context, "Alert deleted", Toast.LENGTH_SHORT).show()
         }
     }
 }

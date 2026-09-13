@@ -71,6 +71,21 @@
   }
 
   function applyListSettings(newSettings) {
+    if (newSettings && config && config.widgets) {
+      if (!newSettings.widgets) newSettings.widgets = {};
+      if (config.widgets.leaderboard && config.widgets.leaderboard.supporters && Object.keys(config.widgets.leaderboard.supporters).length) {
+        if (!newSettings.widgets.leaderboard || !newSettings.widgets.leaderboard.supporters || !Object.keys(newSettings.widgets.leaderboard.supporters).length) {
+          if (!newSettings.widgets.leaderboard) newSettings.widgets.leaderboard = {};
+          newSettings.widgets.leaderboard.supporters = config.widgets.leaderboard.supporters;
+        }
+      }
+      if (config.widgets.recent && config.widgets.recent.recentDonations && config.widgets.recent.recentDonations.length) {
+        if (!newSettings.widgets.recent || !newSettings.widgets.recent.recentDonations || !newSettings.widgets.recent.recentDonations.length) {
+          if (!newSettings.widgets.recent) newSettings.widgets.recent = {};
+          newSettings.widgets.recent.recentDonations = config.widgets.recent.recentDonations;
+        }
+      }
+    }
     config = StorageHelper.mergeWithDefaults(newSettings);
     const listConfig = resolveListConfig(config);
     const root = document.documentElement;
@@ -152,18 +167,30 @@
         .slice(0, max);
     }
 
+    const total = items.reduce((sum, it) => sum + (parseFloat(it.amount || it.amountValue) || 0), 0);
+    const formattedTotal = `₹${total.toLocaleString('en-IN')}`;
+
     const listTitle = TemplateEngine.render(listConfig.text?.titleTemplate || listConfig.title || listConfig.name, {
       title: listConfig.title || listConfig.name,
       count: items.length,
-      max: max
+      max: max,
+      maxEntries: max,
+      totalAmount: total,
+      formattedTotal: formattedTotal
     });
 
-    if (listConfig.code?.enableCustomCode === true && listConfig.code?.customHTML && listConfig.code.customHTML.trim()) {
-      container.innerHTML = TemplateEngine.render(listConfig.code.customHTML, {
-        title: listTitle,
-        count: items.length,
-        items: items
-      });
+    if (listConfig.code?.enableCustomCode === true) {
+      container.innerHTML = (typeof listConfig.code?.customHTML === 'string' && listConfig.code.customHTML)
+        ? TemplateEngine.render(listConfig.code.customHTML, {
+            title: listTitle,
+            count: items.length,
+            max: max,
+            maxEntries: max,
+            totalAmount: total,
+            formattedTotal: formattedTotal,
+            items: items
+          })
+        : '';
       const listEl = container.querySelector('.lb-list');
       if (listEl) listEl.innerHTML = isRecent ? renderRecentRows(items, listConfig) : renderLeaderboardRows(items, listConfig);
       if (window.lucide) lucide.createIcons();
@@ -172,8 +199,8 @@
     }
 
     const headerIcon = isRecent
-      ? '<i data-lucide="history" style="width: 22px; height: 22px; color: var(--list-accent-color);"></i>'
-      : '<span style="font-size: 22px;">🏆</span>';
+      ? '<svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--list-accent-color, #9146ff)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>'
+      : '<svg class="widget-title-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--list-accent-color, #9146ff)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
 
     if (items.length === 0) {
       container.innerHTML = `
@@ -208,7 +235,7 @@
   function renderLeaderboardRows(supporters, listConfig) {
     return supporters.map((supporter, idx) => {
       const rank = idx + 1;
-      const badgeIcon = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : `#${rank}`));
+      const badgeIcon = `#${rank}`;
       const formattedAmount = `₹${supporter.amount.toLocaleString('en-IN')}`;
       return `
         <div class="lb-row rank-${rank}">

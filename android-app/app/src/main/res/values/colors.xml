@@ -1,38 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0a0c14</color>
+    <color name="ic_launcher_background">#0e0e10</color>
 
-    <!-- Brand / Primary -->
-    <color name="colorPrimary">#6C63FF</color>
-    <color name="colorPrimaryDark">#4B44CC</color>
-    <color name="colorAccent">#6C63FF</color>
-    <color name="colorPrimaryVariant">#4B44CC</color>
+    <!-- Brand / Primary — Twitch Purple (DESIGN.md) -->
+    <color name="colorPrimary">#9146FF</color>
+    <color name="colorPrimaryDark">#7a26e7</color>
+    <color name="colorAccent">#9146FF</color>
+    <color name="colorPrimaryVariant">#7a26e7</color>
     <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="accentLight">#d5baff</color>
 
-    <!-- Backgrounds -->
-    <color name="bg">#0a0c14</color>
-    <color name="surface1">#12151f</color>
-    <color name="surface2">#1a1d2b</color>
-    <color name="surface3">#22263a</color>
-    <color name="border">#2e3248</color>
+    <!-- Backgrounds — Dark Surfaces -->
+    <color name="bg">#0e0e10</color>
+    <color name="surface1">#131315</color>
+    <color name="surface2">#18181b</color>
+    <color name="surface3">#201f21</color>
+    <color name="surfaceRaised">#27272a</color>
+    <color name="border">#302f36</color>
 
     <!-- Text -->
-    <color name="textMain">#F0F2FF</color>
-    <color name="textMuted">#8890AA</color>
-    <color name="textDim">#555D7A</color>
+    <color name="textMain">#f4f4f5</color>
+    <color name="textMuted">#a1a1aa</color>
+    <color name="textDim">#71717a</color>
 
     <!-- Status -->
-    <color name="success">#4ADE80</color>
-    <color name="warning">#FBBF24</color>
-    <color name="danger">#F87171</color>
-    <color name="info">#60A5FA</color>
+    <color name="success">#00F593</color>
+    <color name="warning">#ffb703</color>
+    <color name="danger">#ef4444</color>
+    <color name="info">#38bdf8</color>
+    <color name="liveRed">#EB0400</color>
 
     <!-- Gradients / tints -->
-    <color name="accent">#6C63FF</color>
-    <color name="accentHover">#4B44CC</color>
-    <color name="accentDim">#1a1830</color>
+    <color name="accent">#9146FF</color>
+    <color name="accentHover">#7a26e7</color>
+    <color name="accentDim">#2d1a4e</color>
+    <color name="accentSurface">#1e1433</color>
 
-    <!-- PC-server palette (keep compat) -->
-    <color name="colorSurface">#12151f</color>
-    <color name="colorOnSurface">#F0F2FF</color>
+    <!-- Compatibility -->
+    <color name="colorSurface">#131315</color>
+    <color name="colorOnSurface">#f4f4f5</color>
 </resources>

@@ -4,11 +4,44 @@
 
 ## 🚀 Upcoming Features & Tasks
 
-- [ ] **19. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
+### Version 2.2.0 (Planned)
+
+#### P0 — Critical & High Priority Fixes
+
+#### P1 — Memory Optimization, Customization & Auto-Update
+
+- [x] **6. Lazy Month CSV Reader & RAM Eviction (< 15 MB RAM for Multi-Month History)**:
+  - Implemented Early-Exit Reverse Reader in `loadDonations()` (`server.js`) so page queries stop reading disk files as soon as enough matching items are collected, avoiding loading all 12+ months into RAM.
+  - Implemented Date-Range Month Pruning (`getFilteredProfileMonths`) to skip opening unneeded monthly CSV files during filtered searches.
+  - Added LRU cache eviction to clear historical month CSVs from `donationsCache` memory after serving queries, retaining only the active current month in RAM.
+
+- [x] **7. In-App Updates Dashboard & Direct Release Downloads**:
+  - Integrated GitHub Releases API version checker (`/api/version/check` and `/api/updates/check` on PC server).
+  - Built dedicated Software Updates Tab in dashboard with version comparison, formatted changelog, block extender height presets, and step-by-step update guide.
+
+- [ ] **8. Rework on UI Styling**:
+  - Comprehensive UI styling rework across the StreamPe Dashboard: modern glassmorphic accents, polished typography, harmonious color palette, refined cards, modal animations, micro-interactions, and cleaner responsive layout for OBS streamers.
+
+#### P2 — Security & Enhancements
+
+- [ ] **9. Security & Access Control (PIN / Password / 2FA Authentication)** — Add optional password/PIN protection for the PC Dashboard (`/config`) and the Android companion connection (`ws://.../android` & `/api/*`). Prevents unauthorized devices on shared Wi-Fi networks (roommates, shared studios, public Wi-Fi) from accessing financial analytics, triggering bogus alerts, or connecting without entering the streamer's configured PIN/password.
 
 ---
 
 ## ✅ Completed
+
+### Version 2.2.0
+
+- [x] **Profile-Based Donor Alias System & Zero-Dependency ZIP Backup Engine**:
+  - Implemented profile-isolated alias storage (`data/[profile]/aliases.csv`) with automatic fallback to `rawSender` for profiles without alias dictionaries.
+  - Built zero-dependency native Node.js ZIP backup generator (`/api/donations/export-zip`) bundling `donations_ledger.csv` and `aliases.csv`.
+  - Created resilient ZIP/CSV direct import engine (`POST /api/donations/import`) with header inspection, preventing column misidentification (`upDATEdAt`).
+  - Added Export Format & Import Backup modals with **Merge** vs **Replace** mode selector and streamlined 3-column CSV schema (`sender,alias,updatedAt`).
+
+- [x] **Default Portable Storage Root Migration to AppData & Auto-Migration**: Moved default storage root to Windows `%APPDATA%\StreamPe\` (`~/.config/StreamPe` on POSIX) for consistent data persistence across portable updates. Built automatic migration engine `migrateLocalDataIfNeeded()` to transparently copy legacy portable `./data` and `./config` files to `%APPDATA%\StreamPe\` on first boot.
+- [x] **Service Discovery Rebranding, Mesh Fixes & Sidecar Token Isolation**: Rebranded mDNS discovery to `_streampe._tcp`, added Android `WifiManager.MulticastLock` with `CHANGE_WIFI_MULTICAST_STATE` permission, added Windows Defender Firewall mDNS UDP 5353 auto-rule, implemented fallback port cascade sequence (`2907 ➔ 8876 ➔ 2708 ➔ 9091 ➔ 1001 ➔ 0`), added mid-session network switch auto-recovery (LAN ⇄ Wi-Fi IP changes), and established desktop sidecar session token handshake (`[INSTANCE_AUTH]`) to eliminate port hijacking.
+- [x] **Declarative Payment Rules Engine & Whitelisting**: Created `payment-rules.json` array rules engine for PhonePe, Google Pay, and Amazon Pay. Refactored `parsePayment()` with positive whitelisting (rejecting non-payment/promotions), ReDoS input guards (<300 chars), startup self-testing, and real-time 🟢/🟡 `[PARSE]` diagnostic log badges. Published authoritative pattern specification in [`PAYMENT_PATTERNS.md`](file:///d:/xwork/projects/payment-alerts-for-obs/PAYMENT_PATTERNS.md).
+- [x] **Mobile Notification Tester Preset Synchronization & bigText Fix**: Updated mobile tester presets in `NotificationTesterActivity.kt` and PC simulator presets in `config.js` to match modern notification formats. Fixed `bigText` calculation so user-edited test notification text is honored.
 
 ### Version 2.1.0
 
@@ -50,7 +83,7 @@
   - **Slide 1 (Notification Access - Required)**: Clear instructions with quick Android 13/14/15 "Restricted setting" fix guide.
   - **Slide 2 (Battery Keepalive - Recommended)**: Explains background sleep prevention for long stream continuity.
   - **Slide 3 (Accessibility Reader - Optional / Caution)**: Highlights why PhonePe is preferred (no accessibility needed), warns about banking UPI interference, and clarifies Amazon Pay / Android 15 fallback usage.
-  - **Clean Connection Dashboard**: Streamlined [MainActivity.kt](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/src/main/java/com/clowneon1/paymentalertsobs/MainActivity.kt) purely for server discovery and connection.
+  - **Clean Connection Dashboard**: Streamlined [MainActivity.kt](file:///d:/xwork/projects/payment-alerts-for-obs/android-app/app/src-main/java/com/clowneon1/paymentalertsobs/MainActivity.kt) purely for server discovery and connection.
 
 - [x] **6. Server Auto-Discovery (mDNS/Bonjour)**:
   - **PC Server (`server.js`)**: Integrated `bonjour-service` to broadcast `_payment-alerts._tcp` on local Wi-Fi, supporting dynamic fallback ports (`Port 58024`), collision auto-recovery, and clean teardown on app exit / nodemon restarts (`SIGINT`, `SIGTERM`, `SIGUSR2`).
@@ -81,4 +114,4 @@
 
 ---
 
-*Last updated: 2026-08-16*
+*Last updated: 2026-08-28*

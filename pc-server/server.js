@@ -3,16 +3,38 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const os = require('os');
-const { exec } = require('child_process');
+const child_process = require('child_process');
+const { exec } = child_process;
+const dgram = require('dgram');
 const winston = require('winston');
 require('winston-daily-rotate-file');
 const { Bonjour } = require('bonjour-service');
+const aliasesStore = require('./aliases-store');
+const updateManager = require('./update-manager');
+const PaymentsCsv = require('./public/js/lib/payments-csv');
+const {
+  APP_NAME,
+  APP_VERSION,
+  DEFAULT_PORT,
+  FALLBACK_PORTS,
+  UDP_DISCOVERY_PORT,
+  MDNS_SERVICE_TYPE,
+  MAX_REDOS_INPUT_LENGTH,
+  NETWORK_CHANGE_CHECK_INTERVAL_MS,
+  ANDROID_HEARTBEAT_INTERVAL_MS,
+  OBS_HEARTBEAT_INTERVAL_MS,
+  getDefaultAppDataDir
+} = require('./constants');
 
+// App Configuration and Constants
 const isCompiled = !process.execPath.endsWith('node') &&
   !process.execPath.endsWith('node.exe') &&
   !process.execPath.endsWith('bun') &&
   !process.execPath.endsWith('bun.exe');
+
+const isDev = !isCompiled && process.env.NODE_ENV !== 'production';
 
 let baseDir = isCompiled ? path.dirname(process.execPath) : __dirname;
 let PUBLIC_DIR = path.join(baseDir, 'public');
@@ -20,30 +42,74 @@ if (!fs.existsSync(PUBLIC_DIR)) {
   PUBLIC_DIR = path.join(__dirname, 'public');
 }
 
-let writableBaseDir = baseDir;
+// In development mode (npm run dev), strictly use pc-server/data as root
+// In compiled/production runtime, use AppData (%APPDATA%\StreamPe) or custom configured path
+let defaultAppDataDir = isDev ? path.join(__dirname, 'data') : getDefaultAppDataDir();
+let writableBaseDir = isDev ? path.join(__dirname, 'data') : defaultAppDataDir;
 
-// If compiled and running from a system/read-only location (e.g. Program Files), fall back to AppData Roaming
-if (isCompiled && (writableBaseDir.toLowerCase().includes('program files') || writableBaseDir.toLowerCase().includes('system32'))) {
+if (!isDev) {
   try {
-    const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library', 'Application Support') : path.join(process.env.HOME || '', '.local', 'share'));
-    writableBaseDir = path.join(appData, 'com.clowneon1.streampe');
+    if (process.env.TAURI_APP_DATA) {
+      writableBaseDir = process.env.TAURI_APP_DATA;
+    }
   } catch (e) { }
 }
 
-try {
-  // In Tauri the TAURI_APP_DATA env var is set by the Rust launcher
-  if (process.env.TAURI_APP_DATA) {
-    writableBaseDir = process.env.TAURI_APP_DATA;
+// Auto-migrate legacy portable directory files (config, data, logs) to AppData if needed
+function migrateLocalDataIfNeeded(localBase, targetBase) {
+  try {
+    if (localBase === targetBase) return;
+    const foldersToMigrate = ['config', 'data', 'logs'];
+    let migratedCount = 0;
+
+    for (const folder of foldersToMigrate) {
+      const srcFolder = path.join(localBase, folder);
+      const destFolder = path.join(targetBase, folder);
+
+      if (fs.existsSync(srcFolder)) {
+        if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder, { recursive: true });
+
+        const copyRecursive = (src, dest) => {
+          const entries = fs.readdirSync(src, { withFileTypes: true });
+          for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+              if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
+              copyRecursive(srcPath, destPath);
+            } else if (!fs.existsSync(destPath)) {
+              fs.copyFileSync(srcPath, destPath);
+              migratedCount++;
+            }
+          }
+        };
+        copyRecursive(srcFolder, destFolder);
+      }
+    }
+    if (migratedCount > 0) {
+      console.log(`[Storage] 📦 Migrated ${migratedCount} data/config file(s) from local directory to ${targetBase}`);
+    }
+  } catch (err) {
+    console.warn(`[Storage] Migration notice: ${err.message}`);
   }
-} catch (e) { }
+}
+
+if (isCompiled) {
+  migrateLocalDataIfNeeded(baseDir, writableBaseDir);
+  if (baseDir !== __dirname) {
+    migrateLocalDataIfNeeded(__dirname, writableBaseDir);
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+const obsClients = new Set();
+const androidClients = new Set();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 app.get('/favicon.ico', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'icon.png'));
@@ -56,21 +122,23 @@ app.get('/', (req, res) => {
 // ── Path Config Bootstrapping ──
 const PATH_CONFIG_FILE = path.join(writableBaseDir, 'path-config.json');
 let customPaths = { storageRootDir: '' };
-try {
-  if (fs.existsSync(PATH_CONFIG_FILE)) {
-    customPaths = JSON.parse(fs.readFileSync(PATH_CONFIG_FILE, 'utf8')) || {};
+if (!isDev) {
+  try {
+    if (fs.existsSync(PATH_CONFIG_FILE)) {
+      customPaths = JSON.parse(fs.readFileSync(PATH_CONFIG_FILE, 'utf8')) || {};
+    }
+  } catch (e) {
+    console.error('[Server] Failed to read path-config.json:', e.message);
   }
-} catch (e) {
-  console.error('[Server] Failed to read path-config.json:', e.message);
 }
 
-const storageRoot = customPaths.storageRootDir && customPaths.storageRootDir.trim()
+const storageRoot = (!isDev && customPaths.storageRootDir && customPaths.storageRootDir.trim())
   ? path.resolve(customPaths.storageRootDir.trim())
   : writableBaseDir;
 
 const LOG_DIR = path.join(storageRoot, 'logs');
 const SETTINGS_DIR = path.join(storageRoot, 'config');
-const DATA_DIR = path.join(storageRoot, 'data');
+const DATA_DIR = isDev ? storageRoot : path.join(storageRoot, 'data');
 
 for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   try {
@@ -78,6 +146,155 @@ for (const dir of [LOG_DIR, SETTINGS_DIR, DATA_DIR]) {
   } catch (e) {
     console.error(`[Server] Failed to create directory ${dir}:`, e.message);
   }
+}
+
+if (isDev) {
+  console.log(`[Storage] 🛠️ Dev Mode Active: Using pc-server/data as root (${storageRoot})`);
+} else {
+  console.log(`[Storage] 📦 Production Mode: Using storage root (${storageRoot})`);
+}
+
+// Consolidate legacy per-profile folders (data/<profile>/YYYY/MM.csv) into unified data/YYYY/MM.csv
+// Safely archives original legacy files into data/data.old/<profile>/YYYY/MM.csv (like Windows.old)
+function consolidateLegacyProfileData(dataDir) {
+  if (!fs.existsSync(dataDir)) return;
+  const oldArchiveDir = path.join(dataDir, 'data.old');
+  try {
+    const entries = fs.readdirSync(dataDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !/^\d{4}$/.test(entry.name) && entry.name !== 'data.old' && !entry.name.startsWith('.')) {
+        const profileDir = path.join(dataDir, entry.name);
+        const subEntries = fs.readdirSync(profileDir, { withFileTypes: true });
+        for (const sub of subEntries) {
+          if (sub.isDirectory() && /^\d{4}$/.test(sub.name)) {
+            const yr = sub.name;
+            const yearDir = path.join(profileDir, yr);
+            const csvFiles = fs.readdirSync(yearDir).filter(f => f.endsWith('.csv') && !f.endsWith('.bak') && !f.endsWith('.migrated'));
+            for (const file of csvFiles) {
+              const srcCsv = path.join(yearDir, file);
+              const targetYearDir = path.join(dataDir, yr);
+              const targetCsv = path.join(targetYearDir, file);
+              if (!fs.existsSync(targetYearDir)) fs.mkdirSync(targetYearDir, { recursive: true });
+              if (!fs.existsSync(targetCsv)) {
+                fs.copyFileSync(srcCsv, targetCsv);
+              } else {
+                const srcTxs = PaymentsCsv.parseCsv(fs.readFileSync(srcCsv, 'utf8'));
+                const targetTxs = PaymentsCsv.parseCsv(fs.readFileSync(targetCsv, 'utf8'));
+                const existingIds = new Set(targetTxs.map(t => t.id).filter(Boolean));
+                let appended = 0;
+                for (const tx of srcTxs) {
+                  if (!tx.id || !existingIds.has(tx.id)) {
+                    targetTxs.push(tx);
+                    if (tx.id) existingIds.add(tx.id);
+                    appended++;
+                  }
+                }
+                if (appended > 0) {
+                  fs.writeFileSync(targetCsv, PaymentsCsv.serializeCsv(targetTxs), 'utf8');
+                }
+              }
+              // Safely relocate legacy source file to data/data.old/<profile>/<year>/<file>
+              const archiveProfileYearDir = path.join(oldArchiveDir, entry.name, yr);
+              if (!fs.existsSync(archiveProfileYearDir)) fs.mkdirSync(archiveProfileYearDir, { recursive: true });
+              const archiveDst = path.join(archiveProfileYearDir, file);
+              try {
+                fs.renameSync(srcCsv, archiveDst);
+              } catch (_) {
+                try {
+                  fs.copyFileSync(srcCsv, archiveDst);
+                  fs.unlinkSync(srcCsv);
+                } catch (__) { }
+              }
+            }
+            try {
+              if (fs.readdirSync(yearDir).length === 0) {
+                fs.rmdirSync(yearDir);
+              }
+            } catch (_) { }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Storage] Legacy consolidation notice:', err.message);
+  }
+}
+
+function sanitizeAllLedgerFiles(dataDir) {
+  if (!fs.existsSync(dataDir)) return;
+  try {
+    const years = fs.readdirSync(dataDir).filter(f => /^\d{4}$/.test(f));
+    let cleanedCount = 0;
+    let upgradedCount = 0;
+    let normalizedFilesCount = 0;
+    for (const yr of years) {
+      const yrPath = path.join(dataDir, yr);
+      const months = fs.readdirSync(yrPath).filter(f => /^\d{2}\.csv$/.test(f));
+      for (const m of months) {
+        const filePath = path.join(yrPath, m);
+        const rawContent = fs.readFileSync(filePath, 'utf8');
+        const firstLine = (rawContent.split(/\r?\n/)[0] || '').toLowerCase();
+        const needsHeaderUpgrade = !firstLine.includes('canonicalsender');
+        const rawTxs = PaymentsCsv.parseCsv(rawContent);
+        const seen = new Set();
+        const cleanTxs = [];
+        for (const t of rawTxs) {
+          const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            cleanTxs.push(t);
+          }
+        }
+        const cleanContent = PaymentsCsv.serializeCsv(cleanTxs);
+        const rawNormalized = rawContent.replace(/\r\n/g, '\n').trim();
+        const cleanNormalized = cleanContent.replace(/\r\n/g, '\n').trim();
+        const contentChanged = rawNormalized !== cleanNormalized;
+
+        if (rawTxs.length > cleanTxs.length || needsHeaderUpgrade || contentChanged) {
+          fs.writeFileSync(filePath, cleanContent, 'utf8');
+          if (needsHeaderUpgrade) {
+            upgradedCount++;
+            console.log(`[Storage] 📦 Upgraded ${yr}/${m}.csv to 10-column canonical schema on disk`);
+          }
+          if (rawTxs.length > cleanTxs.length) {
+            cleanedCount += (rawTxs.length - cleanTxs.length);
+            console.log(`[Storage] 🧹 Sanitized ${rawTxs.length - cleanTxs.length} duplicate(s) in ${yr}/${m}`);
+          }
+          if (contentChanged && rawTxs.length === cleanTxs.length && !needsHeaderUpgrade) {
+            normalizedFilesCount++;
+            console.log(`[Storage] 📅 Normalized dates and formatting in ${yr}/${m}.csv`);
+          }
+        }
+      }
+    }
+    if (upgradedCount > 0) {
+      console.log(`[Storage] 🚀 Migrated ${upgradedCount} historical CSV file(s) to 10-column canonical schema.`);
+    }
+    if (cleanedCount > 0) {
+      console.log(`[Storage] ✅ Startup Ledger Sanity Check: cleaned ${cleanedCount} duplicate transaction(s).`);
+    }
+    if (normalizedFilesCount > 0) {
+      console.log(`[Storage] 📅 Startup Ledger Sanity Check: normalized date/time format in ${normalizedFilesCount} file(s).`);
+    }
+  } catch (err) {
+    console.warn('[Storage] Ledger sanitization notice:', err.message);
+  }
+}
+
+consolidateLegacyProfileData(DATA_DIR);
+sanitizeAllLedgerFiles(DATA_DIR);
+
+aliasesStore.initAliasesStore(DATA_DIR);
+
+function decorateWithDisplayName(transactions, settings = {}, profile = '') {
+  const list = Array.isArray(transactions) ? transactions : [];
+  const targetProf = profile || (profilesStore && profilesStore.activeProfile) || 'Default';
+  return list.map(tx => {
+    if (!tx || typeof tx !== 'object') return tx;
+    const raw = tx.rawSender || tx.sender || 'Anonymous';
+    const formatted = aliasesStore.formatDonorName(raw, settings, targetProf);
+    return { ...tx, rawSender: raw, sender: formatted };
+  });
 }
 
 const customLevels = {
@@ -218,6 +435,38 @@ function getPrimaryIp() {
   return list.length > 0 ? list[0].address : '127.0.0.1';
 }
 
+function autoSyncWindowsStartupPath() {
+  if (process.platform !== 'win32') return;
+
+  exec('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "StreamPe"', (err, stdout) => {
+    if (err || !stdout) return; // Not enabled in startup, no action needed
+
+    const currentExe = getMainAppExePath();
+    if (!currentExe) return;
+
+    try {
+      const match = stdout.match(/StreamPe\s+REG_\w+\s+(.*)/i);
+      if (match && match[1]) {
+        const rawReg = match[1].trim().replace(/^"/, '').replace(/"$/, '').trim();
+        const currentResolved = path.resolve(currentExe);
+        const regResolved = path.resolve(rawReg);
+
+        if (currentResolved.toLowerCase() !== regResolved.toLowerCase() || !fs.existsSync(regResolved)) {
+          log.info('Startup', `Auto-syncing startup registration: updating path from "${rawReg}" -> "${currentResolved}"`);
+          const cmd = `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "StreamPe" /t REG_SZ /d "\"${currentResolved}\"" /f`;
+          exec(cmd, (regErr) => {
+            if (!regErr) {
+              log.info('Startup', `Successfully auto-re-registered Windows Startup to active portable binary: "${currentResolved}"`);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      log.warn('Startup', 'Auto-sync startup path check error: ' + e.message);
+    }
+  });
+}
+
 function isWindowsStartupEnabled(callback) {
   if (process.platform !== 'win32') return callback(false);
 
@@ -226,7 +475,13 @@ function isWindowsStartupEnabled(callback) {
 
     // Clean up legacy registry keys silently without forcing startup enabled
     if (!err && stdout && (stdout.includes('PaymentAlertsOBS') || stdout.includes('Payment Alerts') || stdout.includes('electron.app.Payment Alerts'))) {
-      exec('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "PaymentAlertsOBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Payment Alerts for OBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "electron.app.Payment Alerts for OBS" /f 2>nul', () => {});
+      exec('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "PaymentAlertsOBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "Payment Alerts for OBS" /f 2>nul & reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "electron.app.Payment Alerts for OBS" /f 2>nul', () => { });
+    }
+
+    if (hasStreamPe) {
+      // Auto-heal path if portable folder was moved, renamed, or extracted to a new release directory
+      autoSyncWindowsStartupPath();
+      return callback(true);
     }
 
     try {
@@ -319,21 +574,30 @@ function ensureWindowsFirewallRule(callback) {
     if (callback) callback(false, 'Not Windows');
     return;
   }
-  exec('netsh advfirewall firewall show rule name="PaymentAlertsOBS"', (err, stdout) => {
-    if (err || !stdout || stdout.includes('No rules match')) {
-      const psCmd = 'powershell -Command "Start-Process netsh -ArgumentList \'advfirewall firewall add rule name=\\\"PaymentAlertsOBS\\\" protocol=TCP dir=in localport=2907 action=allow\' -Verb RunAs -WindowStyle Hidden"';
+  const targetPort = activeServerPort || DEFAULT_PORT || 2907;
+  exec('netsh advfirewall firewall show rule name="StreamPe Server"', (err, stdout) => {
+    if (err || !stdout || stdout.includes('No rules match') || stdout.includes('No rules found')) {
+      const psCmd = `powershell -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\\\"StreamPe Server\\\" protocol=TCP dir=in localport=${targetPort} action=allow' -Verb RunAs -WindowStyle Hidden"`;
       exec(psCmd, (psErr) => {
         if (psErr) log.warn('Firewall', 'Firewall auto-rule error:', psErr.message);
-        else log.info('Firewall', 'Windows Firewall rule for port 2907 created successfully');
+        else log.info('Firewall', `Windows Firewall rule for port ${targetPort} created successfully`);
         if (callback) callback(!psErr, psErr ? psErr.message : null);
       });
+    } else {
+      if (callback) callback(true, null);
     }
   });
 }
 
-log.info('Server', `Log directory: ${LOG_DIR} (daily rotating with 7-day retention)`);
+// ── Payment Parser (Declarative JSON Rule Engine) ────────────────────────
+const STRIP_PREFIXES = [
+  /^phonepe\s*[-:]\s*/i,
+  /^gpay\s*[-:]\s*/i,
+  /^google pay\s*[-:]\s*/i,
+  /^amazon pay\s*[-:]\s*/i,
+  /^from\s+/i,
+];
 
-// ── Payment Parser (JS) ────────────────────────────────────────────
 const STRIP_SUFFIXES = [
   / on amazon pay$/i,
   / on google pay$/i,
@@ -344,9 +608,11 @@ const STRIP_SUFFIXES = [
 ];
 
 function cleanSender(name) {
-  let s = name.trim();
+  if (!name) return 'Donor';
+  let s = String(name).trim();
+  for (const rx of STRIP_PREFIXES) s = s.replace(rx, '');
   for (const rx of STRIP_SUFFIXES) s = s.replace(rx, '');
-  return s.trim();
+  return s.trim() || 'Donor';
 }
 
 function cleanMessage(text) {
@@ -359,7 +625,7 @@ function cleanMessage(text) {
 }
 
 function normaliseAmount(raw) {
-  if (!raw) return '₹0';
+  if (!raw) return '\u20B90';
   const stripped = String(raw).trim()
     .replace(/^\u20B9\s*/, '')
     .replace(/^[Rr][Ss]\.?\s*/, '')
@@ -368,129 +634,165 @@ function normaliseAmount(raw) {
   return `\u20B9${stripped}`;
 }
 
-const RE_PHONEPE_AMOUNT = /has\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_HAS_SENT = /^(.+?)\s+has\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_AMT_RECEIVED_FROM = /(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+received\s+from\s+(.+)/i;
-const RE_PAYMENT_OF = /payment\s+of\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+received\s+from\s+(.+)/i;
-const RE_NAME_SENT = /^(.+?)\s+sent\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_YOU_PAID = /you\s+(?:have\s+)?paid\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+to\s+(.+)/i;
-const RE_RECEIVED_FROM = /received\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
-const RE_FROM_NAME = /^from\s+(.+)/i;
-const RE_AMT_TITLE = /(?:\u20B9|rs\.?\s*)?([\d,.]+(?:\.\d{1,2})?)\s+received/i;
-const RE_AMT_FROM_TITLE = /(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
-const RE_AMAZON_SENDER = /money\s+rec(?:ei)?ved\s+from\s+(.+?)\s+on\s+amazon\s+pay/i;
+function normaliseAmountNumber(raw) {
+  const norm = normaliseAmount(raw);
+  return parseFloat(norm.replace(/[^\d.]/g, '')) || 0;
+}
 
-// Google Pay (GPay) Patterns
-const RE_GPAY_PAID_YOU_SYMBOL = /^(.+?)\s+paid\s+you\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)/i;
-const RE_GPAY_PAID_YOU_WORDS = /^(.+?)\s+paid\s+you\s+([\d,.]+(?:\.\d{1,2})?)\s+rupees/i;
-const RE_GPAY_YOU_RECEIVED = /you\s+received\s+(?:\u20B9|rs\.?\s*)([\d,.]+(?:\.\d{1,2})?)\s+from\s+(.+)/i;
+// Load declarative payment-rules.json
+let PAYMENT_RULES_PATH = path.join(baseDir, 'payment-rules.json');
+if (!fs.existsSync(PAYMENT_RULES_PATH)) {
+  PAYMENT_RULES_PATH = path.join(__dirname, 'payment-rules.json');
+}
+let paymentRulesStore = { version: '1.0.0', apps: [] };
 
-// Non-payment filter regex
-const RE_NON_PAYMENT = /(?:otp|verification code|one time password|security code|cashback won|scratch card|reward earned|reward points|congratulations.*reward|bank balance|available balance|account balance|bill due|bill generated|recharge successful|recharge of|check your credit score|exclusive offer|flat .* off|discount on|special offer)/i;
+try {
+  if (fs.existsSync(PAYMENT_RULES_PATH)) {
+    const rawRules = fs.readFileSync(PAYMENT_RULES_PATH, 'utf8');
+    paymentRulesStore = JSON.parse(rawRules);
+    log.info('Parser', `Loaded payment-rules.json v${paymentRulesStore.version} (${paymentRulesStore.apps.length} app rule suites)`);
+    runPaymentRulesBootSelfTest(paymentRulesStore);
+  }
+} catch (e) {
+  log.error('Parser', 'Failed to load payment-rules.json: ' + e.message);
+}
+
+function runPaymentRulesBootSelfTest(rulesStore) {
+  let totalRules = 0;
+  let passedRules = 0;
+
+  for (const appConfig of rulesStore.apps || []) {
+    for (const rule of appConfig.rules || []) {
+      totalRules++;
+      if (rule.sample) {
+        const sampleNotif = {
+          packageName: appConfig.packageNames[0] || '',
+          appName: appConfig.appName,
+          title: rule.sample.title || '',
+          text: rule.sample.text || '',
+          bigText: rule.sample.bigText || '',
+          message: rule.sample.message || ''
+        };
+        const parsed = parsePayment(sampleNotif);
+        if (parsed && normaliseAmountNumber(parsed.amount) === rule.sample.expectedAmount) {
+          passedRules++;
+        } else {
+          log.warn('ParserSelfTest', `Rule self-test warning for [${rule.id}]: expected ${rule.sample.expectedAmount}, got ${JSON.stringify(parsed)}`);
+        }
+      } else {
+        passedRules++;
+      }
+    }
+  }
+  log.info('ParserSelfTest', `⚡ Payment rules startup self-test: ${passedRules}/${totalRules} rules verified`);
+}
+
+function evaluateSourceExpression(expr, titleMatch, bodyMatch) {
+  if (!expr) return '';
+  if (expr.includes('||')) {
+    const parts = expr.split('||').map(p => p.trim());
+    for (const p of parts) {
+      const res = evaluateSourceExpression(p, titleMatch, bodyMatch);
+      if (res) return res;
+    }
+    return '';
+  }
+
+  if (expr.startsWith('title.')) {
+    const idx = parseInt(expr.replace('title.', ''), 10);
+    return titleMatch && titleMatch[idx] ? titleMatch[idx] : '';
+  }
+
+  if (expr.startsWith('body.')) {
+    const idx = parseInt(expr.replace('body.', ''), 10);
+    return bodyMatch && bodyMatch[idx] ? bodyMatch[idx] : '';
+  }
+
+  return '';
+}
 
 function parsePayment(notification) {
-  const pkg = (notification.packageName || '').trim().toLowerCase();
-  const appName = (notification.appName || '').trim();
-  const title = (notification.title || '').trim();
-  const titleBig = (notification.titleBig || '').trim();
-  const text = (notification.text || '').trim();
-  const bigText = (notification.bigText || '').trim();
+  if (!notification) return null;
 
-  // Combine content for non-payment filtering
-  const allContent = `${title} ${titleBig} ${text} ${bigText}`;
-  if (RE_NON_PAYMENT.test(allContent)) {
-    const isPaymentMatch = RE_GPAY_PAID_YOU_SYMBOL.test(title) || RE_GPAY_PAID_YOU_SYMBOL.test(titleBig) || RE_GPAY_PAID_YOU_SYMBOL.test(bigText) ||
-      RE_PHONEPE_AMOUNT.test(title) || RE_PHONEPE_AMOUNT.test(text) || RE_PHONEPE_AMOUNT.test(bigText);
-    if (!isPaymentMatch) {
-      return null; // Ignore promotional, OTP, or balance alert
-    }
-  }
-
-  const isGPay = pkg.includes('paisa') || pkg.includes('gpay') || appName.toLowerCase().includes('google pay') || appName.toLowerCase().includes('gpay');
-  const isPhonePe = pkg.includes('phonepe') || appName.toLowerCase().includes('phonepe');
-  const isAmazon = pkg.includes('amazon') || appName.toLowerCase().includes('amazon');
+  // Input Sanity & ReDoS Guard (max 300 chars)
+  const pkg = String(notification.packageName || '').trim().toLowerCase();
+  const appName = String(notification.appName || '').trim();
+  const title = String(notification.title || '').trim().substring(0, 300);
+  const titleBig = String(notification.titleBig || '').trim().substring(0, 300);
+  const text = String(notification.text || '').trim().substring(0, 300);
+  const bigText = String(notification.bigText || '').trim().substring(0, 300);
 
   const body = bigText || text;
+  const targetTitle = title || titleBig;
+  const allContent = `${title} ${titleBig} ${text} ${bigText}`.trim();
 
-  // ─ 1. Google Pay (GPay) ───────────────────────────────────────────
-  if (isGPay) {
-    for (const candidate of [title, titleBig, bigText, text].filter(Boolean)) {
-      let m;
-      if ((m = RE_GPAY_PAID_YOU_SYMBOL.exec(candidate))) {
-        const sender = cleanSender(m[1]);
-        const amount = normaliseAmount(m[2]);
-        const rawMsg = (text && text !== candidate && !RE_GPAY_PAID_YOU_SYMBOL.test(text)) ? text : (notification.message || '');
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(rawMsg) };
-      }
-      if ((m = RE_GPAY_PAID_YOU_WORDS.exec(candidate))) {
-        const sender = cleanSender(m[1]);
-        const amount = normaliseAmount(m[2]);
-        const rawMsg = (text && text !== candidate && !RE_GPAY_PAID_YOU_WORDS.test(text)) ? text : (notification.message || '');
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(rawMsg) };
-      }
-      if ((m = RE_GPAY_YOU_RECEIVED.exec(candidate))) {
-        const sender = cleanSender(m[2]);
-        const amount = normaliseAmount(m[1]);
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(notification.message || '') };
-      }
-      if ((m = RE_AMT_RECEIVED_FROM.exec(candidate))) {
-        const sender = cleanSender(m[2]);
-        const amount = normaliseAmount(m[1]);
-        return { sender, amount, sourceApp: 'Google Pay', message: cleanMessage(notification.message || '') };
-      }
-    }
-  }
+  if (!allContent) return null;
 
-  // ─ 2. Amazon Pay ───────────────────────────────────────────────
-  if (isAmazon) {
-    const senderM = RE_AMAZON_SENDER.exec(body);
-    const amtM = RE_AMT_TITLE.exec(title);
-    if (senderM && amtM) {
-      return { sender: cleanSender(senderM[1]), amount: normaliseAmount(amtM[1]), sourceApp: 'Amazon Pay' };
-    }
-    const m = RE_AMT_RECEIVED_FROM.exec(body) || RE_AMT_RECEIVED_FROM.exec(title);
-    if (m) return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: 'Amazon Pay' };
-  }
+  // Identify matching app configuration
+  const matchedAppConfig = (paymentRulesStore.apps || []).find(app => {
+    return (app.packageNames || []).some(p => pkg.includes(p.toLowerCase())) ||
+      (app.appName && appName.toLowerCase().includes(app.appName.toLowerCase()));
+  });
 
-  // ─ 3. PhonePe ─────────────────────────────────────────────────
-  if (isPhonePe) {
-    for (const candidate of [body, text, title].filter(Boolean)) {
-      const hasIdx = candidate.indexOf(' has ');
-      const amtM = RE_PHONEPE_AMOUNT.exec(candidate);
-      if (hasIdx > 0 && amtM) {
-        return {
-          sender: cleanSender(candidate.substring(0, hasIdx)),
-          amount: normaliseAmount(amtM[1]),
-          sourceApp: 'PhonePe'
+  // Evaluate matching app rules or fallback rules
+  const appsToEvaluate = matchedAppConfig ? [matchedAppConfig] : (paymentRulesStore.apps || []);
+
+  for (const appConfig of appsToEvaluate) {
+    for (const rule of appConfig.rules || []) {
+      let titleMatch = null;
+      let bodyMatch = null;
+
+      if (rule.titlePattern) {
+        const titleRx = new RegExp(rule.titlePattern, 'i');
+        titleMatch = titleRx.exec(targetTitle);
+        if (!titleMatch && !rule.bodyPattern) continue;
+      }
+
+      if (rule.bodyPattern) {
+        const bodyRx = new RegExp(rule.bodyPattern, 'i');
+        bodyMatch = bodyRx.exec(body) || bodyRx.exec(text) || bodyRx.exec(title);
+        if (!bodyMatch) continue;
+      }
+
+      if (rule.titlePattern && !titleMatch) continue;
+
+      let rawSender = '';
+      let rawAmount = '';
+
+      if (rule.senderSource) {
+        rawSender = evaluateSourceExpression(rule.senderSource, titleMatch, bodyMatch);
+      }
+      if (rule.amountSource) {
+        rawAmount = evaluateSourceExpression(rule.amountSource, titleMatch, bodyMatch);
+      }
+
+      if (rawSender && rawAmount) {
+        const sender = cleanSender(rawSender);
+        const amount = normaliseAmount(rawAmount);
+
+        let message = '';
+        if (rule.extractMessage) {
+          const rawMsg = (text && text !== bodyMatch[0] && !bodyMatch[0].includes(text)) ? text : (notification.message || '');
+          message = cleanMessage(rawMsg);
+        }
+
+        const parsed = {
+          sender,
+          amount,
+          sourceApp: appConfig.appName || appName || 'UPI',
+          message
         };
+
+        log.info('PARSE', `🟢 Matched rule [${rule.id}] => Sender: "${sender}", Amount: ${amount} via ${parsed.sourceApp}`);
+        return parsed;
       }
-    }
-    const amtTitleM = RE_AMT_TITLE.exec(title);
-    const fromTextM = RE_FROM_NAME.exec(text);
-    if (amtTitleM && fromTextM) {
-      return { sender: cleanSender(fromTextM[1]), amount: normaliseAmount(amtTitleM[1]), sourceApp: 'PhonePe' };
-    }
-    const compactM = RE_AMT_FROM_TITLE.exec(title);
-    if (compactM) {
-      return { sender: cleanSender(compactM[2]), amount: normaliseAmount(compactM[1]), sourceApp: 'PhonePe' };
     }
   }
 
-  // ─ 4. Generic fallbacks ──────────────────────────────────────────
-  for (const candidate of [body, title].filter(Boolean)) {
-    let m;
-    if ((m = RE_HAS_SENT.exec(candidate)))
-      return { sender: cleanSender(m[1]), amount: normaliseAmount(m[2]), sourceApp: appName || 'UPI' };
-    if ((m = RE_PAYMENT_OF.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_RECEIVED_FROM.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_AMT_RECEIVED_FROM.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
-    if ((m = RE_NAME_SENT.exec(candidate)))
-      return { sender: cleanSender(m[1]), amount: normaliseAmount(m[2]), sourceApp: appName || 'UPI' };
-    if ((m = RE_YOU_PAID.exec(candidate)))
-      return { sender: cleanSender(m[2]), amount: normaliseAmount(m[1]), sourceApp: appName || 'UPI' };
+  // Strict Positive Whitelist Fallback:
+  // Non-matching notifications from payment apps are logged as promotional and ignored
+  if (matchedAppConfig) {
+    log.info('PARSE', `🟡 Ignored (${matchedAppConfig.appName} non-payment / promotional alert) => Title: "${title}", Text: "${text}"`);
   }
 
   return null;
@@ -501,10 +803,26 @@ function parsePayment(notification) {
 const ConfigSchema = require('./public/js/lib/config-schema');
 const ConfigMigration = require('./public/js/lib/config-migration');
 const TemplateMatcher = require('./public/js/lib/template-matcher');
-const PaymentsCsv = require('./public/js/lib/payments-csv');
 
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 const LEGACY_CONFIG_FILE = fs.existsSync(path.join(baseDir, 'widget-config.json')) ? path.join(baseDir, 'widget-config.json') : path.join(__dirname, 'widget-config.json');
+const SHIPPED_DEFAULT_PROFILE_FILE = fs.existsSync(path.join(baseDir, 'templates', 'default-profile.json'))
+  ? path.join(baseDir, 'templates', 'default-profile.json')
+  : path.join(__dirname, 'templates', 'default-profile.json');
+
+function getShippedDefaultProfile() {
+  try {
+    if (fs.existsSync(SHIPPED_DEFAULT_PROFILE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SHIPPED_DEFAULT_PROFILE_FILE, 'utf8'));
+      if (parsed && typeof parsed === 'object') {
+        return ConfigMigration.migrate(parsed);
+      }
+    }
+  } catch (e) {
+    log.error('Settings', 'Failed to read default-profile.json: ' + e.message);
+  }
+  return ConfigSchema.createDefaultConfig();
+}
 
 function loadSettings() {
   try {
@@ -519,8 +837,10 @@ function loadSettings() {
       return migrated;
     }
   } catch (e) { log.error('Settings', 'Load error: ' + e.message); }
-  log.info('Settings', 'No config found, using defaults');
-  return ConfigSchema.createDefaultConfig();
+  log.info('Settings', 'No config found, loading shipped default profile');
+  const initial = getShippedDefaultProfile();
+  saveSettings(initial);
+  return initial;
 }
 
 function applySettingsPatch(current, patch) {
@@ -598,25 +918,24 @@ function getTodayYearMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function getDonationsCsvPath(profileName, yearMonth) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ym = yearMonth || getTodayYearMonth();
+function getDonationsCsvPath(profileNameOrYm, yearMonth) {
+  let ym = yearMonth;
+  if (!ym && profileNameOrYm && /^\d{4}-\d{2}$/.test(profileNameOrYm)) {
+    ym = profileNameOrYm;
+  }
+  if (!ym) ym = getTodayYearMonth();
   const [year, month] = ym.split('-');
-  return path.join(DATA_DIR, profile, year, `${month}.csv`);
+  return path.join(DATA_DIR, year, `${month}.csv`);
 }
 
 function getAvailableProfileMonths(profileName) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  const profileDir = path.join(DATA_DIR, profile);
-  if (!fs.existsSync(profileDir)) return [];
+  if (!fs.existsSync(DATA_DIR)) return [];
 
   const months = [];
   try {
-    const years = fs.readdirSync(profileDir).filter(y => /^\d{4}$/.test(y));
+    const years = fs.readdirSync(DATA_DIR).filter(y => /^\d{4}$/.test(y));
     for (const yr of years) {
-      const yearDir = path.join(profileDir, yr);
+      const yearDir = path.join(DATA_DIR, yr);
       const files = fs.readdirSync(yearDir).filter(f => /^\d{2}\.csv$/.test(f));
       for (const f of files) {
         const mo = f.replace('.csv', '');
@@ -624,112 +943,274 @@ function getAvailableProfileMonths(profileName) {
       }
     }
   } catch (e) {
-    log.error('Database', 'Error scanning profile months: ' + e.message);
+    log.error('Database', 'Error scanning data months: ' + e.message);
   }
   return months.sort().reverse();
 }
 
-function loadDonations(profileName, monthKey) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
+// ── LRU Historical Cache Manager (< 15 MB RAM Target) ──────────────
+const MAX_HISTORICAL_CACHED_MONTHS = 2;
+const historicalCacheKeys = [];
+
+function touchHistoricalCache(cacheKey) {
+  const idx = historicalCacheKeys.indexOf(cacheKey);
+  if (idx !== -1) {
+    historicalCacheKeys.splice(idx, 1);
+  }
+  historicalCacheKeys.push(cacheKey);
+
+  // Evict oldest historical month if over limit
+  while (historicalCacheKeys.length > MAX_HISTORICAL_CACHED_MONTHS) {
+    const oldestKey = historicalCacheKeys.shift();
+    if (oldestKey && donationsCache[oldestKey]) {
+      delete donationsCache[oldestKey];
+    }
+  }
+}
+
+/**
+ * Returns sorted list of candidate months (YYYY-MM, descending) that intersect with the provided date filters.
+ */
+function getFilteredProfileMonths(profileName, filters = {}) {
+  const allMonths = getAvailableProfileMonths();
+  if (!allMonths.length) return [];
+
+  const { month, specificDate, startDate, endDate } = filters;
+
+  // 1. Direct month filter (e.g. '2026-05')
+  if (month && month !== 'all' && /^\d{4}-\d{2}$/.test(month)) {
+    return allMonths.includes(month) ? [month] : [];
+  }
+
+  // 2. Specific exact date filter (e.g. '2026-07-15')
+  if (specificDate && /^\d{4}-\d{2}-\d{2}$/.test(specificDate)) {
+    const targetYm = specificDate.substring(0, 7);
+    return allMonths.includes(targetYm) ? [targetYm] : [];
+  }
+
+  // 3. Start/End date bounds (e.g. startDate: '2026-03-10', endDate: '2026-05-20')
+  const startYm = startDate && /^\d{4}-\d{2}/.test(startDate) ? startDate.substring(0, 7) : null;
+  const endYm = endDate && /^\d{4}-\d{2}/.test(endDate) ? endDate.substring(0, 7) : null;
+
+  if (startYm || endYm) {
+    return allMonths.filter(ym => {
+      if (startYm && ym < startYm) return false;
+      if (endYm && ym > endYm) return false;
+      return true;
+    });
+  }
+
+  return allMonths;
+}
+
+/**
+ * Fast stream line-counter to compute record counts in monthly CSV files without holding full JS objects in RAM.
+ */
+function countMonthlyTransactionsFast(profileName, monthKey) {
+  const filePath = getDonationsCsvPath(monthKey);
+  try {
+    if (!fs.existsSync(filePath)) return 0;
+    const content = fs.readFileSync(filePath, 'utf8');
+    let lines = 0;
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10) lines++; // '\n'
+    }
+    if (content.length > 0 && content.charCodeAt(content.length - 1) !== 10) lines++;
+    return Math.max(0, lines - 1);
+  } catch (_) {
+    return 0;
+  }
+}
+
+function loadDonations(profileName, monthKey, options = {}) {
+  const currentActiveYm = getTodayYearMonth();
+  const ymKey = (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) ? monthKey : (options.filters && options.filters.month);
 
   // If specific month is requested
-  if (monthKey && monthKey !== 'all') {
-    const cacheKey = `${profile}_${monthKey}`;
+  if (ymKey && ymKey !== 'all') {
+    const cacheKey = `ledger_${ymKey}`;
     if (donationsCache[cacheKey]) {
+      if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
       return donationsCache[cacheKey];
     }
-    const filePath = getDonationsCsvPath(profile, monthKey);
+    const filePath = getDonationsCsvPath(ymKey);
     try {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
-        const txs = PaymentsCsv.parseCsv(content);
+        const rawTxs = PaymentsCsv.parseCsv(content);
+        const seen = new Set();
+        const txs = [];
+        for (const t of rawTxs) {
+          const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            txs.push(t);
+          }
+        }
+        const cleanContent = PaymentsCsv.serializeCsv(txs);
+        const rawNormalized = content.replace(/\r\n/g, '\n').trim();
+        const cleanNormalized = cleanContent.replace(/\r\n/g, '\n').trim();
+        const contentChanged = rawNormalized !== cleanNormalized;
+
+        if (rawTxs.length > txs.length || contentChanged) {
+          try {
+            fs.writeFileSync(filePath, cleanContent, 'utf8');
+            if (rawTxs.length > txs.length) {
+              log.info('DonationsCSV', `🧹 Auto-sanitized ${rawTxs.length - txs.length} duplicate row(s) in ${filePath}`);
+            }
+            if (contentChanged && rawTxs.length === txs.length) {
+              log.info('DonationsCSV', `📅 Auto-sanitized dates/formatting in ${filePath}`);
+            }
+          } catch (_) { }
+        }
         donationsCache[cacheKey] = txs;
+        if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
         return txs;
       }
     } catch (e) {
       log.error('DonationsCSV', `Failed to load donations CSV (${filePath}): ` + e.message);
     }
     donationsCache[cacheKey] = [];
+    if (ymKey !== currentActiveYm) touchHistoricalCache(cacheKey);
     return [];
   }
 
-  // If all history is requested
-  const allMonths = getAvailableProfileMonths(profile);
+  // If filtered months or all history is requested
+  const targetMonths = options.filters ? getFilteredProfileMonths(null, options.filters) : getAvailableProfileMonths();
   let allTxs = [];
-  for (const ym of allMonths) {
-    const monthTxs = loadDonations(profile, ym);
+  for (const ym of targetMonths) {
+    const monthTxs = loadDonations(null, ym);
     allTxs = allTxs.concat(monthTxs);
   }
   allTxs.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
   return allTxs;
 }
 
+function clearAllDonationLedgers() {
+  try {
+    if (fs.existsSync(DATA_DIR)) {
+      const years = fs.readdirSync(DATA_DIR).filter(f => /^\d{4}$/.test(f));
+      for (const yr of years) {
+        const yrPath = path.join(DATA_DIR, yr);
+        try {
+          const files = fs.readdirSync(yrPath).filter(f => f.endsWith('.csv'));
+          for (const file of files) {
+            try { fs.unlinkSync(path.join(yrPath, file)); } catch (_) { }
+          }
+          if (fs.readdirSync(yrPath).length === 0) {
+            try { fs.rmdirSync(yrPath); } catch (_) { }
+          }
+        } catch (_) { }
+      }
+    }
+    // Flush all in-memory ledger caches
+    Object.keys(donationsCache).forEach(k => {
+      if (k.startsWith('ledger_')) delete donationsCache[k];
+    });
+    historicalCacheKeys.length = 0;
+    return true;
+  } catch (err) {
+    log.error('DonationsCSV', 'Error clearing donation ledgers: ' + err.message);
+    return false;
+  }
+}
+
 function saveDonations(profileName, transactions) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
   try {
     const groups = {};
     const realTransactions = (transactions || []).filter(t => !t.simulated);
+    const seen = new Set();
+    const uniqueTxs = [];
 
-    realTransactions.forEach(t => {
-      let ym = PaymentsCsv.getMonthKey(t.timestamp || t.date);
+    for (const t of realTransactions) {
+      const k = t.id || `${t.timestamp}_${t.sender}_${t.amount}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        uniqueTxs.push(t);
+      }
+    }
+
+    uniqueTxs.forEach(t => {
+      const rawTx = {
+        ...t,
+        sender: t.rawSender || t.sender
+      };
+      delete rawTx.rawSender;
+
+      let ym = PaymentsCsv.getMonthKey(rawTx.date || rawTx.timestamp);
       if (!ym) ym = getTodayYearMonth();
       if (!groups[ym]) groups[ym] = [];
-      groups[ym].push(t);
+      groups[ym].push(rawTx);
     });
 
-    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
-    cacheKeys.forEach(k => delete donationsCache[k]);
-
-    const existingMonths = getAvailableProfileMonths(profile);
-    existingMonths.forEach(ym => {
+    // Clean up any historical month shards that exist on disk but now have 0 transactions
+    const existingMonths = getAvailableProfileMonths();
+    for (const ym of existingMonths) {
       if (!groups[ym]) {
-        const filePath = getDonationsCsvPath(profile, ym);
+        const filePath = getDonationsCsvPath(ym);
         if (fs.existsSync(filePath)) {
           try { fs.unlinkSync(filePath); } catch (_) { }
         }
+        const fileDir = path.dirname(filePath);
+        try {
+          if (fs.existsSync(fileDir) && fs.readdirSync(fileDir).length === 0) {
+            fs.rmdirSync(fileDir);
+          }
+        } catch (_) { }
+        delete donationsCache[`ledger_${ym}`];
       }
-    });
+    }
 
     for (const [ym, txs] of Object.entries(groups)) {
-      const filePath = getDonationsCsvPath(profile, ym);
+      const filePath = getDonationsCsvPath(ym);
       const fileDir = path.dirname(filePath);
       if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
       const content = PaymentsCsv.serializeCsv(txs);
       fs.writeFileSync(filePath, content, 'utf8');
-      donationsCache[`${profile}_${ym}`] = txs;
+      donationsCache[`ledger_${ym}`] = txs;
     }
 
     return true;
   } catch (e) {
-    log.error('DonationsCSV', `Failed to save donations CSV for ${profile}: ` + e.message);
+    log.error('DonationsCSV', `Failed to save donations CSV: ` + e.message);
     return false;
   }
 }
 
 function appendDonation(profileName, tx) {
-  const profile = profileName || (profilesStore && profilesStore.activeProfile) || 'Default';
   if (tx.simulated) return;
 
-  let ym = PaymentsCsv.getMonthKey(tx.timestamp || tx.date);
+  let ym = PaymentsCsv.getMonthKey(tx.date || tx.timestamp);
   if (!ym) ym = getTodayYearMonth();
 
-  const filePath = getDonationsCsvPath(profile, ym);
-  const cacheKey = `${profile}_${ym}`;
+  const filePath = getDonationsCsvPath(ym);
+  const cacheKey = `ledger_${ym}`;
 
   try {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
 
-    const row = PaymentsCsv.formatCsvRow(tx) + '\n';
+    // Deduplication check: prevent appending duplicate transactions
+    const existing = donationsCache[cacheKey] || (fs.existsSync(filePath) ? loadDonations(null, ym) : []);
+    const txKey = tx.id || `${tx.timestamp}_${tx.sender}_${tx.amount}`;
+    if (existing.some(t => (t.id || `${t.timestamp}_${t.sender}_${t.amount}`) === txKey)) {
+      return true; // Already recorded, prevent duplicate insertion
+    }
+
+    const rawTx = { ...tx, sender: tx.rawSender || tx.sender };
+    delete rawTx.rawSender;
+    const row = PaymentsCsv.formatCsvRow(rawTx) + '\n';
 
     if (!fs.existsSync(filePath)) {
-      saveDonations(profile, [tx]);
+      const content = PaymentsCsv.serializeCsv([rawTx]);
+      fs.writeFileSync(filePath, content, 'utf8');
+      donationsCache[cacheKey] = [tx];
     } else {
       fs.appendFileSync(filePath, row, 'utf8');
       if (donationsCache[cacheKey]) {
         donationsCache[cacheKey].unshift(tx);
       } else {
-        loadDonations(profile, ym);
+        loadDonations(null, ym);
       }
     }
     return true;
@@ -742,24 +1223,25 @@ function appendDonation(profileName, tx) {
 function migrateLegacyCsvDatabases() {
   try {
     if (!fs.existsSync(DATA_DIR)) return;
-    const files = fs.readdirSync(DATA_DIR);
-    for (const file of files) {
-      const match = file.match(/^donations_(.+?)\.csv$/);
-      if (match) {
-        const profile = match[1];
-        const filePath = path.join(DATA_DIR, file);
-        log.info('Migration', `Found legacy CSV database for profile "${profile}": ${file}`);
-        try {
-          const content = fs.readFileSync(filePath, 'utf8');
-          const txs = PaymentsCsv.parseCsv(content);
-          if (txs.length > 0) {
-            log.info('Migration', `Migrating ${txs.length} legacy transactions to month-sharded structure...`);
-            saveDonations(profile, txs);
+    const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const match = entry.name.match(/^donations_(.+?)\.csv$/);
+        if (match) {
+          const filePath = path.join(DATA_DIR, entry.name);
+          log.info('Migration', `Found legacy flat CSV database: ${entry.name}`);
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const txs = PaymentsCsv.parseCsv(content);
+            if (txs.length > 0) {
+              log.info('Migration', `Consolidating ${txs.length} legacy transactions to unified ledger...`);
+              saveDonations(null, txs);
+            }
+            fs.renameSync(filePath, filePath + '.bak');
+          } catch (err) {
+            log.error('Migration', `Failed to migrate legacy CSV ${entry.name}: ` + err.message);
           }
-          fs.renameSync(filePath, filePath + '.bak');
-          log.info('Migration', `Legacy file renamed to ${file}.bak`);
-        } catch (err) {
-          log.error('Migration', `Failed to migrate legacy CSV ${file}: ` + err.message);
         }
       }
     }
@@ -770,15 +1252,13 @@ function migrateLegacyCsvDatabases() {
 
 migrateLegacyCsvDatabases();
 
-// ── Metadata Cache Helpers (data/[profile]/metadata.json) ──────────
-function getMetadataPath(profileName) {
-  const profile = (profileName || (profilesStore && profilesStore.activeProfile) || 'Default')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(DATA_DIR, profile, 'metadata.json');
+// ── Unified Metadata Cache Helpers (data/metadata.json) ──────────
+function getMetadataPath() {
+  return path.join(DATA_DIR, 'metadata.json');
 }
 
 function loadProfileMetadata(profileName) {
-  const filePath = getMetadataPath(profileName);
+  const filePath = getMetadataPath();
   try {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -794,7 +1274,7 @@ function loadProfileMetadata(profileName) {
 }
 
 function saveProfileMetadata(profileName, metadata) {
-  const filePath = getMetadataPath(profileName);
+  const filePath = getMetadataPath();
   try {
     const fileDir = path.dirname(filePath);
     if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
@@ -824,35 +1304,42 @@ function syncDerivedMetricsToSettings(profileName, broadcast = true, newTx = nul
     const amt = parseFloat(newTx.amount) || 0;
     metadata.goal.currentAmount = (parseFloat(metadata.goal.currentAmount) || 0) + amt;
 
+    const rawSender = newTx.sender || 'Anonymous';
+    const donorName = aliasesStore.formatDonorName(rawSender, targetSettings, profile);
+
     const supporters = metadata.leaderboard.supporters || {};
-    supporters[newTx.sender] = (parseFloat(supporters[newTx.sender]) || 0) + amt;
+    supporters[donorName] = (parseFloat(supporters[donorName]) || 0) + amt;
     metadata.leaderboard.supporters = supporters;
 
     let recent = metadata.recent.recentDonations || [];
     if (!Array.isArray(recent)) recent = [];
-    const decorated = decorateWithTemplate(newTx);
+    const decorated = decorateWithTemplate({ ...newTx, rawSender: rawSender, sender: donorName }, profile);
     recent.unshift(decorated);
     if (recent.length > 50) recent = recent.slice(0, 50);
     metadata.recent.recentDonations = recent;
 
     saveProfileMetadata(profile, metadata);
   } else {
-    // Full sync from disk files (triggered on startup, profile switch, manual edit, delete, or import)
-    const metadataPath = getMetadataPath(profile);
-    if (!forceRebuild && fs.existsSync(metadataPath)) {
-      metadata = loadProfileMetadata(profile);
-    } else {
-      const transactions = loadDonations(profile);
-      const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
+    // Full sync from disk files (re-evaluates transactions with active donor aliases)
+    const rawTransactions = loadDonations(profile);
+    const transactions = decorateWithDisplayName(rawTransactions, targetSettings, profile);
+    const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
 
-      metadata = {
-        goal: { currentAmount: metrics.goalAmount },
-        leaderboard: { supporters: metrics.supporters },
-        recent: { recentDonations: metrics.recentDonations }
-      };
+    // Preserve active goal's current progress rather than overwriting with all-time historical total revenue
+    const existingMeta = loadProfileMetadata(profile);
+    const preservedGoalAmount = (existingMeta?.goal?.currentAmount !== undefined)
+      ? parseFloat(existingMeta.goal.currentAmount)
+      : ((targetSettings.widgets?.goal?.currentAmount !== undefined)
+        ? parseFloat(targetSettings.widgets.goal.currentAmount)
+        : 0);
 
-      saveProfileMetadata(profile, metadata);
-    }
+    metadata = {
+      goal: { currentAmount: isNaN(preservedGoalAmount) ? 0 : preservedGoalAmount },
+      leaderboard: { supporters: metrics.supporters },
+      recent: { recentDonations: metrics.recentDonations }
+    };
+
+    saveProfileMetadata(profile, metadata);
   }
 
   // Merge into in-memory settings for widgets and websocket broadcasts
@@ -955,19 +1442,34 @@ autoMigrateInitialDonations();
 const processedAlertIds = new Set();
 
 function broadcastSettings(settings) {
-  const payload = JSON.stringify({ type: 'SETTINGS_UPDATED', payload: settings, activeProfile: profilesStore.activeProfile });
+  const target = settings || alertSettings;
+  const metadata = loadProfileMetadata();
+  if (target && target.widgets) {
+    if (!target.widgets.goal) target.widgets.goal = {};
+    if (!target.widgets.leaderboard) target.widgets.leaderboard = {};
+    if (!target.widgets.recent) target.widgets.recent = {};
+    if (metadata.goal) target.widgets.goal.currentAmount = metadata.goal.currentAmount || 0;
+    if (metadata.leaderboard) target.widgets.leaderboard.supporters = metadata.leaderboard.supporters || {};
+    if (metadata.recent) target.widgets.recent.recentDonations = metadata.recent.recentDonations || [];
+  }
+  const payload = JSON.stringify({ type: 'SETTINGS_UPDATED', payload: target, activeProfile: profilesStore.activeProfile });
   obsClients.forEach(c => { if (c.readyState === 1) c.send(payload); });
 }
 
 // ── Amount filter ─────────────────────────────────────────────────────
 const parseAmountNum = (rawAmount) => TemplateMatcher.parseAmount(rawAmount);
 
-function decorateWithTemplate(event) {
+function decorateWithTemplate(event, profile = '') {
   const amount = parseAmountNum(event.amount);
+  const rawSender = event.rawSender || event.sender || 'Anonymous';
+  const targetProf = profile || (profilesStore && profilesStore.activeProfile) || 'Default';
+  const formattedSender = aliasesStore.formatDonorName(rawSender, alertSettings, targetProf);
   if (event.alertTemplateId) {
     const template = alertSettings.alertTemplates.find(t => t.id === event.alertTemplateId);
     return {
       ...event,
+      rawSender: rawSender,
+      sender: formattedSender,
       amountValue: amount,
       alertTemplateId: template ? template.id : event.alertTemplateId,
       alertTemplateName: template ? template.name : ''
@@ -976,6 +1478,8 @@ function decorateWithTemplate(event) {
   const template = TemplateMatcher.select(alertSettings.alertTemplates, amount);
   return {
     ...event,
+    rawSender: rawSender,
+    sender: formattedSender,
     amountValue: amount,
     alertTemplateId: template ? template.id : null,
     alertTemplateName: template ? template.name : ''
@@ -1001,9 +1505,9 @@ function processPaymentForGoalAndLeaderboard(notification) {
 
     const numAmount = parseAmountNum(notification.amount);
     const effectiveAmount = numAmount > 0 ? numAmount : 0;
-    let senderName = (notification.sender || notification.title || 'Unknown').trim();
-    if (/received|sent/i.test(senderName))
-      senderName = senderName.split(/sent|received/i)[0].trim() || 'Unknown';
+
+    const rawSenderName = cleanSender(notification.rawSender || notification.sender || notification.title || 'Unknown');
+    const formattedSenderName = aliasesStore.formatDonorName(rawSenderName, alertSettings, profilesStore.activeProfile);
 
     const now = Number(notification.timestamp) || Date.now();
     const d = new Date(now);
@@ -1014,7 +1518,8 @@ function processPaymentForGoalAndLeaderboard(notification) {
       timestamp: now,
       date: !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '',
       time: !isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : '',
-      sender: senderName,
+      rawSender: rawSenderName,
+      sender: formattedSenderName,
       amount: effectiveAmount,
       currency: currencyCode,
       rawAmount: PaymentsCsv.formatCurrency(effectiveAmount, currencyCode),
@@ -1029,7 +1534,7 @@ function processPaymentForGoalAndLeaderboard(notification) {
     const metrics = syncDerivedMetricsToSettings(profilesStore.activeProfile, true, tx);
     if (alertId) processedAlertIds.add(alertId);
 
-    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${senderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
+    log.info('Payment', `[CSV Recorded] ₹${effectiveAmount} from "${rawSenderName}" via ${tx.sourceApp} | Total Goal: ₹${metrics.goalAmount} | AlertID=${tx.id}`);
   } catch (e) {
     log.error('Payment', 'Error in processPaymentForGoalAndLeaderboard: ' + e.message);
   }
@@ -1054,6 +1559,8 @@ app.get('/goal', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'goal.html')))
 app.get('/leaderboard', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'list.html')));
 app.get('/list', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'list.html')));
 
+app.get('/api/payment-rules', (req, res) => res.json(paymentRulesStore));
+
 // ── CSV Donations & Analytics Endpoints ──────────────────────────────
 app.get('/api/donations/months', (req, res) => {
   const profile = req.query.profile || profilesStore.activeProfile;
@@ -1069,26 +1576,27 @@ app.get('/api/analytics', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  const startDate = req.query.startDate || '';
-  const endDate = req.query.endDate || '';
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
 
-  const transactions = loadDonations(profile, month);
+  const filterOptions = {
+    month,
+    provider,
+    search,
+    minAmount,
+    maxAmount,
+    specificDate,
+    startDate,
+    endDate
+  };
+
+  const transactions = loadDonations(profile, month, { filters: filterOptions });
   const targetSettings = profilesStore.profiles[profile] || alertSettings;
   const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
 
   const metrics = PaymentsCsv.computeMetrics(transactions, {
     startAmount,
     includeSimulated: false,
-    filters: {
-      month,
-      provider,
-      search,
-      minAmount,
-      maxAmount,
-      specificDate,
-      startDate,
-      endDate
-    }
+    filters: filterOptions
   });
 
   const timelineMode = req.query.timelineMode || req.query.trendMode || 'month';
@@ -1116,28 +1624,78 @@ app.get('/api/donations/query', (req, res) => {
   const month = req.query.month || 'all';
   const provider = req.query.provider || 'all';
   const search = req.query.search || '';
+  const alias = req.query.alias || '';
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  const startDate = req.query.startDate || '';
-  const endDate = req.query.endDate || '';
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
   const sort = (req.query.sort || 'desc').toLowerCase();
   const sortBy = (req.query.sortBy || 'date').toLowerCase();
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(10, parseInt(req.query.limit, 10) || 50));
 
-  const allTransactions = loadDonations(profile, month);
-  const filtered = PaymentsCsv.filterTransactions(allTransactions, {
+  const filterOptions = {
     month,
     provider,
     search,
+    alias,
     minAmount,
     maxAmount,
     specificDate,
     startDate,
     endDate,
     includeSimulated: false
-  });
+  };
+
+  const targetSettings = profilesStore.profiles[profile] || alertSettings;
+  const candidateMonths = getFilteredProfileMonths(profile, filterOptions);
+
+  // Fast path: Date descending (newest first - default table view)
+  if (sortBy === 'date' && sort === 'desc') {
+    let collectedFiltered = [];
+    const neededCount = page * limit;
+    let totalCount = 0;
+
+    for (let i = 0; i < candidateMonths.length; i++) {
+      const ym = candidateMonths[i];
+      const monthRaw = loadDonations(profile, ym);
+      const monthDecorated = decorateWithDisplayName(monthRaw, targetSettings);
+      const monthFiltered = PaymentsCsv.filterTransactions(monthDecorated, filterOptions);
+
+      monthFiltered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+      collectedFiltered = collectedFiltered.concat(monthFiltered);
+      totalCount += monthFiltered.length;
+
+      // Early-Exit: If we collected enough items and have unconstrained trailing months, count remaining fast
+      if (collectedFiltered.length >= neededCount && !search && !alias && provider === 'all' && !minAmount && !maxAmount && !specificDate) {
+        for (let j = i + 1; j < candidateMonths.length; j++) {
+          totalCount += countMonthlyTransactionsFast(profile, candidateMonths[j]);
+        }
+        break;
+      }
+    }
+
+    const total = totalCount;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const startIndex = (page - 1) * limit;
+    const slice = collectedFiltered.slice(startIndex, startIndex + limit);
+
+    return res.json({
+      ok: true,
+      profile,
+      sort,
+      page,
+      limit,
+      total,
+      totalPages,
+      transactions: slice
+    });
+  }
+
+  // Fallback for custom sorts (e.g. amount asc/desc, date asc): load only candidate pruned months
+  const rawTransactions = loadDonations(profile, month, { filters: filterOptions });
+  const allTransactions = decorateWithDisplayName(rawTransactions, targetSettings);
+  const filtered = PaymentsCsv.filterTransactions(allTransactions, filterOptions);
 
   if (sortBy === 'amount') {
     if (sort === 'asc') {
@@ -1172,8 +1730,9 @@ app.get('/api/donations/query', (req, res) => {
 
 app.get('/api/donations', (req, res) => {
   const profile = req.query.profile || profilesStore.activeProfile;
-  const transactions = loadDonations(profile);
+  const rawTransactions = loadDonations(profile);
   const targetSettings = profilesStore.profiles[profile] || alertSettings;
+  const transactions = decorateWithDisplayName(rawTransactions, targetSettings);
   const startAmount = parseFloat(targetSettings.widgets?.goal?.startAmount) || 0;
   const metrics = PaymentsCsv.computeMetrics(transactions, { startAmount, includeSimulated: false });
   res.json({
@@ -1184,6 +1743,65 @@ app.get('/api/donations', (req, res) => {
     metrics
   });
 });
+
+// ── Donor Aliases API ──────────────────────────────────────────
+app.get('/api/aliases', (req, res) => {
+  const profile = req.query.profile || profilesStore.activeProfile;
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile) });
+});
+
+app.get('/api/aliases/csv', (req, res) => {
+  const profile = req.query.profile || profilesStore.activeProfile;
+  const aliasList = aliasesStore.getAliases(profile);
+
+  let csv = 'sender,alias,updatedAt\n';
+  for (const entry of aliasList) {
+    csv += `${escapeCsvField(entry.sender)},${escapeCsvField(entry.alias)},${escapeCsvField(entry.updatedAt)}\n`;
+  }
+
+  const filename = `aliases_${profile}_${new Date().toISOString().split('T')[0]}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+});
+
+app.post('/api/aliases', (req, res) => {
+  const profile = req.body.profile || req.query.profile || profilesStore.activeProfile;
+  const { sender, alias, note } = req.body || {};
+  if (!sender || !alias) {
+    return res.status(400).json({ ok: false, error: 'Sender and alias are required' });
+  }
+  aliasesStore.setAlias(sender, alias, profile);
+  log.info('AliasesStore', `Set donor alias for "${sender}" -> "${alias}" [Profile: ${profile}]`);
+  const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });
+});
+
+app.delete('/api/aliases/:sender', (req, res) => {
+  const profile = req.query.profile || req.body?.profile || profilesStore.activeProfile;
+  const sender = req.params.sender;
+  if (!sender) {
+    return res.status(400).json({ ok: false, error: 'Sender parameter required' });
+  }
+  aliasesStore.deleteAlias(sender, profile);
+  log.info('AliasesStore', `Deleted donor alias for "${sender}" [Profile: ${profile}]`);
+  const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
+  res.json({ ok: true, profile, aliases: aliasesStore.getAliases(profile), metrics });
+});
+
+function normalizeDateBounds(startDateStr, endDateStr) {
+  let startDate = startDateStr || '';
+  if (startDate && startDate.length === 7) {
+    startDate = `${startDate}-01`;
+  }
+  let endDate = endDateStr || '';
+  if (endDate && endDate.length === 7) {
+    const [year, monthVal] = endDate.split('-').map(Number);
+    const lastDay = new Date(year, monthVal, 0).getDate();
+    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
+  }
+  return { startDate, endDate };
+}
 
 function getMonthsInRange(startDateStr, endDateStr) {
   if (!startDateStr || !endDateStr) return [];
@@ -1212,18 +1830,7 @@ app.get('/api/donations/csv', (req, res) => {
   const minAmount = req.query.minAmount || '';
   const maxAmount = req.query.maxAmount || '';
   const specificDate = req.query.date || req.query.specificDate || '';
-  let startDate = req.query.startDate || '';
-  let endDate = req.query.endDate || '';
-
-  // Normalize YYYY-MM inputs to full YYYY-MM-DD bounds so string comparisons are inclusive
-  if (startDate && startDate.length === 7) {
-    startDate = `${startDate}-01`;
-  }
-  if (endDate && endDate.length === 7) {
-    const [year, monthVal] = endDate.split('-').map(Number);
-    const lastDay = new Date(year, monthVal, 0).getDate();
-    endDate = `${endDate}-${String(lastDay).padStart(2, '0')}`;
-  }
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
 
   let transactions = [];
   if (startDate && endDate) {
@@ -1249,42 +1856,312 @@ app.get('/api/donations/csv', (req, res) => {
 
   // Sort descending by timestamp
   filtered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
-
   const csvContent = PaymentsCsv.serializeCsv(filtered);
   const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
-  const filename = `donations_${profile}_filtered_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
+  const filename = `earnings_${profile}_filtered_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(csvContent);
+});
+
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+class ZipBuilder {
+  constructor() {
+    this.files = [];
+  }
+
+  addFile(filename, contentBuffer) {
+    const buf = Buffer.isBuffer(contentBuffer) ? contentBuffer : Buffer.from(String(contentBuffer || ''), 'utf8');
+    const filenameBuf = Buffer.from(filename, 'utf8');
+    const crc = zlib.crc32 ? zlib.crc32(buf) : 0;
+
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+    this.files.push({
+      name: filename,
+      nameBuf: filenameBuf,
+      content: buf,
+      crc: crc,
+      dosTime: dosTime,
+      dosDate: dosDate,
+      uncompressedSize: buf.length,
+      compressedSize: buf.length
+    });
+  }
+
+  toBuffer() {
+    const localHeaders = [];
+    const cdEntries = [];
+    let offset = 0;
+
+    for (const f of this.files) {
+      const header = Buffer.alloc(30 + f.nameBuf.length);
+      header.writeUInt32LE(0x04034b50, 0);
+      header.writeUInt16LE(20, 4);
+      header.writeUInt16LE(0, 6);
+      header.writeUInt16LE(0, 8);
+      header.writeUInt16LE(f.dosTime, 10);
+      header.writeUInt16LE(f.dosDate, 12);
+      header.writeUInt32LE(f.crc, 14);
+      header.writeUInt32LE(f.compressedSize, 18);
+      header.writeUInt32LE(f.uncompressedSize, 22);
+      header.writeUInt16LE(f.nameBuf.length, 26);
+      header.writeUInt16LE(0, 28);
+      f.nameBuf.copy(header, 30);
+
+      const cdEntry = Buffer.alloc(46 + f.nameBuf.length);
+      cdEntry.writeUInt32LE(0x02014b50, 0);
+      cdEntry.writeUInt16LE(20, 4);
+      cdEntry.writeUInt16LE(20, 6);
+      cdEntry.writeUInt16LE(0, 8);
+      cdEntry.writeUInt16LE(0, 10);
+      cdEntry.writeUInt16LE(f.dosTime, 12);
+      cdEntry.writeUInt16LE(f.dosDate, 14);
+      cdEntry.writeUInt32LE(f.crc, 16);
+      cdEntry.writeUInt32LE(f.compressedSize, 20);
+      cdEntry.writeUInt32LE(f.uncompressedSize, 24);
+      cdEntry.writeUInt16LE(f.nameBuf.length, 28);
+      cdEntry.writeUInt16LE(0, 30);
+      cdEntry.writeUInt16LE(0, 32);
+      cdEntry.writeUInt16LE(0, 34);
+      cdEntry.writeUInt16LE(0, 36);
+      cdEntry.writeUInt32LE(0, 38);
+      cdEntry.writeUInt32LE(offset, 42);
+      f.nameBuf.copy(cdEntry, 46);
+
+      localHeaders.push(header, f.content);
+      cdEntries.push(cdEntry);
+      offset += header.length + f.content.length;
+    }
+
+    const cdStart = offset;
+    let cdSize = 0;
+    for (const cd of cdEntries) cdSize += cd.length;
+
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(0, 4);
+    eocd.writeUInt16LE(0, 6);
+    eocd.writeUInt16LE(this.files.length, 8);
+    eocd.writeUInt16LE(this.files.length, 10);
+    eocd.writeUInt32LE(cdSize, 12);
+    eocd.writeUInt32LE(cdStart, 16);
+    eocd.writeUInt16LE(0, 20);
+
+    return Buffer.concat([...localHeaders, ...cdEntries, eocd]);
+  }
+}
+
+function parseZipEntries(buffer) {
+  const entries = [];
+  if (!Buffer.isBuffer(buffer) || buffer.length < 30) return entries;
+
+  let offset = 0;
+  while (offset + 30 <= buffer.length) {
+    const sig = buffer.readUInt32LE(offset);
+    if (sig !== 0x04034b50) break;
+
+    const compMethod = buffer.readUInt16LE(offset + 8);
+    const compSize = buffer.readUInt32LE(offset + 18);
+    const nameLen = buffer.readUInt16LE(offset + 26);
+    const extraLen = buffer.readUInt16LE(offset + 28);
+
+    const name = buffer.toString('utf8', offset + 30, offset + 30 + nameLen);
+    const dataStart = offset + 30 + nameLen + extraLen;
+    const rawData = buffer.subarray(dataStart, dataStart + compSize);
+
+    let content = '';
+    if (compMethod === 0) {
+      content = rawData.toString('utf8');
+    } else if (compMethod === 8) {
+      try { content = zlib.inflateRawSync(rawData).toString('utf8'); } catch (_) { }
+    }
+
+    entries.push({ name, content });
+    offset = dataStart + compSize;
+  }
+  return entries;
+}
+
+function parseCsvLineSimple(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+app.get('/api/donations/export-zip', (req, res) => {
+  const profile = req.query.profile || profilesStore.activeProfile;
+  const month = req.query.month || 'all';
+  const provider = req.query.provider || 'all';
+  const search = req.query.search || '';
+  const minAmount = req.query.minAmount || '';
+  const maxAmount = req.query.maxAmount || '';
+  const specificDate = req.query.date || req.query.specificDate || '';
+  const { startDate, endDate } = normalizeDateBounds(req.query.startDate, req.query.endDate);
+
+  let transactions = [];
+  if (startDate && endDate) {
+    const months = getMonthsInRange(startDate, endDate);
+    for (const ym of months) {
+      transactions = transactions.concat(loadDonations(profile, ym));
+    }
+  } else {
+    transactions = loadDonations(profile, month);
+  }
+
+  const filtered = PaymentsCsv.filterTransactions(transactions, {
+    month, provider, search, minAmount, maxAmount, specificDate, startDate, endDate, includeSimulated: false
+  });
+  filtered.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+
+  const csvLedger = PaymentsCsv.serializeCsv(filtered);
+  const aliasList = aliasesStore.getAliases(profile);
+
+  let csvAliases = 'sender,alias,updatedAt\n';
+  for (const entry of aliasList) {
+    csvAliases += `${escapeCsvField(entry.sender)},${escapeCsvField(entry.alias)},${escapeCsvField(entry.updatedAt)}\n`;
+  }
+
+  const zip = new ZipBuilder();
+  zip.addFile('earnings_ledger.csv', csvLedger);
+  zip.addFile('aliases.csv', csvAliases);
+
+  const zipBuf = zip.toBuffer();
+  const rangeSuffix = (startDate && endDate) ? `${startDate}_to_${endDate}` : month;
+  const filename = `streampe_earnings_backup_${profile}_${rangeSuffix}_${new Date().toISOString().split('T')[0]}.zip`;
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(zipBuf);
 });
 
 app.post('/api/donations/import', (req, res) => {
   try {
     const profile = req.body.profile || profilesStore.activeProfile;
     const mode = req.body.mode || 'replace';
-    const csvContent = req.body.csv || '';
+    const rawContent = req.body.csv || req.body.data || '';
 
-    if (!csvContent.trim()) {
-      return res.status(400).json({ ok: false, error: 'Empty CSV content' });
+    if (!rawContent) {
+      return res.status(400).json({ ok: false, error: 'Empty import content' });
     }
 
-    const importedTxs = PaymentsCsv.parseCsv(csvContent);
+    let inputBuffer = null;
+    if (typeof rawContent === 'string' && (rawContent.startsWith('data:') || /^[A-Za-z0-9+/=]+$/.test(rawContent.trim().substring(0, 100)))) {
+      const base64Data = rawContent.includes('base64,') ? rawContent.split('base64,')[1] : rawContent;
+      try { inputBuffer = Buffer.from(base64Data, 'base64'); } catch (_) { }
+    }
+
+    let importedTxs = [];
+    let aliasCount = 0;
+
+    const isZip = (inputBuffer && inputBuffer.length >= 4 && inputBuffer.readUInt32LE(0) === 0x04034b50) ||
+      (typeof rawContent === 'string' && rawContent.startsWith('PK\x03\x04'));
+
+    if (isZip) {
+      const zipBuf = inputBuffer || Buffer.from(rawContent, 'binary');
+      const entries = parseZipEntries(zipBuf);
+
+      for (const entry of entries) {
+        if (!entry.content) continue;
+        const entryName = (entry.name || '').toLowerCase();
+        const firstLine = entry.content.split(/\r?\n/)[0].toLowerCase();
+
+        if (entryName.includes('alias') || (firstLine.includes('alias') && !firstLine.includes('amount'))) {
+          const aliasLines = entry.content.split(/\r?\n/).filter(l => l.trim().length > 0);
+          const startIdx = aliasLines[0].toLowerCase().startsWith('sender,alias') ? 1 : 0;
+          for (let i = startIdx; i < aliasLines.length; i++) {
+            const parts = parseCsvLineSimple(aliasLines[i]);
+            if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+              aliasesStore.setAlias(parts[0].trim(), parts[1].trim(), profile);
+              aliasCount++;
+            }
+          }
+        } else if (entryName.includes('donations') || entryName.includes('ledger') || firstLine.includes('amount') || firstLine.includes('sourceapp')) {
+          const txs = PaymentsCsv.parseCsv(entry.content);
+          importedTxs = importedTxs.concat(txs);
+        }
+      }
+    } else {
+      const text = typeof rawContent === 'string' ? rawContent : rawContent.toString('utf8');
+      const firstLine = text.split(/\r?\n/)[0].toLowerCase();
+      if (firstLine.includes('alias') && !firstLine.includes('amount')) {
+        const aliasLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        const startIdx = aliasLines[0].toLowerCase().startsWith('sender,alias') ? 1 : 0;
+        for (let i = startIdx; i < aliasLines.length; i++) {
+          const parts = parseCsvLineSimple(aliasLines[i]);
+          if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+            aliasesStore.setAlias(parts[0].trim(), parts[1].trim(), profile);
+            aliasCount++;
+          }
+        }
+      } else {
+        importedTxs = PaymentsCsv.parseCsv(text);
+      }
+    }
+
     let finalTxs = importedTxs;
-
-    if (mode === 'merge') {
-      const existing = loadDonations(profile);
-      const existingMap = new Map(existing.map(t => [t.id, t]));
-      importedTxs.forEach(t => existingMap.set(t.id, t));
-      finalTxs = Array.from(existingMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    if (mode === 'replace') {
+      clearAllDonationLedgers();
+      if (importedTxs.length > 0) {
+        saveDonations(profile, finalTxs);
+      }
+    } else if (importedTxs.length > 0) {
+      if (mode === 'merge') {
+        const existing = loadDonations(profile);
+        const existingMap = new Map(existing.map(t => [t.id, t]));
+        importedTxs.forEach(t => existingMap.set(t.id, t));
+        finalTxs = Array.from(existingMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      }
+      saveDonations(profile, finalTxs);
     }
 
-    saveDonations(profile, finalTxs);
     const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
-    log.info('DonationsCSV', `Imported ${importedTxs.length} transactions (mode: ${mode}) into ${profile}`);
-    res.json({ ok: true, profile, importedCount: importedTxs.length, totalCount: finalTxs.length, metrics });
+    log.info('DonationsCSV', `Imported ${importedTxs.length} transactions, ${aliasCount} aliases into profile [${profile}]`);
+    res.json({ ok: true, profile, importedCount: importedTxs.length, aliasCount, totalCount: finalTxs.length, metrics });
   } catch (e) {
     log.error('DonationsCSV', 'Import error: ' + e.message);
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── In-App Version & Update Check API ───────────────────────
+app.get(['/api/updates/check', '/api/version/check'], async (req, res) => {
+  try {
+    const forceRefresh = req.query.force === 'true' || req.query.refresh === '1';
+    const currentVer = req.query.currentVersion || req.query.version || APP_VERSION;
+    const result = await updateManager.checkForUpdates(currentVer, forceRefresh);
+    res.json(result);
+  } catch (err) {
+    log.error('UpdateManager', 'Check updates error: ' + err.message);
+    res.status(500).json({ ok: false, error: err.message, currentVersion: APP_VERSION });
   }
 });
 
@@ -1295,15 +2172,32 @@ app.post('/api/donations/record', (req, res) => {
     const amountNum = parseFloat(TemplateMatcher.parseAmount(body.amount)) || 0;
     if (amountNum <= 0) return res.status(400).json({ ok: false, error: 'Valid amount is required' });
 
-    const now = Number(body.timestamp) || Date.now();
-    const d = new Date(now);
+    const now = new Date();
+    const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    const dateVal = PaymentsCsv.normalizeDate(body.date, body.timestamp || now.getTime()) || curDateStr;
+    const timeVal = (body.time && String(body.time).trim())
+      ? PaymentsCsv.normalizeTime(body.time, body.timestamp || now.getTime())
+      : curTimeStr;
+
+    let ts = null;
+    const parsedDt = new Date(`${dateVal}T${timeVal}`);
+    if (!isNaN(parsedDt.getTime())) {
+      ts = parsedDt.getTime();
+    } else if (body.timestamp && !isNaN(Number(body.timestamp))) {
+      ts = Number(body.timestamp);
+    } else {
+      ts = now.getTime();
+    }
 
     const currencyCode = (body.currency || 'INR').toUpperCase();
+
     const tx = {
-      id: body.id || `manual_${now}_${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: now,
-      date: body.date || (!isNaN(d.getTime()) ? d.toISOString().split('T')[0] : ''),
-      time: body.time || (!isNaN(d.getTime()) ? d.toTimeString().split(' ')[0] : ''),
+      id: body.id || `manual_${ts}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: ts,
+      date: dateVal,
+      time: timeVal,
       sender: (body.sender || 'Anonymous').trim(),
       amount: amountNum,
       currency: currencyCode,
@@ -1342,17 +2236,35 @@ app.put('/api/donations/:id', (req, res) => {
     if (amountNum <= 0) return res.status(400).json({ ok: false, error: 'Valid amount is required' });
 
     const currencyCode = (body.currency || currentTxs[idx].currency || 'INR').toUpperCase();
-    const now = body.timestamp || currentTxs[idx].timestamp || Date.now();
+    const existingTs = currentTxs[idx].timestamp || Date.now();
+    const updatedDate = body.date !== undefined ? PaymentsCsv.normalizeDate(body.date, existingTs) : currentTxs[idx].date;
+    let updatedTime = currentTxs[idx].time;
+    if (body.time !== undefined) {
+      updatedTime = (body.time && String(body.time).trim())
+        ? PaymentsCsv.normalizeTime(body.time, existingTs)
+        : currentTxs[idx].time;
+    }
+
+    let ts = null;
+    const parsedDt = new Date(`${updatedDate}T${updatedTime}`);
+    if (!isNaN(parsedDt.getTime())) {
+      ts = parsedDt.getTime();
+    } else if (body.timestamp && !isNaN(Number(body.timestamp))) {
+      ts = Number(body.timestamp);
+    } else {
+      ts = existingTs;
+    }
 
     currentTxs[idx] = {
       ...currentTxs[idx],
+      timestamp: ts,
       sender: (body.sender !== undefined ? body.sender : currentTxs[idx].sender).trim(),
       amount: amountNum,
       currency: currencyCode,
       rawAmount: PaymentsCsv.formatCurrency(amountNum, currencyCode),
       sourceApp: (body.sourceApp !== undefined ? body.sourceApp : currentTxs[idx].sourceApp).trim(),
-      date: body.date !== undefined ? body.date : currentTxs[idx].date,
-      time: body.time !== undefined ? body.time : currentTxs[idx].time,
+      date: updatedDate,
+      time: updatedTime,
       message: (body.message !== undefined ? body.message : currentTxs[idx].message).trim()
     };
 
@@ -1388,27 +2300,60 @@ app.delete('/api/donations/:id', (req, res) => {
 app.post('/api/donations/clear', (req, res) => {
   try {
     const profile = req.body?.profile || profilesStore.activeProfile;
-    const profileDir = path.join(DATA_DIR, profile.replace(/[^a-zA-Z0-9_-]/g, '_'));
-    if (fs.existsSync(profileDir)) {
-      try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch (_) { }
-    }
-    const cacheKeys = Object.keys(donationsCache).filter(k => k.startsWith(`${profile}_`));
-    cacheKeys.forEach(k => delete donationsCache[k]);
+    clearAllDonationLedgers();
 
     const metrics = syncDerivedMetricsToSettings(profile, true, null, true);
-    log.info('DonationsCSV', `Cleared all transactions and directories for ${profile}`);
+    log.info('DonationsCSV', `Cleared all transactions and monthly ledgers for ${profile}`);
     res.json({ ok: true, profile, count: 0, metrics });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
+app.post('/api/goal/reset', (req, res) => {
+  try {
+    const profile = req.body?.profile || profilesStore.activeProfile;
+    const targetSettings = profilesStore.profiles[profile] || alertSettings;
+
+    const meta = loadProfileMetadata(profile);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = 0;
+    saveProfileMetadata(profile, meta);
+
+    if (targetSettings.widgets?.goal) {
+      targetSettings.widgets.goal.currentAmount = 0;
+    }
+    if (profile === profilesStore.activeProfile) {
+      alertSettings = targetSettings;
+    }
+    saveSettings(alertSettings);
+    profilesStore.profiles[profile] = targetSettings;
+    saveProfilesStore(profilesStore);
+    broadcastSettings(alertSettings);
+
+    log.info('Goal', `Reset stream goal for profile "${profile}" to ₹0`);
+    res.json({ ok: true, profile, currentAmount: 0 });
+  } catch (e) {
+    log.error('Goal', 'Error resetting stream goal: ' + e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/settings', (req, res) => {
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   res.json({ activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles), settings: alertSettings });
 });
 
 app.post('/api/settings', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  const targetProf = profilesStore.activeProfile || 'Default';
+  if (req.body?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(targetProf);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(req.body.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(targetProf, meta);
+  }
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;
   saveProfilesStore(profilesStore);
@@ -1418,6 +2363,20 @@ app.post('/api/settings', (req, res) => {
 
 app.get('/api/profiles', (req, res) => {
   res.json({ activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles), profilesMap: profilesStore.profiles });
+});
+
+app.get('/api/profiles/default-template', (req, res) => {
+  const tpl = getShippedDefaultProfile();
+  const metadata = loadProfileMetadata();
+  if (tpl && tpl.widgets) {
+    if (!tpl.widgets.goal) tpl.widgets.goal = {};
+    if (!tpl.widgets.leaderboard) tpl.widgets.leaderboard = {};
+    if (!tpl.widgets.recent) tpl.widgets.recent = {};
+    tpl.widgets.goal.currentAmount = metadata.goal?.currentAmount || 0;
+    tpl.widgets.leaderboard.supporters = metadata.leaderboard?.supporters || {};
+    tpl.widgets.recent.recentDonations = metadata.recent?.recentDonations || [];
+  }
+  res.json({ ok: true, template: tpl });
 });
 
 app.post('/api/profiles/switch', (req, res) => {
@@ -1434,6 +2393,12 @@ app.post('/api/profiles/save', (req, res) => {
   const { name, settings: newSettings } = req.body;
   if (!name) return res.status(400).json({ ok: false, error: 'Profile name required' });
   if (newSettings) alertSettings = ConfigMigration.migrate(newSettings);
+  if (newSettings?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(name);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(newSettings.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(name, meta);
+  }
   profilesStore.profiles[name] = alertSettings;
   profilesStore.activeProfile = name;
   syncDerivedMetricsToSettings(name, false);
@@ -1449,15 +2414,27 @@ app.post('/api/profiles/delete', (req, res) => {
     if (!profilesStore.profiles['Default']) profilesStore.profiles['Default'] = ConfigSchema.createDefaultConfig();
     profilesStore.activeProfile = 'Default';
     alertSettings = profilesStore.profiles['Default'];
+    syncDerivedMetricsToSettings('Default', false);
     saveSettings(alertSettings);
   }
   saveProfilesStore(profilesStore); broadcastSettings(alertSettings);
   res.json({ ok: true, activeProfile: profilesStore.activeProfile, profiles: Object.keys(profilesStore.profiles) });
 });
 
-app.get('/api/config', (req, res) => res.json(alertSettings));
+app.get('/api/config', (req, res) => {
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
+  res.json(alertSettings);
+});
 app.post('/api/config', (req, res) => {
   alertSettings = applySettingsPatch(alertSettings, req.body);
+  const targetProf = profilesStore.activeProfile || 'Default';
+  if (req.body?.widgets?.goal?.currentAmount !== undefined) {
+    const meta = loadProfileMetadata(targetProf);
+    if (!meta.goal) meta.goal = {};
+    meta.goal.currentAmount = parseFloat(req.body.widgets.goal.currentAmount) || 0;
+    saveProfileMetadata(targetProf, meta);
+  }
+  syncDerivedMetricsToSettings(profilesStore.activeProfile, false);
   saveSettings(alertSettings);
   profilesStore.profiles[profilesStore.activeProfile] = alertSettings;
   saveProfilesStore(profilesStore);
@@ -1483,8 +2460,18 @@ app.get('/api/system/paths', (req, res) => {
 app.post('/api/system/paths', (req, res) => {
   try {
     const body = req.body || {};
+    const newTargetRoot = (body.storageRootDir || '').trim();
+    const copyCurrentData = body.copyCurrentData === true;
+
+    const resolvedTarget = newTargetRoot ? path.resolve(newTargetRoot) : writableBaseDir;
+    const resolvedCurrent = storageRoot;
+
+    if (copyCurrentData && resolvedTarget !== resolvedCurrent) {
+      migrateLocalDataIfNeeded(resolvedCurrent, resolvedTarget);
+    }
+
     const newPaths = {
-      storageRootDir: (body.storageRootDir || '').trim()
+      storageRootDir: newTargetRoot
     };
 
     fs.writeFileSync(PATH_CONFIG_FILE, JSON.stringify(newPaths, null, 2), 'utf8');
@@ -1793,6 +2780,7 @@ app.get('/api/logs/live', (req, res) => {
   }
 });
 
+
 app.post('/api/logs/clear', (req, res) => {
   try {
     const targetDate = (req.query.date || (req.body && req.body.date)) && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || req.body.date)
@@ -1860,25 +2848,6 @@ app.post('/api/test', (req, res) => {
   });
   res.json({ ok: true, sent: result.count, template: result.templateName, templateId: result.templateId, simulated: isSimulated });
 });
-
-// ── WebSocket Helpers ───────────────────────────────────────────────────
-const obsClients = new Set();
-const androidClients = new Set();
-
-function getActiveWsCount(clientSet) {
-  if (!clientSet) return 0;
-  for (const client of clientSet) {
-    if (!client || client.readyState === 2 || client.readyState === 3) {
-      clientSet.delete(client);
-    }
-  }
-  return clientSet.size;
-}
-
-// Fix: use getActiveWsCount() so /health never reports stale/dead sockets
-app.get('/health', (req, res) =>
-  res.json({ status: 'ok', androidClients: getActiveWsCount(androidClients), obsClients: getActiveWsCount(obsClients) })
-);
 
 // ── WebSocket Handler ───────────────────────────────────────────────────
 wss.on('connection', (ws, req) => {
@@ -2019,18 +2988,124 @@ wss.on('close', () => {
 });
 wss.on('error', () => { });
 
-// HTTP and WS share the same underlying server — one port covers both.
-const PREFERRED_PORT = parseInt(process.env.PORT || '2907', 10);
+// ── Health Check Route ────────────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'StreamPe',
+    version: APP_VERSION,
+    hostname: os.hostname(),
+    port: activeServerPort || PREFERRED_PORT,
+    sessionToken: SESSION_TOKEN,
+    primaryIp: getPrimaryIp(),
+    wsPath: '/android',
+    androidClients: getActiveWsCount(androidClients),
+    obsClients: getActiveWsCount(obsClients)
+  });
+});
 
-// ── mDNS Auto-Discovery (Bonjour / Zeroconf) ─────────────────────────
+// HTTP and WS share the same underlying server — one port covers both.
+const PREFERRED_PORT = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
+const SESSION_TOKEN = process.env.STREAMPE_SESSION_TOKEN || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+let activeServerPort = PREFERRED_PORT;
+
+// ── mDNS Auto-Discovery & UDP Direct Broadcast ─────────────────────────
 let bonjourInstance = null;
 let publishedService = null;
+let udpSocket = null;
+
+function startUdpBroadcastListener() {
+  try {
+    if (udpSocket) {
+      try { udpSocket.close(); } catch (_) { }
+    }
+    udpSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    udpSocket.on('message', (msg, rinfo) => {
+      const text = msg.toString().trim();
+      if (text.includes('STREAMPE_DISCOVER')) {
+        const reply = JSON.stringify({
+          type: 'STREAMPE_RESPONSE',
+          app: 'StreamPe',
+          version: APP_VERSION,
+          hostname: os.hostname(),
+          port: activeServerPort,
+          primaryIp: getPrimaryIp()
+        });
+        udpSocket.send(reply, 0, reply.length, rinfo.port, rinfo.address, () => { });
+      }
+    });
+    udpSocket.on('error', (err) => {
+      log.warn('UDP', `UDP Direct Broadcast notice: ${err.message}`);
+    });
+    udpSocket.bind(UDP_DISCOVERY_PORT, () => {
+      log.info('UDP', `UDP Direct Subnet Discovery listener active on port ${UDP_DISCOVERY_PORT}`);
+    });
+  } catch (e) {
+    log.warn('UDP', `Failed to start UDP discovery listener: ${e.message}`);
+  }
+}
+
+function stopUdpBroadcastListener() {
+  if (udpSocket) {
+    try { udpSocket.close(); } catch (_) { }
+    udpSocket = null;
+  }
+}
+
+function ensureWindowsFirewallMdnsRule() {
+  if (os.platform() !== 'win32') return;
+  try {
+    const cmd = 'netsh advfirewall firewall show rule name="StreamPe mDNS (UDP 5353)"';
+    child_process.exec(cmd, (err, stdout) => {
+      if (err || !stdout || !stdout.includes('StreamPe mDNS')) {
+        const addCmd = 'netsh advfirewall firewall add rule name="StreamPe mDNS (UDP 5353)" dir=in action=allow protocol=UDP localport=5353';
+        child_process.exec(addCmd, (addErr) => {
+          if (!addErr) log.info('Firewall', 'Added Windows Defender Firewall rule for mDNS (UDP 5353)');
+        });
+      }
+    });
+  } catch (_) { }
+}
+
+function saveActiveInstanceMetadata(port, token) {
+  try {
+    const activeFile = path.join(SETTINGS_DIR, 'active-instance.json');
+    if (!fs.existsSync(SETTINGS_DIR)) fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+    const meta = {
+      port,
+      sessionToken: token,
+      pid: process.pid,
+      primaryIp: getPrimaryIp(),
+      hostname: os.hostname(),
+      boundAt: Date.now()
+    };
+    fs.writeFileSync(activeFile, JSON.stringify(meta, null, 2), 'utf8');
+  } catch (_) { }
+}
+
+let lastPrimaryIp = '';
+function startNetworkChangeListener() {
+  lastPrimaryIp = getPrimaryIp();
+  setInterval(() => {
+    const currentIp = getPrimaryIp();
+    if (currentIp !== lastPrimaryIp && currentIp !== '127.0.0.1') {
+      log.info('Network', `🌐 Primary IP changed: ${lastPrimaryIp} ➔ ${currentIp}. Re-broadcasting mDNS and updating metadata.`);
+      lastPrimaryIp = currentIp;
+      if (activeServerPort) {
+        startMdnsDiscovery(activeServerPort);
+        saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
+        const payload = JSON.stringify({ type: 'network_changed', primaryIp: currentIp });
+        androidClients.forEach(ws => { try { ws.send(payload); } catch (_) { } });
+        obsClients.forEach(ws => { try { ws.send(payload); } catch (_) { } });
+      }
+    }
+  }, 10000);
+}
 
 function startMdnsDiscovery(port, retryCount = 0) {
   try {
     if (!bonjourInstance) {
       bonjourInstance = new Bonjour();
-      // Catch any unexpected socket errors on the underlying registry
       if (bonjourInstance._server && typeof bonjourInstance._server.on === 'function') {
         bonjourInstance._server.on('error', () => { });
       }
@@ -2038,25 +3113,33 @@ function startMdnsDiscovery(port, retryCount = 0) {
     const hostName = os.hostname() || 'Streamer-PC';
     let serviceName = `StreamPe - ${hostName}`;
     if (port !== PREFERRED_PORT || retryCount > 0) {
-      serviceName += ` (Port ${port}${retryCount > 0 ? ` #${retryCount}` : ''})`;
+      const instanceIdx = FALLBACK_PORTS.indexOf(port);
+      const displayNum = instanceIdx > 0 ? instanceIdx : (retryCount > 0 ? retryCount : 1);
+      serviceName += ` (${displayNum})`;
+    }
+
+    if (publishedService) {
+      try { publishedService.destroy(); } catch (_) { }
     }
 
     publishedService = bonjourInstance.publish({
       name: serviceName,
-      type: 'payment-alerts',
+      type: 'streampe',
       protocol: 'tcp',
       port: port,
       probe: false,
       txt: {
-        version: '2.1.0',
+        version: APP_VERSION,
         server: 'streampe',
         hostname: hostName,
-        wsPath: '/android'
+        os: os.platform(),
+        wsPath: '/android',
+        sessionRequired: 'true'
       }
     });
 
     publishedService.on('up', () => {
-      log.info('mDNS', `Auto-Discovery active: _payment-alerts._tcp.local on port ${port} ("${serviceName}")`);
+      log.info('mDNS', `Auto-Discovery active: _streampe._tcp.local on port ${port} ("${serviceName}")`);
     });
 
     publishedService.on('error', (err) => {
@@ -2088,6 +3171,19 @@ function stopMdnsDiscovery() {
 
 process.on('exit', () => stopMdnsDiscovery());
 
+if (process.platform === 'win32' && process.stdin && process.stdin.isTTY) {
+  try {
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.on('SIGINT', () => {
+      process.emit('SIGINT');
+    });
+  } catch (_) { }
+}
+
 process.on('SIGINT', () => {
   stopMdnsDiscovery();
   setTimeout(() => process.exit(0), 50);
@@ -2106,32 +3202,46 @@ process.once('SIGUSR2', () => {
   }, 50);
 });
 
-function startServer(port) {
-  server.listen(port, '0.0.0.0');
+function startServer(portIdx = 0) {
+  const targetPort = FALLBACK_PORTS[portIdx] !== undefined ? FALLBACK_PORTS[portIdx] : 0;
+
+  server.listen(targetPort, '0.0.0.0');
 
   server.once('listening', () => {
-    const actualPort = server.address().port;
-    if (actualPort !== PREFERRED_PORT) {
-      log.warn('Server', `⚠️  Port ${PREFERRED_PORT} was in use — started on fallback port ${actualPort}`);
+    activeServerPort = server.address().port;
+    console.log(`[INSTANCE_AUTH] PORT=${activeServerPort} TOKEN=${SESSION_TOKEN}`);
+
+    if (activeServerPort !== PREFERRED_PORT) {
+      log.warn('Server', `⚠️  Port ${PREFERRED_PORT} was in use — bound to fallback port ${activeServerPort}`);
     }
-    ensureWindowsFirewallRule();
-    startMdnsDiscovery(actualPort);
+
+    saveActiveInstanceMetadata(activeServerPort, SESSION_TOKEN);
+    ensureWindowsFirewallMdnsRule();
+    autoSyncWindowsStartupPath();
+    startMdnsDiscovery(activeServerPort);
+    startUdpBroadcastListener();
+    startNetworkChangeListener();
+
     const primaryIp = getPrimaryIp();
     const ips = getLocalIpAddresses();
     log.info('Server', `\n🚀 StreamPe PC Server Running!`);
     log.info('Server', `   -------------------------------------------------`);
-    log.info('Server', `   📱 Mobile App Connection IP: http://${primaryIp}:${actualPort}`);
-    log.info('Server', `   🔍 mDNS Auto-Discovery:      _payment-alerts._tcp (Port ${actualPort})`);
+    log.info('Server', `   📱 Mobile App Connection IP: http://${primaryIp}:${activeServerPort}`);
+    log.info('Server', `   🔍 mDNS Auto-Discovery:      _streampe._tcp (Port ${activeServerPort})`);
     ips.forEach(ip => log.info('Server', `      Network Adapter [${ip.name}]: ${ip.address}`));
-    log.info('Server', `   🖥️ OBS Config Dashboard:   http://${primaryIp}:${actualPort}/config`);
-    log.info('Server', `   📡 OBS Alert Overlay:       http://${primaryIp}:${actualPort}/overlay/alerts`);
+    log.info('Server', `   🖥️ OBS Config Dashboard:   http://${primaryIp}:${activeServerPort}/config`);
+    log.info('Server', `   📡 OBS Alert Overlay:       http://${primaryIp}:${activeServerPort}/overlay/alerts`);
     log.info('Server', `   -------------------------------------------------`);
   });
 
   server.once('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      log.warn('Server', `Port ${port} is already in use — retrying on a random available port...`);
-      server.close(() => startServer(0));
+    if (err.code === 'EADDRINUSE' && portIdx + 1 < FALLBACK_PORTS.length) {
+      const nextPort = FALLBACK_PORTS[portIdx + 1];
+      log.warn('Server', `Port ${targetPort} in use — retrying on fallback port ${nextPort}...`);
+      server.close(() => startServer(portIdx + 1));
+    } else if (err.code === 'EADDRINUSE') {
+      log.warn('Server', `All fallback ports in use — binding to random OS port...`);
+      server.close(() => startServer(FALLBACK_PORTS.length - 1));
     } else {
       log.error('Server', `Failed to start server: ${err.message}`);
       process.exit(1);
@@ -2139,9 +3249,7 @@ function startServer(port) {
   });
 }
 
-startServer(PREFERRED_PORT);
+startServer(0);
 
-// Export the http.Server instance so Electron's main.js can read
-// server.address().port after the server has started listening —
-// this works for both the preferred port and any random fallback port.
+// Export the http.Server instance
 module.exports = server;

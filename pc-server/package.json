@@ -1,16 +1,25 @@
 {
   "name": "streampe-server",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "StreamPe - PC Server App",
   "author": "clowneon1",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon --watch server.js server.js",
+    "test": "node tests/run-all-tests.js",
+    "build": "node scripts/package-release.js",
+    "build:patch": "node scripts/package-release.js patch",
+    "build:minor": "node scripts/package-release.js minor",
+    "build:major": "node scripts/package-release.js major",
+    "dist": "node scripts/package-release.js",
+    "dist:patch": "node scripts/package-release.js patch",
+    "dist:minor": "node scripts/package-release.js minor",
+    "dist:major": "node scripts/package-release.js major",
     "bun:build": "node scripts/build-bun-sidecar.js",
     "app:dev": "node scripts/build-bun-sidecar.js && tauri dev",
     "app:dist": "node scripts/package-release.js",
-    "version": "node scripts/sync-version.js && git add src-tauri/Cargo.toml src-tauri/tauri.conf.json ../android-app/app/build.gradle"
+    "version": "node scripts/sync-version.js && git add src-tauri/Cargo.toml src-tauri/tauri.conf.json constants.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

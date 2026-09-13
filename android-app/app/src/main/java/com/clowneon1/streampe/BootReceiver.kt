@@ -18,6 +18,6 @@ class BootReceiver : BroadcastReceiver() {
         if (prefs.serverUrl.isBlank() || !prefs.isConnected) return
 
         val serviceIntent = Intent(context, NotificationForwarderService::class.java)
-        context.startForegroundService(serviceIntent)
+        androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
     }
 }

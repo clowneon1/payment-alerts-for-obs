@@ -21,7 +21,6 @@ class NotificationForwarderService : Service() {
 
     private val keepAliveRunnable = object : Runnable {
         override fun run() {
-            // Ping WebSocket to keep connection alive & detect drops early
             WebSocketManager.ping()
             keepAliveHandler.postDelayed(this, keepAliveInterval)
         }
@@ -38,6 +37,12 @@ class NotificationForwarderService : Service() {
         )
         acquireWakeLock()
         keepAliveHandler.postDelayed(keepAliveRunnable, keepAliveInterval)
+
+        WebSocketManager.onServerUrlChanged = { newUrl ->
+            try {
+                AppPrefs(this).serverUrl = newUrl
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -46,36 +51,38 @@ class NotificationForwarderService : Service() {
             return START_NOT_STICKY
         }
 
-        // Reconnect WebSocket if it dropped
         val prefs = AppPrefs(this)
-        if (prefs.serverUrl.isNotBlank()) {
+        if (prefs.serverUrl.isNotBlank() && prefs.isConnected) {
             val wsUrl = prefs.serverUrl
                 .replace("http://", "ws://")
-                .replace("https://", "wss://") + "/android"
+                .replace("https://", "wss://")
+                .trimEnd('/') + "/android"
             WebSocketManager.connectIfNeeded(wsUrl)
         }
 
-        // Restore saved selected packages into NotificationService
         NotificationService.allowedPackages = prefs.selectedPackages
-
-        return START_STICKY  // Android restarts this service if killed
+        return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // App was swiped away from recents — reschedule restart
-        val restartIntent = Intent(applicationContext, NotificationForwarderService::class.java)
-        val pending = PendingIntent.getService(
-            applicationContext, 1, restartIntent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
-        alarm.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 2000, pending)
+        try {
+            val restartIntent = Intent(applicationContext, NotificationForwarderService::class.java)
+            val pending = PendingIntent.getService(
+                applicationContext, 1, restartIntent,
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+            alarm.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 2000, pending)
+        } catch (_: Exception) {}
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         keepAliveHandler.removeCallbacks(keepAliveRunnable)
-        wakeLock?.release()
+        if (wakeLock?.isHeld == true) {
+            try { wakeLock?.release() } catch (_: Exception) {}
+        }
+        wakeLock = null
         super.onDestroy()
     }
 
@@ -86,17 +93,19 @@ class NotificationForwarderService : Service() {
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "StreamPe::NotificationWakeLock"
-        ).also { it.acquire(10 * 60 * 1000L) } // max 10 min, re-acquired via keepalive
+        ).also {
+            try {
+                it.acquire(10 * 60 * 1000L)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun buildNotification(): Notification {
-        // Tapping the notification opens AppSelectorActivity
         val openIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, AppSelectorActivity::class.java),
+            Intent(this, HomeActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        // Stop action in notification
         val stopIntent = PendingIntent.getService(
             this, 0,
             Intent(this, NotificationForwarderService::class.java).apply { action = ACTION_STOP },
@@ -104,21 +113,21 @@ class NotificationForwarderService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("StreamPe")
-            .setContentText("Running — forwarding notifications to stream")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentText("Active — listening for payment notifications")
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_delete, "Stop", stopIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent)
             .build()
     }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "StreamPe Alerts",
+            "StreamPe Background Service",
             NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Keeps notification forwarding alive in background" }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        ).apply { description = "Keeps payment notification listener active during stream" }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 }

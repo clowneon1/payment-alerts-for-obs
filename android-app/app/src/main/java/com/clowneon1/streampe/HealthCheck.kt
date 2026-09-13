@@ -18,10 +18,12 @@ object HealthCheck {
                 callback(false, "Cannot reach server: ${e.message}")
             }
             override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    callback(true, "OK")
-                } else {
-                    callback(false, "Server returned ${response.code}")
+                response.use { res ->
+                    if (res.isSuccessful) {
+                        callback(true, "OK")
+                    } else {
+                        callback(false, "Server returned ${res.code}")
+                    }
                 }
             }
         })

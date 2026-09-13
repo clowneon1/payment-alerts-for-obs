@@ -29,49 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const iframe = el('preview-iframe');
 
   function initCodeEditors() {
-    const editorConfigs = [
-      { id: 'input-custom-html', mode: 'htmlmixed' },
-      { id: 'input-custom-css', mode: 'css' },
-      { id: 'input-custom-js', mode: 'javascript' },
-      { id: 'input-goal-custom-html', mode: 'htmlmixed' },
-      { id: 'input-goal-custom-css', mode: 'css' },
-      { id: 'input-goal-custom-js', mode: 'javascript' },
-      { id: 'input-lb-custom-html', mode: 'htmlmixed' },
-      { id: 'input-lb-custom-css', mode: 'css' },
-      { id: 'input-lb-custom-js', mode: 'javascript' },
-      { id: 'input-recent-custom-html', mode: 'htmlmixed' },
-      { id: 'input-recent-custom-css', mode: 'css' },
-      { id: 'input-recent-custom-js', mode: 'javascript' },
-      { id: 'input-list-custom-html', mode: 'htmlmixed' },
-      { id: 'input-list-custom-css', mode: 'css' },
-      { id: 'input-list-custom-js', mode: 'javascript' },
-      { id: 'input-cycling-custom-html', mode: 'htmlmixed' },
-      { id: 'input-cycling-custom-css', mode: 'css' },
-      { id: 'input-cycling-custom-js', mode: 'javascript' }
-    ];
+    // Inline editors replaced by centralized Code Studio
+  }
 
-    editorConfigs.forEach(conf => {
-      const textarea = el(conf.id);
-      if (!textarea) return;
-
-      const editor = CodeMirror.fromTextArea(textarea, {
-        mode: conf.mode,
-        theme: 'dracula',
-        lineNumbers: true,
-        matchBrackets: true,
-        autoCloseBrackets: true,
-        tabSize: 2,
-        indentUnit: 2,
-        viewportMargin: Infinity,
-        lineWrapping: true
-      });
-
-      editor.on('change', () => {
-        if (!suppressSync) syncLivePreview();
-      });
-
-      editors[conf.id] = editor;
-    });
+  function pulseEditorElement(cmInstance) {
+    if (!cmInstance) return;
+    const wrapper = cmInstance.getWrapperElement ? cmInstance.getWrapperElement() : (cmInstance.nodeType ? cmInstance : null);
+    if (wrapper) {
+      wrapper.classList.remove('editor-flash-pulse');
+      void wrapper.offsetWidth;
+      wrapper.classList.add('editor-flash-pulse');
+      setTimeout(() => wrapper.classList.remove('editor-flash-pulse'), 700);
+    }
   }
 
   async function formatCode(editorId) {
@@ -95,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
         singleQuote: true
       });
       editor.setValue(formatted);
-      showToast('<i data-lucide="check"></i> Code formatted');
+      pulseEditorElement(editor);
+      showToast('<i data-lucide="check"></i> Code formatted', 'success');
     } catch (err) {
       console.warn('[Prettier] Formatting error:', err);
       showToast('<i data-lucide="alert-triangle"></i> Format failed: ' + err.message.split('\n')[0], 'error');
@@ -107,7 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!toast) return;
     toast.innerHTML = message;
     if (window.lucide) lucide.createIcons();
-    toast.style.borderColor = type === 'success' ? '#00e676' : (type === 'error' ? '#ff5252' : 'var(--accent)');
+    toast.style.borderColor = type === 'error' ? '#ff5252' : 'var(--accent, #9146ff)';
+    toast.style.boxShadow = type === 'error' ? '0 8px 32px rgba(0, 0, 0, 0.75), 0 0 18px rgba(255, 82, 82, 0.35)' : '0 8px 32px rgba(0, 0, 0, 0.75), 0 0 18px var(--accent-glow, rgba(145, 70, 255, 0.35))';
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 3000);
   }
@@ -166,6 +137,470 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') AppModal.hide(null);
   });
 
+  // ── Advanced Fullscreen Code Studio Controller ──────────────
+  // ── Advanced Fullscreen Code Studio Controller ──────────────
+  const CodeStudio = {
+    modal: null,
+    editor: null,
+    activeWidget: 'alerts', // 'alerts' | 'goal' | 'list' | 'cycling'
+    activeLang: 'html',     // 'html' | 'css' | 'js'
+    activeBottomTab: 'vars', // 'vars' | 'classes'
+    previewVisible: true,
+    debounceTimer: null,
+
+    variablesMap: ConfigSchema.TEMPLATE_VARIABLES,
+    cssClassesMap: ConfigSchema.CSS_CLASSES_MAP,
+
+    widgetTargetMap: {
+      alerts: {
+        badge: 'ALERTS',
+        previewUrl: '/overlay/alert',
+        codeKind: 'alert'
+      },
+      goal: {
+        badge: 'GOAL WIDGET',
+        previewUrl: '/overlay/goal',
+        codeKind: 'goal'
+      },
+      list: {
+        badge: 'LIST WIDGET',
+        previewUrl: '/overlay/list',
+        codeKind: 'leaderboard'
+      },
+      cycling: {
+        badge: 'CYCLING WIDGET',
+        previewUrl: '/overlay/cycling-widget',
+        codeKind: 'cycling'
+      }
+    },
+
+    getCodeObject() {
+      if (this.activeWidget === 'alerts') {
+        const tpl = currentTemplate();
+        if (tpl) {
+          if (!tpl.code) tpl.code = ConfigSchema.normalizeCode({}, 'alert');
+          return tpl.code;
+        }
+      } else if (this.activeWidget === 'goal') {
+        const g = config.widgets?.goal;
+        if (g) {
+          if (!g.code) g.code = ConfigSchema.normalizeCode({}, 'goal');
+          return g.code;
+        }
+      } else if (this.activeWidget === 'list') {
+        const l = currentListConfig();
+        if (l) {
+          if (!l.code) l.code = ConfigSchema.normalizeCode({}, l.type === 'recent' ? 'recent' : 'leaderboard');
+          return l.code;
+        }
+      } else if (this.activeWidget === 'cycling') {
+        const c = config.widgets?.cycling;
+        if (c) {
+          if (!c.code) c.code = ConfigSchema.normalizeCode({}, 'cycling');
+          return c.code;
+        }
+      }
+      return null;
+    },
+
+    getCurrentLangKey(lang) {
+      if (lang === 'html') return 'customHTML';
+      if (lang === 'css') return 'customCSS';
+      if (lang === 'js') return 'customJS';
+      return 'customHTML';
+    },
+
+    getCodeValue(lang) {
+      const codeObj = this.getCodeObject();
+      if (!codeObj) return '';
+      const key = this.getCurrentLangKey(lang);
+      return typeof codeObj[key] === 'string' ? codeObj[key] : '';
+    },
+
+    syncCurrentToConfig() {
+      if (!this.editor) return;
+      const codeObj = this.getCodeObject();
+      if (!codeObj) return;
+      const key = this.getCurrentLangKey(this.activeLang);
+      codeObj[key] = this.editor.getValue();
+    },
+
+    init() {
+      this.modal = el('modal-code-studio');
+      if (!this.modal) return;
+
+      const textarea = el('input-studio-editor-textarea');
+      if (textarea && !this.editor && window.CodeMirror) {
+        this.editor = CodeMirror.fromTextArea(textarea, {
+          mode: 'htmlmixed',
+          theme: 'dracula',
+          lineNumbers: true,
+          matchBrackets: true,
+          autoCloseBrackets: true,
+          tabSize: 2,
+          indentUnit: 2,
+          lineWrapping: true,
+          viewportMargin: Infinity
+        });
+
+        this.editor.on('change', () => {
+          this.onEditorChange();
+        });
+
+        this.editor.on('cursorActivity', () => {
+          this.updateCursorStatus();
+        });
+      }
+
+      this.bindEvents();
+    },
+
+    bindEvents() {
+      document.querySelectorAll('.btn-popout-code').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const widget = btn.dataset.popoutWidget || 'alerts';
+          this.open(widget, 'html');
+        });
+      });
+
+      const closeBtn = el('btn-studio-close');
+      const saveBtn = el('btn-studio-save');
+      const backdrop = el('code-studio-backdrop');
+      if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+      if (backdrop) backdrop.addEventListener('click', () => this.close());
+      if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+          this.syncCurrentToConfig();
+          const res = await saveToServer();
+          if (res && res.ok) {
+            showToast('<i data-lucide="check"></i> Code changes saved successfully!', 'success');
+          }
+        });
+      }
+
+      document.querySelectorAll('.code-studio-lang-btn').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const lang = tab.dataset.studioLang;
+          this.switchLang(lang);
+        });
+      });
+
+      document.querySelectorAll('.code-studio-bottom-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          this.activeBottomTab = tab.dataset.bottomTab;
+          document.querySelectorAll('.code-studio-bottom-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.bottomTab === this.activeBottomTab);
+          });
+          this.renderBottomPanel();
+        });
+      });
+
+      const formatBtn = el('btn-studio-format');
+      if (formatBtn) formatBtn.addEventListener('click', () => this.formatCurrentCode());
+
+      const resetBtn = el('btn-studio-reset');
+      if (resetBtn) resetBtn.addEventListener('click', () => this.resetCurrentCode());
+
+      const togglePreviewBtn = el('btn-studio-toggle-preview');
+      if (togglePreviewBtn) togglePreviewBtn.addEventListener('click', () => this.togglePreview());
+
+      const testBtn = el('btn-studio-trigger-test');
+      if (testBtn) testBtn.addEventListener('click', () => this.triggerTestInPreview());
+
+      window.addEventListener('keydown', async (e) => {
+        if (!this.isOpen()) return;
+
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this.close();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          this.syncCurrentToConfig();
+          const res = await saveToServer();
+          if (res && res.ok) showToast('<i data-lucide="check"></i> Code changes saved!', 'success');
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          this.formatCurrentCode();
+        }
+      });
+    },
+
+    isOpen() {
+      return this.modal && this.modal.style.display !== 'none';
+    },
+
+    open(widget = 'alerts', lang = 'html') {
+      this.activeWidget = widget;
+      this.activeLang = lang;
+
+      const meta = this.widgetTargetMap[widget] || this.widgetTargetMap.alerts;
+      const badgeEl = el('code-studio-badge');
+      if (badgeEl) {
+        if (widget === 'list') {
+          const activeList = currentListConfig();
+          badgeEl.textContent = (activeList && activeList.type === 'recent') ? 'RECENT DONATIONS' : 'TOP SUPPORTERS';
+        } else {
+          badgeEl.textContent = meta.badge;
+        }
+      }
+
+      const testBtn = el('btn-studio-trigger-test');
+      if (testBtn) {
+        testBtn.style.display = (widget === 'alerts') ? 'inline-flex' : 'none';
+      }
+
+      const iframe = el('code-studio-iframe');
+      if (iframe) {
+        let previewUrl = meta.previewUrl;
+        if (widget === 'list') {
+          const activeList = currentListConfig();
+          previewUrl = `/overlay/list?id=${activeList.id}`;
+        }
+        iframe.src = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}preview=true&t=${Date.now()}`;
+      }
+
+      this.modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+
+      this.switchLang(lang, true);
+      if (window.lucide) lucide.createIcons();
+    },
+
+    close() {
+      this.syncCurrentToConfig();
+      if (this.modal) this.modal.style.display = 'none';
+      document.body.style.overflow = '';
+      readFormValues();
+      syncLivePreview();
+    },
+
+    switchLang(lang, isInitial = false) {
+      if (!isInitial) {
+        this.syncCurrentToConfig();
+      }
+
+      this.activeLang = lang;
+
+      document.querySelectorAll('.code-studio-lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.studioLang === lang);
+      });
+
+      const modePill = el('code-studio-mode-pill');
+      if (modePill) modePill.textContent = lang.toUpperCase();
+
+      let mode = 'htmlmixed';
+      if (lang === 'css') mode = 'css';
+      if (lang === 'js') mode = 'javascript';
+
+      // Auto set bottom tab to classes for CSS, or vars for HTML/JS
+      this.activeBottomTab = lang === 'css' ? 'classes' : 'vars';
+      document.querySelectorAll('.code-studio-bottom-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.bottomTab === this.activeBottomTab);
+      });
+
+      const initialValue = this.getCodeValue(lang);
+
+      if (this.editor) {
+        this.editor.setOption('mode', mode);
+        this.editor.setValue(initialValue || '');
+        this.editor.clearHistory();
+        setTimeout(() => {
+          this.editor.refresh();
+          this.editor.focus();
+        }, 50);
+      }
+
+      this.renderBottomPanel();
+      this.updateCursorStatus();
+    },
+
+    renderBottomPanel() {
+      const container = el('code-studio-bottom-content');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      if (this.activeBottomTab === 'vars') {
+        const vars = this.variablesMap[this.activeWidget] || [];
+        if (vars.length === 0) {
+          container.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">No template variables for this widget.</span>';
+          return;
+        }
+
+        vars.forEach(v => {
+          const varName = (typeof v === 'object' && v !== null) ? v.name : String(v);
+          const varDesc = (typeof v === 'object' && v !== null) ? v.desc : '';
+          const insertText = this.activeLang === 'js' ? varName : `{{${varName}}}`;
+
+          const chip = document.createElement('span');
+          chip.className = 'code-studio-chip';
+          chip.textContent = insertText;
+          if (varDesc) {
+            chip.title = `${varName}: ${varDesc} (Click to insert/copy)`;
+          }
+          chip.addEventListener('click', () => {
+            if (this.editor) {
+              const doc = this.editor.getDoc();
+              const cursor = doc.getCursor();
+              doc.replaceRange(insertText, cursor);
+              this.editor.focus();
+            }
+            copyToClipboard(insertText).catch(() => { });
+            showToast(`<i data-lucide="copy"></i> Copied "${insertText}"`);
+          });
+          container.appendChild(chip);
+        });
+      } else {
+        const classes = this.cssClassesMap[this.activeWidget] || [];
+        if (classes.length === 0) {
+          container.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">No class selectors for this widget.</span>';
+          return;
+        }
+
+        classes.forEach(c => {
+          const pill = document.createElement('span');
+          pill.className = 'code-studio-class-pill';
+          pill.textContent = `{ ${c} }`;
+          pill.addEventListener('click', () => {
+            if (this.activeLang === 'css' && this.editor) {
+              const doc = this.editor.getDoc();
+              const cursor = doc.getCursor();
+              doc.replaceRange(`\n${c} {\n  \n}\n`, cursor);
+              this.editor.focus();
+            }
+            copyToClipboard(c).catch(() => { });
+            showToast(`<i data-lucide="copy"></i> Copied selector "${c}"`);
+          });
+          container.appendChild(pill);
+        });
+      }
+
+      if (window.lucide) lucide.createIcons();
+    },
+
+    onEditorChange() {
+      this.syncCurrentToConfig();
+      this.updateCursorStatus();
+
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        syncLivePreview();
+      }, 100);
+    },
+
+    updateCursorStatus() {
+      if (!this.editor) return;
+      const cursor = this.editor.getCursor();
+      const posEl = el('code-studio-cursor-info');
+      if (posEl) {
+        posEl.textContent = `Ln ${cursor.line + 1}, Col ${cursor.ch + 1}`;
+      }
+      const charEl = el('code-studio-char-info');
+      if (charEl) {
+        const val = this.editor.getValue() || '';
+        charEl.textContent = `${val.length} chars`;
+      }
+    },
+
+    async formatCurrentCode() {
+      if (!this.editor || !window.prettier) return;
+
+      const code = this.editor.getValue();
+      let parser = 'html';
+      let plugins = [prettierPlugins.html];
+
+      if (this.activeLang === 'css') {
+        parser = 'css';
+        plugins = [prettierPlugins.postcss];
+      } else if (this.activeLang === 'js') {
+        parser = 'babel';
+        plugins = [prettierPlugins.babel];
+      }
+
+      try {
+        const formatted = await prettier.format(code, {
+          parser,
+          plugins,
+          tabWidth: 2,
+          singleQuote: true,
+          printWidth: 80
+        });
+        this.editor.setValue(formatted);
+        this.syncCurrentToConfig();
+        syncLivePreview();
+        pulseEditorElement(this.editor);
+        showToast('<i data-lucide="check"></i> Code formatted', 'success');
+      } catch (err) {
+        console.warn('[Prettier] Formatting error:', err);
+        showToast('<i data-lucide="alert-triangle"></i> Format failed: ' + err.message.split('\n')[0], 'error');
+      }
+    },
+
+    resetCurrentCode() {
+      if (!this.editor) return;
+      let defaultCode = '';
+      if (this.activeWidget === 'alerts') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.alert.customJS;
+      } else if (this.activeWidget === 'goal') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.goal.customJS;
+      } else if (this.activeWidget === 'list') {
+        const activeList = currentListConfig();
+        const kind = (activeList && activeList.type === 'recent') ? 'recent' : 'leaderboard';
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE[kind].customJS;
+      } else if (this.activeWidget === 'cycling') {
+        if (this.activeLang === 'html') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customHTML;
+        if (this.activeLang === 'css') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customCSS;
+        if (this.activeLang === 'js') defaultCode = ConfigSchema.DEFAULT_CODE.cycling.customJS;
+      }
+
+      this.editor.setValue(defaultCode);
+      this.syncCurrentToConfig();
+      syncLivePreview();
+      pulseEditorElement(this.editor);
+      showToast('<i data-lucide="rotate-ccw"></i> Reset to default code');
+    },
+
+    togglePreview() {
+      this.previewVisible = !this.previewVisible;
+      const previewCol = el('code-studio-preview-column');
+      const editorCol = el('code-studio-editor-column');
+      const label = el('lbl-studio-preview-toggle');
+
+      if (previewCol) previewCol.classList.toggle('hidden', !this.previewVisible);
+      if (editorCol) editorCol.classList.toggle('full-width', !this.previewVisible);
+      if (label) label.textContent = this.previewVisible ? 'Hide Preview' : 'Show Preview';
+
+      setTimeout(() => {
+        if (this.editor) this.editor.refresh();
+      }, 250);
+    },
+
+    triggerTestInPreview() {
+      const iframe = el('code-studio-iframe');
+      if (!iframe || !iframe.contentWindow) return;
+
+      const loadedTemplate = currentTemplate();
+      const testData = {
+        ...sampleAlert(),
+        alertTemplateId: loadedTemplate ? loadedTemplate.id : null
+      };
+
+      iframe.contentWindow.postMessage({
+        type: 'TRIGGER_TEST_ALERT',
+        data: testData
+      }, '*');
+
+      showToast('<i data-lucide="zap"></i> Sent test event to preview sandbox');
+    }
+  };
+
   // Works in both HTTPS (navigator.clipboard) and plain HTTP / OBS browser sources (execCommand fallback).
   // Pass the originating button element as the second argument to get a visual "✓ Copied!" flash animation.
   function copyToClipboard(text, triggerBtn) {
@@ -187,33 +622,24 @@ document.addEventListener('DOMContentLoaded', () => {
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-    } catch (_) {}
+    } catch (_) { }
   }
   function _flashCopied(btn) {
     if (!btn || btn._copying) return;
     btn._copying = true;
     const original = btn.innerHTML;
     const originalTitle = btn.title;
-    const originalBg = btn.style.background;
-    const originalColor = btn.style.color;
-    const originalBorder = btn.style.border;
-    btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px;"></i>';
+    btn.innerHTML = '<i data-lucide="check" style="width:13px;height:13px;stroke:var(--cyan);"></i>';
     btn.title = 'Copied!';
-    if (window.lucide) lucide.createIcons({ attrs: { class: 'lucide' }, nameAttr: 'data-lucide' });
-    btn.style.background = '#00e676';
-    btn.style.color = '#000';
-    btn.style.border = '1.5px solid #00e676';
+    if (window.lucide) lucide.createIcons();
     btn.classList.add('btn-copy-flash');
     setTimeout(() => {
       btn.innerHTML = original;
       btn.title = originalTitle;
-      btn.style.background = originalBg;
-      btn.style.color = originalColor;
-      btn.style.border = originalBorder;
       btn.classList.remove('btn-copy-flash');
       btn._copying = false;
-      if (window.lucide) lucide.createIcons({ attrs: { class: 'lucide' }, nameAttr: 'data-lucide' });
-    }, 1600);
+      if (window.lucide) lucide.createIcons();
+    }, 1500);
   }
 
   // ── Generic field helpers ────────────────────────────────────
@@ -483,21 +909,22 @@ document.addEventListener('DOMContentLoaded', () => {
         positionY: tplAnchor.y,
         width: numVal('tpl-layout-width', template.layout.width)
       });
+      const prevTplCode = template.code || ConfigSchema.DEFAULT_CODE.alert;
       template.code = {
         enableCustomCode: checked('chk-enable-custom-code', false),
-        customHTML: val('input-custom-html', ''),
-        customCSS: val('input-custom-css', ''),
-        customJS: val('input-custom-js', '')
+        customHTML: (typeof prevTplCode.customHTML === 'string') ? prevTplCode.customHTML : ConfigSchema.DEFAULT_CODE.alert.customHTML,
+        customCSS: (typeof prevTplCode.customCSS === 'string') ? prevTplCode.customCSS : ConfigSchema.DEFAULT_CODE.alert.customCSS,
+        customJS: (typeof prevTplCode.customJS === 'string') ? prevTplCode.customJS : ConfigSchema.DEFAULT_CODE.alert.customJS
       };
     }
 
     const goal = config.widgets.goal;
+    const prevGoalCurrent = goal.currentAmount;
     goal.enabled = checked('chk-enable-goal', goal.enabled);
     goal.allowOverflow = checked('chk-goal-allow-overflow', !!goal.allowOverflow);
     goal.title = val('input-goal-title', goal.title);
     goal.targetAmount = numVal('input-goal-target', goal.targetAmount);
-    goal.currentAmount = numVal('input-goal-current', goal.currentAmount);
-    goal.startAmount = numVal('input-goal-start', goal.startAmount);
+    goal.currentAmount = numVal('input-goal-current', prevGoalCurrent !== undefined ? prevGoalCurrent : 0);
     goal.endDate = val('input-goal-end-date', goal.endDate);
     goal.text = Object.assign(readTextStyle(TEXT_PREFIXES.goal, goal.text), {
       titleTemplate: val('input-goal-title', goal.text.titleTemplate)
@@ -517,11 +944,12 @@ document.addEventListener('DOMContentLoaded', () => {
       fillColor2: val('input-goal-fill-color2-hex') || val('input-goal-fill-color2', goal.style.fillColor2),
       effect: val('select-goal-effect', goal.style.effect)
     });
+    const prevGoalCode = goal.code || ConfigSchema.DEFAULT_CODE.goal;
     goal.code = {
       enableCustomCode: checked('chk-enable-goal-custom-code', false),
-      customHTML: val('input-goal-custom-html', ''),
-      customCSS: val('input-goal-custom-css', ''),
-      customJS: val('input-goal-custom-js', '')
+      customHTML: (typeof prevGoalCode.customHTML === 'string') ? prevGoalCode.customHTML : ConfigSchema.DEFAULT_CODE.goal.customHTML,
+      customCSS: (typeof prevGoalCode.customCSS === 'string') ? prevGoalCode.customCSS : ConfigSchema.DEFAULT_CODE.goal.customCSS,
+      customJS: (typeof prevGoalCode.customJS === 'string') ? prevGoalCode.customJS : ConfigSchema.DEFAULT_CODE.goal.customJS
     };
 
     const activeList = currentListConfig();
@@ -555,25 +983,31 @@ document.addEventListener('DOMContentLoaded', () => {
       activeList.layout = Object.assign({}, activeList.layout, {
         width: numVal('input-list-layout-width', activeList.layout?.width || 450)
       });
+      const listDefault = activeList.type === 'recent' ? ConfigSchema.DEFAULT_CODE.recent : ConfigSchema.DEFAULT_CODE.leaderboard;
+      const prevListCode = activeList.code || listDefault;
       activeList.code = {
         enableCustomCode: checked('chk-enable-list-custom-code', false),
-        customHTML: val('input-list-custom-html', ''),
-        customCSS: val('input-list-custom-css', ''),
-        customJS: val('input-list-custom-js', '')
+        customHTML: (typeof prevListCode.customHTML === 'string') ? prevListCode.customHTML : listDefault.customHTML,
+        customCSS: (typeof prevListCode.customCSS === 'string') ? prevListCode.customCSS : listDefault.customCSS,
+        customJS: (typeof prevListCode.customJS === 'string') ? prevListCode.customJS : listDefault.customJS
       };
 
       if (activeList.type === 'leaderboard') {
+        const prevSupporters = config.widgets.leaderboard.supporters;
         config.widgets.leaderboard.title = activeList.title;
         config.widgets.leaderboard.maxEntries = activeList.maxEntries;
         config.widgets.leaderboard.showAmounts = activeList.showAmounts;
         config.widgets.leaderboard.style = Object.assign({}, activeList.style);
         config.widgets.leaderboard.text = Object.assign({}, activeList.text);
+        if (prevSupporters) config.widgets.leaderboard.supporters = prevSupporters;
       } else {
+        const prevRecent = config.widgets.recent.recentDonations;
         config.widgets.recent.title = activeList.title;
         config.widgets.recent.maxEntries = activeList.maxEntries;
         config.widgets.recent.showAmounts = activeList.showAmounts;
         config.widgets.recent.style = Object.assign({}, activeList.style);
         config.widgets.recent.text = Object.assign({}, activeList.text);
+        if (prevRecent) config.widgets.recent.recentDonations = prevRecent;
       }
     }
 
@@ -605,8 +1039,8 @@ document.addEventListener('DOMContentLoaded', () => {
       mediaRadius: numVal('input-cycling-media-radius', 8)
     });
 
-    const cyclingPreset = val('cycling-position-preset', 'bottom-left');
-    const cyclingAnchor = ConfigSchema.POSITION_PRESETS[cyclingPreset] || { x: 10, y: 90 };
+    const cyclingPreset = val('cycling-position-preset', 'center');
+    const cyclingAnchor = ConfigSchema.POSITION_PRESETS[cyclingPreset] || { x: 50, y: 50 };
     cycling.layout = {
       positionPreset: cyclingPreset,
       positionX: cyclingAnchor.x,
@@ -614,11 +1048,12 @@ document.addEventListener('DOMContentLoaded', () => {
       width: numVal('cycling-layout-width', 350)
     };
 
+    const prevCyclingCode = cycling.code || ConfigSchema.DEFAULT_CODE.cycling;
     cycling.code = {
       enableCustomCode: checked('chk-enable-cycling-custom-code', false),
-      customHTML: val('input-cycling-custom-html', ''),
-      customCSS: val('input-cycling-custom-css', ''),
-      customJS: val('input-cycling-custom-js', '')
+      customHTML: (typeof prevCyclingCode.customHTML === 'string') ? prevCyclingCode.customHTML : ConfigSchema.DEFAULT_CODE.cycling.customHTML,
+      customCSS: (typeof prevCyclingCode.customCSS === 'string') ? prevCyclingCode.customCSS : ConfigSchema.DEFAULT_CODE.cycling.customCSS,
+      customJS: (typeof prevCyclingCode.customJS === 'string') ? prevCyclingCode.customJS : ConfigSchema.DEFAULT_CODE.cycling.customJS
     };
 
     config.widgets.cycling = cycling;
@@ -679,7 +1114,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setVal('input-goal-title', goal.text.titleTemplate || goal.title);
     setVal('input-goal-target', goal.targetAmount);
     setVal('input-goal-current', goal.currentAmount);
-    setVal('input-goal-start', goal.startAmount);
     setVal('input-goal-end-date', goal.endDate);
     setVal('input-goal-fill-color', goal.style.fillColor);
     setVal('input-goal-fill-color-hex', goal.style.fillColor);
@@ -697,7 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setVal('input-goal-bg-color', goal.style.backgroundColor);
     setVal('input-goal-bg-color-hex', goal.style.backgroundColor);
     setSelectVal('select-goal-effect', goal.style.effect);
-    el('goal-fill2-container').style.display = goal.style.useGradient ? 'block' : 'none';
+    el('goal-fill2-container').style.display = goal.style.useGradient ? 'flex' : 'none';
 
     writeTextStyle(TEXT_PREFIXES.goal, goal.text);
     writeCanvas(TEXT_PREFIXES.goal, goal.canvas);
@@ -710,7 +1144,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeList = currentListConfig();
     if (activeList) {
       setChecked('chk-enable-list', activeList.enabled);
-      setVal('input-list-name', activeList.name);
       setVal('select-list-type', activeList.type);
       setVal('input-list-title', activeList.text.titleTemplate || activeList.title);
       const listPresets = ['3', '5', '10', '20'];
@@ -799,7 +1232,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     suppressSync = false;
     syncLivePreview();
+    updateSavedBaseline();
   }
+
+  let lastSavedSnapshot = '';
+
+  function getSerializedState() {
+    readFormValues();
+    const cleanConfig = JSON.parse(JSON.stringify(config));
+    if (cleanConfig.widgets?.goal) cleanConfig.widgets.goal.currentAmount = 0;
+    if (cleanConfig.widgets?.leaderboard) cleanConfig.widgets.leaderboard.supporters = {};
+    if (cleanConfig.widgets?.recent) cleanConfig.widgets.recent.recentDonations = [];
+    return JSON.stringify(cleanConfig);
+  }
+
+  function updateSavedBaseline() {
+    lastSavedSnapshot = getSerializedState();
+  }
+
+  function hasUnsavedChanges() {
+    if (!lastSavedSnapshot) return false;
+    return getSerializedState() !== lastSavedSnapshot;
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges()) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Are you sure you want to reload?';
+      return e.returnValue;
+    }
+  });
 
   function syncLivePreview() {
     if (suppressSync) return;
@@ -808,6 +1270,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.postMessage({ type: 'SETTINGS_UPDATED', payload: config }, '*');
       iframe.contentWindow.postMessage({ type: 'config', config: config }, '*');
+    }
+    const studioIframe = el('code-studio-iframe');
+    if (studioIframe && studioIframe.contentWindow) {
+      studioIframe.contentWindow.postMessage({ type: 'SETTINGS_UPDATED', payload: config }, '*');
+      studioIframe.contentWindow.postMessage({ type: 'config', config: config }, '*');
     }
   }
 
@@ -988,6 +1455,32 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveToServer(profileName) {
     console.log('[Server IO] Saving profile to server:', profileName);
     readFormValues();
+
+    // Validate that Custom HTML is not empty when Custom Code is enabled
+    const template = currentTemplate();
+    if (template && template.code && template.code.enableCustomCode && !template.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Custom HTML cannot be empty' };
+    }
+
+    const goal = config.widgets?.goal;
+    if (goal && goal.code && goal.code.enableCustomCode && !goal.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Goal Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Goal Custom HTML cannot be empty' };
+    }
+
+    const activeList = currentListConfig();
+    if (activeList && activeList.code && activeList.code.enableCustomCode && !activeList.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> List Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'List Custom HTML cannot be empty' };
+    }
+
+    const cycling = config.widgets?.cycling;
+    if (cycling && cycling.code && cycling.code.enableCustomCode && !cycling.code.customHTML.trim()) {
+      showToast('<i data-lucide="alert-triangle"></i> Cycling Custom HTML cannot be empty when custom code is enabled', 'error');
+      return { ok: false, error: 'Cycling Custom HTML cannot be empty' };
+    }
+
     const targetName = profileName || getCurrentProfileName();
     try {
       const res = await fetch('/api/profiles/save', {
@@ -998,9 +1491,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       console.log('[Server IO] Save response:', data);
       if (data.ok && data.settings) {
-        populateForm(data.settings);
+        config = ConfigMigration.migrate(data.settings);
         if (data.profiles) await loadProfilesList(data.activeProfile);
         await fetchAndRenderAnalytics();
+        updateSavedBaseline();
       }
       return data;
     } catch (err) {
@@ -1033,6 +1527,183 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── In-App Update Engine & Updates Tab ───────────────────────────
+  let latestUpdateInfo = null;
+  let updatePollTimer = null;
+
+  function formatReleaseNotesMarkdown(md) {
+    if (!md) return '<span style="color: var(--text-muted);">No changelog or release notes provided.</span>';
+
+    let html = md
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Headers ###, ##, #
+    html = html.replace(/^### (.*$)/gim, '<h5 style="color: var(--accent); margin: 14px 0 6px 0; font-size: 13.5px; font-weight: 700;">$1</h5>');
+    html = html.replace(/^## (.*$)/gim, '<h4 style="color: #f1f5f9; margin: 16px 0 8px 0; font-size: 14.5px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px;">$1</h4>');
+    html = html.replace(/^# (.*$)/gim, '<h3 style="color: var(--accent); margin: 18px 0 10px 0; font-size: 15.5px; font-weight: 800;">$1</h3>');
+
+    // Bold & Italic
+    html = html.replace(/\*\*(.*?)\*\*/gim, '<strong style="color: #f8fafc;">$1</strong>');
+    html = html.replace(/\*(.*?)\*/gim, '<em style="color: #cbd5e1;">$1</em>');
+
+    // Inline code `code`
+    html = html.replace(/`([^`]+)`/gim, '<code style="background: rgba(145, 70, 255, 0.12); color: var(--accent-light); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-family: monospace; border: 1px solid rgba(145, 70, 255, 0.25);">$1</code>');
+
+    // Markdown links [text](url)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gim, '<a href="$2" target="_blank" style="color: var(--accent-light); text-decoration: underline;">$1</a>');
+
+    // Bullet points
+    html = html.replace(/^\* (.*$)/gim, '<div style="display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.5;"><span style="color: var(--accent); font-weight: bold;">•</span><span>$1</span></div>');
+    html = html.replace(/^- (.*$)/gim, '<div style="display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.5;"><span style="color: var(--accent); font-weight: bold;">•</span><span>$1</span></div>');
+
+    // Raw URLs
+    html = html.replace(/(^|[^">])(https?:\/\/[^\s<"']+)/gim, '$1<a href="$2" target="_blank" style="color: var(--accent); text-decoration: underline;">$2</a>');
+
+    // Double newlines
+    html = html.replace(/\n\n/g, '<div style="height: 8px;"></div>');
+
+    return html;
+  }
+
+  async function checkAppUpdates(silent = true, force = false) {
+    try {
+      const url = force ? '/api/updates/check?force=true' : '/api/updates/check';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data || !data.ok) {
+        if (!silent) showToast('<i data-lucide="alert-circle"></i> Failed to check updates: ' + (data?.error || 'Network error'));
+        return;
+      }
+
+      latestUpdateInfo = data;
+      const navPill = el('nav-update-pill');
+
+      if (data.updateAvailable) {
+        if (navPill) navPill.style.display = 'inline-block';
+      } else {
+        if (navPill) navPill.style.display = 'none';
+        if (!silent) {
+          showToast(`<i data-lucide="check-circle"></i> StreamPe is up to date (v${data.currentVersion})`);
+        }
+      }
+
+      renderUpdatesTabUI(data);
+    } catch (err) {
+      if (!silent) showToast('<i data-lucide="alert-circle"></i> Update check error: ' + err.message);
+    }
+  }
+
+  async function refreshUpdatesTab() {
+    const releaseNotes = el('tab-update-release-notes');
+    if (!latestUpdateInfo) {
+      if (releaseNotes) {
+        releaseNotes.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-muted);"><div class="rotation-spinner spinner-sm" style="border-top-color: var(--accent);"></div> Fetching latest release notes from GitHub...</div>';
+      }
+      await checkAppUpdates(true);
+    } else {
+      renderUpdatesTabUI(latestUpdateInfo);
+    }
+  }
+
+  function renderUpdatesTabUI(data) {
+    if (!data) return;
+
+    const currentVer = el('tab-update-current-ver');
+    const latestVer = el('tab-update-latest-ver');
+    const headline = el('updates-status-headline');
+    const subtext = el('updates-status-subtext');
+    const releaseTitle = el('tab-update-release-title');
+    const releaseNotes = el('tab-update-release-notes');
+    const publishedDate = el('tab-update-published-date');
+    const zipBtn = el('btn-tab-download-zip');
+    const ghBtn = el('btn-tab-view-github');
+
+    if (currentVer) currentVer.textContent = `v${data.currentVersion || '2.1.0'}`;
+    if (latestVer) latestVer.textContent = `v${data.latestVersion || '2.2.0'}`;
+    if (releaseTitle) releaseTitle.textContent = data.releaseName || 'What’s New in this Release';
+    if (releaseNotes) {
+      releaseNotes.innerHTML = formatReleaseNotesMarkdown(data.releaseNotes);
+    }
+
+    if (publishedDate && data.publishedAt) {
+      const d = new Date(data.publishedAt);
+      publishedDate.textContent = `Released on ${d.toLocaleDateString()}`;
+    }
+
+    if (ghBtn && data.releaseUrl) {
+      ghBtn.href = data.releaseUrl;
+    }
+    if (zipBtn && data.assets && data.assets.portableZip) {
+      zipBtn.href = data.assets.portableZip.downloadUrl;
+    } else if (zipBtn) {
+      zipBtn.href = data.releaseUrl || 'https://github.com/clowneon1/streampe/releases/latest';
+    }
+
+    if (data.updateAvailable) {
+      if (headline) {
+        headline.innerHTML = `⚡ StreamPe <span style="color: var(--accent);">v${data.latestVersion}</span> is Available!`;
+      }
+      if (subtext) {
+        subtext.textContent = 'A new release is available with performance improvements, fixes, and new features.';
+      }
+    } else {
+      if (headline) {
+        headline.innerHTML = `✅ StreamPe is Up to Date`;
+      }
+      if (subtext) {
+        subtext.textContent = `You are running the latest version of StreamPe (v${data.currentVersion}).`;
+      }
+    }
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function setupUpdateListeners() {
+    on('btn-tab-check-updates', 'click', () => {
+      showToast('<i data-lucide="refresh-cw"></i> Checking for updates...');
+      checkAppUpdates(false, true).then(() => {
+        if (latestUpdateInfo) renderUpdatesTabUI(latestUpdateInfo);
+      });
+    });
+
+    // ── Release Notes Box Extender ──
+    const UPDATE_NOTES_HEIGHTS = { sm: 260, md: 460, lg: 760 };
+    const UPDATE_NOTES_KEY = 'streampe_update_notes_height';
+    const notesContainer = el('tab-update-release-notes');
+
+    function setNotesHeight(h) {
+      if (!notesContainer) return;
+      notesContainer.style.height = `${h}px`;
+      try { localStorage.setItem(UPDATE_NOTES_KEY, String(h)); } catch (_) { }
+      const smBtn = el('btn-update-notes-height-sm');
+      const mdBtn = el('btn-update-notes-height-md');
+      const lgBtn = el('btn-update-notes-height-lg');
+      if (smBtn) smBtn.style.color = h === UPDATE_NOTES_HEIGHTS.sm ? 'var(--accent)' : '';
+      if (mdBtn) mdBtn.style.color = h === UPDATE_NOTES_HEIGHTS.md ? 'var(--accent)' : '';
+      if (lgBtn) lgBtn.style.color = h === UPDATE_NOTES_HEIGHTS.lg ? 'var(--accent)' : '';
+    }
+
+    try {
+      const saved = parseInt(localStorage.getItem(UPDATE_NOTES_KEY), 10);
+      if (saved && saved >= 200) setNotesHeight(saved);
+      else setNotesHeight(UPDATE_NOTES_HEIGHTS.md);
+    } catch (_) { setNotesHeight(UPDATE_NOTES_HEIGHTS.md); }
+
+    on('btn-update-notes-height-sm', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.sm));
+    on('btn-update-notes-height-md', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.md));
+    on('btn-update-notes-height-lg', 'click', () => setNotesHeight(UPDATE_NOTES_HEIGHTS.lg));
+
+    on('btn-update-notes-expand', 'click', () => {
+      const current = parseInt(notesContainer?.style?.height, 10) || UPDATE_NOTES_HEIGHTS.md;
+      const next = current <= UPDATE_NOTES_HEIGHTS.sm ? UPDATE_NOTES_HEIGHTS.md
+        : current <= UPDATE_NOTES_HEIGHTS.md ? UPDATE_NOTES_HEIGHTS.lg
+          : UPDATE_NOTES_HEIGHTS.sm;
+      setNotesHeight(next);
+    });
+  }
+
   // ── Wiring ───────────────────────────────────────────────────
   const TAB_PREVIEW_URLS = {
     goal: '/overlay/goal',
@@ -1063,9 +1734,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const resizer = el('panel-resizer');
         const actionBar = document.querySelector('.action-bar');
 
-        if (tab === 'earnings' || tab === 'server-logs') {
+        if (tab === 'earnings' || tab === 'server-logs' || tab === 'updates') {
           if (tab === 'earnings') refreshEarningsAnalytics();
           if (tab === 'server-logs') fetchLiveLogs();
+          if (tab === 'updates') refreshUpdatesTab();
           if (previewPanel) previewPanel.style.display = 'none';
           if (resizer) resizer.style.display = 'none';
           if (actionBar) actionBar.style.display = 'none';
@@ -1420,6 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const SNIPPETS = {
+    // Alert Snippets
     'html-default': ConfigSchema.DEFAULT_CODE.alert.customHTML,
     'html-badge': '<div class="alert-badge" style="background:var(--accent-color);color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;margin-bottom:6px;display:inline-block;">{{sourceApp}}</div>\n{{mediaHtml}}\n<div class="alert-title" style="font-size:26px;">{{sender}} → {{amount}}</div>',
     'css-no-border': '\n.alert-box {\n  border-left: none !important;\n}',
@@ -1427,10 +2100,22 @@ document.addEventListener('DOMContentLoaded', () => {
     'css-large-media': '\n.alert-media {\n  width: 100% !important;\n  max-width: 100% !important;\n  height: auto !important;\n}',
     'css-glow': '\n.alert-box {\n  box-shadow: 0 0 25px var(--accent-color), inset 0 0 15px var(--accent-color) !important;\n}',
     'js-log': '\nconsole.log("[Payment Alert]", notifData.sender, notifData.amount);',
-    'js-scale': '\nalertBox.style.transform = "scale(1.15)";\nsetTimeout(() => alertBox.style.transform = "scale(1)", 300);'
+    'js-scale': '\nalertBox.style.transform = "scale(1.15)";\nsetTimeout(() => alertBox.style.transform = "scale(1)", 300);',
+
+    // List & Leaderboard Snippets
+    'html-lb-default': ConfigSchema.DEFAULT_CODE.leaderboard.customHTML,
+    'html-recent-default': ConfigSchema.DEFAULT_CODE.recent.customHTML,
+    'css-lb-transparent': '\n.lb-card {\n  background: transparent !important;\n  box-shadow: none !important;\n}',
+    'css-lb-glow-ranks': '\n.rank-1 { box-shadow: 0 0 16px rgba(255, 183, 3, 0.4) !important; }\n.rank-2 { box-shadow: 0 0 14px rgba(213, 186, 255, 0.35) !important; }\n.rank-3 { box-shadow: 0 0 12px rgba(145, 70, 255, 0.3) !important; }',
+    'css-lb-no-row-bg': '\n.lb-row {\n  background: transparent !important;\n  border-color: rgba(255, 255, 255, 0.05) !important;\n}',
+    'js-lb-log': '\nconsole.log("[List Overlay Items]", items);'
   };
 
   function snippetTarget(key) {
+    if (key.startsWith('html-lb-') || key.startsWith('html-recent-')) return el('input-list-custom-html');
+    if (key.startsWith('css-lb-')) return el('input-list-custom-css');
+    if (key.startsWith('js-lb-')) return el('input-list-custom-js');
+
     if (key.startsWith('html-')) return el('input-custom-html');
     if (key.startsWith('css-')) return el('input-custom-css');
     return el('input-custom-js');
@@ -1479,7 +2164,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const insert = `${selector} {\n  \n}\n`;
           setVal(textarea.id, currentVal + (currentVal ? '\n' : '') + insert);
         }
-        copyToClipboard(selector).catch(() => {});
+        copyToClipboard(selector).catch(() => { });
         showToast('<i data-lucide="copy"></i> Copied selector "' + selector + '"');
       });
     });
@@ -1548,18 +2233,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setupActionButtons() {
     on('chk-goal-use-gradient', 'change', (e) => {
-      el('goal-fill2-container').style.display = e.target.checked ? 'block' : 'none';
+      el('goal-fill2-container').style.display = e.target.checked ? 'flex' : 'none';
       syncLivePreview();
+    });
+
+    on('chk-goal-allow-overflow', 'change', async () => {
+      readFormValues();
+      await saveToServer();
+      showToast('<i data-lucide="check"></i> Goal Overflow mode updated');
+    });
+
+    ['chk-enable-goal', 'chk-enable-list', 'chk-enable-cycling'].forEach(id => {
+      on(id, 'change', async () => {
+        readFormValues();
+        await saveToServer();
+        showToast('<i data-lucide="check"></i> Widget status updated');
+      });
     });
 
     document.querySelectorAll('.btn-format-code').forEach(btn => {
       btn.addEventListener('click', () => {
         const container = btn.closest('.code-editor-container');
-        const activeTab = container.querySelector('.code-tab-btn.active');
+        const activeTab = container ? container.querySelector('.code-tab-btn.active') : null;
         if (!activeTab) return;
         const panel = container.querySelector(`.code-tab-panel[data-code-panel="${activeTab.dataset.codeTab}"]`);
         const textarea = panel && panel.querySelector('textarea');
-        if (textarea && textarea.id) formatCode(textarea.id);
+        if (textarea && textarea.id) formatCode(textarea.id, btn);
       });
     });
 
@@ -1610,16 +2309,42 @@ document.addEventListener('DOMContentLoaded', () => {
         message: 'Reset all settings in this profile to defaults?'
       });
       if (!confirmed) return;
-      populateForm(ConfigSchema.createDefaultConfig());
-      showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults');
+      try {
+        const tplRes = await fetch('/api/profiles/default-template');
+        const tplData = await tplRes.json();
+        const defConfig = (tplData.ok && tplData.template) ? tplData.template : ConfigSchema.createDefaultConfig();
+        populateForm(defConfig);
+        const saveRes = await saveToServer();
+        if (saveRes.ok) {
+          showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults and saved profile!', 'success');
+        } else {
+          showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults (local only)');
+        }
+      } catch (err) {
+        populateForm(ConfigSchema.createDefaultConfig());
+        showToast('<i data-lucide="rotate-ccw"></i> Reset to defaults');
+      }
     });
 
     // ── Profiles
     on('select-profile', 'change', async (e) => {
+      const targetProfile = e.target.value;
+      if (hasUnsavedChanges()) {
+        const confirmLeave = await AppModal.show({
+          title: 'Unsaved Changes',
+          message: 'You have unsaved changes in this profile that will be discarded. Are you sure you want to switch profiles?',
+          confirmText: 'Discard & Switch',
+          cancelText: 'Stay on Profile'
+        });
+        if (!confirmLeave) {
+          e.target.value = getCurrentProfileName();
+          return;
+        }
+      }
       const res = await fetch('/api/profiles/switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: e.target.value })
+        body: JSON.stringify({ name: targetProfile })
       });
       const data = await res.json();
       if (data.ok) {
@@ -1636,10 +2361,43 @@ document.addEventListener('DOMContentLoaded', () => {
         showInput: true
       });
       if (!name) return;
+      try {
+        const tplRes = await fetch('/api/profiles/default-template');
+        const tplData = await tplRes.json();
+        const newSettings = (tplData.ok && tplData.template) ? tplData.template : ConfigSchema.createDefaultConfig();
+        const res = await fetch('/api/profiles/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, settings: newSettings })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          config = data.settings;
+          populateForm(data.settings);
+          await loadProfilesList(name);
+          await fetchAndRenderAnalytics();
+          showToast('<i data-lucide="user"></i> Created profile "' + name + '"');
+        }
+      } catch (err) {
+        showToast('<i data-lucide="alert-triangle"></i> Failed to create profile: ' + err.message);
+      }
+    });
+
+    on('btn-profile-clone', 'click', async () => {
+      const select = el('select-profile');
+      const currentName = select ? select.value : 'Default';
+      const name = await AppModal.show({
+        title: 'Clone Profile',
+        message: `Enter name for cloned copy of "${currentName}":`,
+        showInput: true,
+        defaultValue: `${currentName} (Copy)`
+      });
+      if (!name) return;
+      readFormValues();
       await saveToServer(name);
       await loadProfilesList(name);
       await fetchAndRenderAnalytics();
-      showToast('<i data-lucide="user"></i> Created profile "' + name + '"');
+      showToast('<i data-lucide="copy"></i> Cloned profile to "' + name + '"');
     });
 
     on('btn-profile-rename', 'click', async () => {
@@ -1730,60 +2488,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.target.value = '';
     });
 
-    // ── Goal Controls (Derived from CSV Single Source of Truth) ──
-    on('btn-goal-test-add', async () => {
-      try {
-        const activeProf = getCurrentProfileName();
-        const res = await fetch('/api/donations/record', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            profile: activeProf,
-            sender: 'Test Supporter',
-            amount: 100,
-            currency: 'INR',
-            sourceApp: 'Manual Test'
-          })
-        });
-        const data = await res.json();
-        if (data.ok) {
-          config.widgets.goal.currentAmount = data.metrics.goalAmount;
-          config.widgets.leaderboard.supporters = data.metrics.supporters;
-          config.widgets.recent.recentDonations = data.metrics.recentDonations;
-          populateForm(config);
-          showToast('<i data-lucide="zap"></i> Added ₹100 donation to Goal and CSV');
-        }
-      } catch (err) {
-        showToast('<i data-lucide="alert-triangle"></i> Failed to add amount: ' + err.message);
-      }
-    });
-
-    on('btn-goal-reset', async () => {
-      const confirmed = await AppModal.show({
-        title: 'Reset Stream Goal',
-        message: 'Reset current goal progress and clear donation records for this profile?'
-      });
-      if (!confirmed) return;
-      try {
-        const activeProf = getCurrentProfileName();
-        const res = await fetch('/api/donations/clear', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profile: activeProf })
-        });
-        const data = await res.json();
-        if (data.ok) {
-          config.widgets.goal.currentAmount = data.metrics.goalAmount;
-          config.widgets.leaderboard.supporters = data.metrics.supporters;
-          config.widgets.recent.recentDonations = data.metrics.recentDonations;
-          populateForm(config);
-          showToast('<i data-lucide="rotate-ccw"></i> Goal progress reset');
-        }
-      } catch (err) {
-        showToast('<i data-lucide="alert-triangle"></i> Failed to reset goal progress');
-      }
-    });
-
     // ── Centralized Donations Data CSV Helpers ────────────────
     on('btn-sidebar-export-donations', 'click', (e) => {
       if (e) {
@@ -1801,9 +2505,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    on('btn-sidebar-import-donations', 'click', () => {
-      const f = el('file-import-donations-csv');
-      if (f) f.click();
+    on('btn-sidebar-import-donations', 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        if (el('input-import-file-picker')) el('input-import-file-picker').value = '';
+        if (el('select-import-mode')) el('select-import-mode').value = 'merge';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
     });
 
     on('file-import-donations-csv', 'change', async (e) => {
@@ -1812,10 +2525,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         try {
-          const text = ev.target.result;
-          let csvPayload = text;
-          if (file.name.endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
-            const parsed = JSON.parse(text);
+          let csvPayload = ev.target.result;
+          if (file.name.endsWith('.json') || (typeof csvPayload === 'string' && (csvPayload.trim().startsWith('{') || csvPayload.trim().startsWith('[')))) {
+            const parsed = JSON.parse(csvPayload);
             const list = Array.isArray(parsed) ? parsed : (parsed.recentDonations || Object.entries(parsed.supporters || parsed).map(([name, total]) => ({ sender: name, amount: total })));
             const txs = list.map((r, i) => ({
               id: r.id || `imported_${Date.now()}_${i}`,
@@ -1837,7 +2549,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const res = await fetch('/api/donations/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile: activeProf, csv: csvPayload, mode: 'replace' })
+            body: JSON.stringify({ profile: activeProf, csv: csvPayload, mode: 'merge' })
           });
           const data = await res.json();
           if (data.ok) {
@@ -1853,19 +2565,25 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('<i data-lucide="alert-triangle"></i> Invalid file format: ' + err.message);
         }
       };
-      reader.readAsText(file);
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
       e.target.value = '';
     });
 
     // ── Code reset buttons
     [['btn-reset-alert-code', 'alert', ['input-custom-html', 'input-custom-css', 'input-custom-js']],
-     ['btn-reset-goal-code', 'goal', ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js']],
-     ['btn-reset-lb-code', 'leaderboard', ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js']],
-     ['btn-reset-recent-code', 'recent', ['input-recent-custom-html', 'input-recent-custom-css', 'input-recent-custom-js']],
-     ['btn-reset-list-code', 'list', ['input-list-custom-html', 'input-list-custom-css', 'input-list-custom-js']],
-     ['btn-reset-cycling-code', 'cycling', ['input-cycling-custom-html', 'input-cycling-custom-css', 'input-cycling-custom-js']]
+    ['btn-reset-goal-code', 'goal', ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js']],
+    ['btn-reset-lb-code', 'leaderboard', ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js']],
+    ['btn-reset-recent-code', 'recent', ['input-recent-custom-html', 'input-recent-custom-css', 'input-recent-custom-js']],
+    ['btn-reset-list-code', 'list', ['input-list-custom-html', 'input-list-custom-css', 'input-list-custom-js']],
+    ['btn-reset-cycling-code', 'cycling', ['input-cycling-custom-html', 'input-cycling-custom-css', 'input-cycling-custom-js']]
     ].forEach(([btnId, kind, ids]) => {
-      on(btnId, 'click', () => {
+      const btn = el(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', () => {
         let defaults = ConfigSchema.DEFAULT_CODE[kind];
         if (kind === 'list') {
           const activeList = currentListConfig();
@@ -1876,6 +2594,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal(ids[0], defaults.customHTML);
         setVal(ids[1], defaults.customCSS);
         setVal(ids[2], defaults.customJS);
+        ids.forEach(id => {
+          if (editors[id]) pulseEditorElement(editors[id]);
+        });
+        flashButtonSuccess(btn, '<i data-lucide="check"></i> Restored!');
         syncLivePreview();
         showToast('<i data-lucide="rotate-ccw"></i> Code reset to defaults');
       });
@@ -1911,17 +2633,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let appName = 'PhonePe';
       let packageName = 'com.phonepe.app';
-      let title = 'PhonePe';
-      let text = `${sender} has sent Rs. ${formattedAmount}.00 to your bank account`;
+      let title = `PhonePe - ${sender}`;
+      let text = `has sent ₹${formattedAmount}.00`;
 
       if (providerKey === 'gpay') {
         appName = 'Google Pay';
         packageName = 'com.google.android.apps.nbu.paisa.user';
-        title = `${sender} paid you ₹${formattedAmount}`;
-        text = msg || `${sender} paid you ₹${formattedAmount}`;
+        title = `Google Pay`;
+        text = `${sender} paid you ₹${formattedAmount}`;
       } else if (providerKey === 'amazon') {
         appName = 'Amazon Pay';
-        packageName = 'in.amazon.mShop.android.shopping';
+        packageName = 'com.amazon.mShop.android.shopping';
         title = `₹${formattedAmount} received`;
         text = `Money received from ${sender} on Amazon Pay`;
       } else if (providerKey === 'cash') {
@@ -1932,8 +2654,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         appName = 'PhonePe';
         packageName = 'com.phonepe.app';
-        title = 'PhonePe';
-        text = `${sender} has sent Rs. ${formattedAmount}.00 to your bank account`;
+        title = `PhonePe - ${sender}`;
+        text = `has sent ₹${formattedAmount}.00`;
       }
 
       const isIsolated = config.simulation ? config.simulation.isolatedMode !== false : true;
@@ -1952,9 +2674,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const SIM_PRESETS = {
       phonepe: { provider: 'phonepe', sender: 'Rahul Kumar', amount: '500', message: 'Awesome stream!' },
-      gpay:    { provider: 'gpay',    sender: 'Priya Singh', amount: '1000', message: 'Keep up the great work!' },
-      amazon:  { provider: 'amazon',  sender: 'Sneha Patel', amount: '1500', message: 'Thanks for streaming!' },
-      cash:    { provider: 'cash',    sender: 'Amit Verma',  amount: '250',  message: 'Chai paani subscription ☕' },
+      gpay: { provider: 'gpay', sender: 'Priya Singh', amount: '1000', message: 'Keep up the great work!' },
+      amazon: { provider: 'amazon', sender: 'Sneha Patel', amount: '1500', message: 'Thanks for streaming!' },
+      cash: { provider: 'cash', sender: 'Amit Verma', amount: '250', message: 'Chai paani subscription ☕' },
       highval: { provider: 'phonepe', sender: 'Vikramaditya', amount: '5000', message: 'ULTRA DONATION! 👑🔥' }
     };
 
@@ -2107,7 +2829,7 @@ document.addEventListener('DOMContentLoaded', () => {
               refreshEarningsAnalytics();
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       };
       dashboardWs.onclose = () => setTimeout(connectDashboardWebSocket, 3000);
     } catch (e) {
@@ -2177,19 +2899,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isNaN(d.getTime())) {
         timeDisplay = d.toLocaleTimeString([], { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const levelStyles = {
-      INFO:  'background: rgba(0, 229, 255, 0.12); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.28);',
-      WARN:  'background: rgba(255, 214, 0, 0.12); color: #ffd600; border: 1px solid rgba(255, 214, 0, 0.28);',
+      INFO: 'background: rgba(145, 70, 255, 0.15); color: #d5baff; border: 1px solid rgba(145, 70, 255, 0.35);',
+      WARN: 'background: rgba(255, 214, 0, 0.12); color: #ffd600; border: 1px solid rgba(255, 214, 0, 0.28);',
       ERROR: 'background: rgba(255, 82, 82, 0.16); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.35); font-weight: 700;',
       EVENT: 'background: rgba(224, 64, 251, 0.15); color: #e040fb; border: 1px solid rgba(224, 64, 251, 0.3);',
-      PARSE: 'background: rgba(0, 230, 118, 0.12); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.28);',
+      PARSE: 'background: rgba(0, 245, 147, 0.12); color: #00F593; border: 1px solid rgba(0, 245, 147, 0.28);',
       DEDUP: 'background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2);',
     };
 
     const badgeStyle = levelStyles[level] || 'color: #cbd5e1;';
-    const tagHtml = tag ? `<span style="color: #67e8f9; font-weight: 600; margin-right: 4px;">[${TemplateEngine.escapeHtml(tag)}]</span>` : '';
+    const tagHtml = tag ? `<span style="color: #d5baff; font-weight: 600; margin-right: 4px;">[${TemplateEngine.escapeHtml(tag)}]</span>` : '';
 
     return `<div class="log-line log-level-${level.toLowerCase()}" style="margin-bottom: 3px; line-height: 1.6; font-family: inherit;"><span style="color: #475569; font-size: 10px; margin-right: 6px; user-select: none;">[${TemplateEngine.escapeHtml(timeDisplay)}]</span><span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; margin-right: 6px; letter-spacing: 0.5px; ${badgeStyle}">${level}</span>${tagHtml}<span style="color: #f1f5f9;">${TemplateEngine.escapeHtml(msg)}</span></div>`;
   }
@@ -2293,8 +3015,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const active = currentListConfig();
       copyOverlayUrl(`/overlay/list?id=${active.id || 'top-supporters'}`, `List (${active.name || 'Active'}) Overlay`, e.currentTarget);
     });
-    on('btn-copy-lb-url', 'click', (e) => copyOverlayUrl('/overlay/leaderboard', 'Leaderboard Overlay', e.currentTarget));
-    on('btn-copy-recent-url', 'click', (e) => copyOverlayUrl('/overlay/recent', 'Recent Overlay', e.currentTarget));
     on('btn-copy-cycling-url', 'click', (e) => copyOverlayUrl('/overlay/cycling-widget', 'Cycling Overlay', e.currentTarget));
 
     on('btn-copy-current-url', 'click', (e) => {
@@ -2313,17 +3033,9 @@ document.addEventListener('DOMContentLoaded', () => {
       let url = iframe.src;
       const path = new URL(url, location.origin).pathname;
       if (path === '/preview.html' || path === '/overlay/alert') {
-          url = '/overlay/alerts';
+        url = '/overlay/alerts';
       }
       window.open(url, '_blank');
-    });
-
-    // ── Custom Max Entry Toggles
-    ['lb', 'recent'].forEach(key => {
-      on(`select-${key}-max`, 'change', (e) => {
-        el(`input-${key}-max-custom`).style.display = e.target.value === 'custom' ? 'block' : 'none';
-        syncLivePreview();
-      });
     });
 
     on('btn-clear-logs', 'click', async () => {
@@ -2370,6 +3082,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timelineMode: 'month',
     search: '',
     searchDonor: '',
+    searchAlias: '',
     searchNote: '',
     minAmount: '',
     specificDate: '',
@@ -2401,38 +3114,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentVal = analyticsState.month;
             let optionsHtml = '<option value="all">📅 All Time (Full History)</option>';
 
-            const activeOpts = [];
-            const archiveOpts = [];
-
-            const now = new Date();
-            const twelveMonthsAgo = new Date();
-            twelveMonthsAgo.setMonth(now.getMonth() - 11);
-            twelveMonthsAgo.setDate(1); // Boundary starts at the 1st of that month
-
             mData.months.forEach(m => {
               const [yr, mo] = m.split('-').map(Number);
               const optDate = new Date(yr, mo - 1, 1);
               const label = optDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-              const optionHtml = `<option value="${m}"${m === currentVal ? ' selected' : ''}>${label}</option>`;
-
-              if (optDate >= twelveMonthsAgo) {
-                activeOpts.push(optionHtml);
-              } else {
-                archiveOpts.push(optionHtml);
-              }
+              optionsHtml += `<option value="${m}"${m === currentVal ? ' selected' : ''}>${label}</option>`;
             });
-
-            if (activeOpts.length > 0) {
-              optionsHtml += `<optgroup label="📅 Active Months (Last 12 Months)">${activeOpts.join('')}</optgroup>`;
-            }
-            if (archiveOpts.length > 0) {
-              optionsHtml += `<optgroup label="🗄️ Historical Archives (Older)">${archiveOpts.join('')}</optgroup>`;
-            }
 
             monthSelect.innerHTML = optionsHtml;
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 2. Fetch aggregated analytics
       const effectiveSearch = [analyticsState.search, analyticsState.searchDonor, analyticsState.searchNote].filter(Boolean).join(' ');
@@ -2455,25 +3147,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const a = data.analytics || {};
 
+      const formatCompact = (amt) => (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+        ? PaymentsCsv.formatCompactCurrency(amt)
+        : `₹${(parseFloat(amt) || 0).toLocaleString('en-IN')}`;
+
       // 3. Update KPI Cards & Single-Line Summary Bar
-      if (el('kpi-total-revenue')) el('kpi-total-revenue').innerHTML = a.formattedTotalRevenue || '&#8377;0.00';
+      if (el('kpi-total-revenue')) el('kpi-total-revenue').innerHTML = formatCompact(a.totalRevenue || 0);
       if (el('kpi-total-count')) el('kpi-total-count').textContent = (a.totalDonationsCount || 0).toLocaleString();
       if (el('kpi-unique-donors')) el('kpi-unique-donors').textContent = (a.uniqueDonorsCount || 0).toLocaleString();
-      if (el('kpi-avg-amount')) el('kpi-avg-amount').innerHTML = a.formattedAverageDonation || '&#8377;0.00';
+      if (el('kpi-avg-amount')) el('kpi-avg-amount').innerHTML = formatCompact(a.averageDonation || 0);
       if (el('kpi-peak-day')) {
         const peak = a.peakDay;
         if (peak && peak.date !== 'N/A' && peak.amount > 0) {
-          el('kpi-peak-day').textContent = `${peak.date} · ${peak.formattedAmount}`;
+          el('kpi-peak-day').textContent = `${peak.date} · ${formatCompact(peak.amount)}`;
         } else {
           el('kpi-peak-day').textContent = 'N/A';
         }
       }
 
       // Single-Line Filtered Stats Summary Bar
-      if (el('summary-stat-total')) el('summary-stat-total').innerHTML = a.formattedTotalRevenue || '&#8377;0.00';
+      if (el('summary-stat-total')) el('summary-stat-total').innerHTML = formatCompact(a.totalRevenue || 0);
       if (el('summary-stat-count')) el('summary-stat-count').textContent = (a.totalDonationsCount || 0).toLocaleString();
       if (el('summary-stat-donors')) el('summary-stat-donors').textContent = (a.uniqueDonorsCount || 0).toLocaleString();
-      if (el('summary-stat-avg')) el('summary-stat-avg').innerHTML = a.formattedAverageDonation || '&#8377;0.00';
+      if (el('summary-stat-avg')) el('summary-stat-avg').innerHTML = formatCompact(a.averageDonation || 0);
       if (el('summary-stat-badge')) {
         const filterParts = [];
         if (analyticsState.provider && analyticsState.provider !== 'all') {
@@ -2518,8 +3214,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const legend = el('analytics-donut-legend');
     if (!svg || !centerAmt || !legend) return;
 
-    centerAmt.textContent = donut.formattedTotal || '₹0.00';
-    if (centerLbl) centerLbl.textContent = `${donut.totalCount || 0} Donations`;
+    centerAmt.textContent = (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+      ? PaymentsCsv.formatCompactCurrency(donut.totalRevenue || 0)
+      : (donut.formattedTotal || '₹0.00');
+    if (centerLbl) centerLbl.textContent = `${donut.totalCount || 0} Earnings`;
 
     const segments = donut.segments || [];
 
@@ -2576,27 +3274,42 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
+  let currentTimelineData = [];
+
   function renderTrendChart(trends) {
-    const svg = el('analytics-trend-svg');
+    currentTimelineData = trends || [];
+    renderSingleTrendSvg(el('analytics-trend-svg'), currentTimelineData, false);
+    renderSingleTrendSvg(el('modal-analytics-trend-svg'), currentTimelineData, true);
+
+    // Update modal summary if present
+    const modalTotalEl = el('modal-trend-total');
+    if (modalTotalEl && currentTimelineData.length) {
+      const sum = currentTimelineData.reduce((acc, t) => acc + (t.amount || 0), 0);
+      const curr = (typeof currentConfig !== 'undefined' && currentConfig && currentConfig.currency) || 'INR';
+      modalTotalEl.textContent = `Period Total: ${PaymentsCsv.formatCurrency(sum, curr)}`;
+    }
+  }
+
+  function renderSingleTrendSvg(svg, trends, isModal = false) {
     if (!svg) return;
 
     if (!trends || !trends.length) {
       svg.innerHTML = `
-        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="12">
+        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="${isModal ? '14' : '12'}" font-family="Geist, sans-serif">
           No transactions recorded for this timeframe
         </text>
       `;
       return;
     }
 
-    const viewBoxWidth = 680;
-    const viewBoxHeight = 240;
+    const viewBoxWidth = isModal ? 840 : 540;
+    const viewBoxHeight = isModal ? 320 : 220;
     svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
 
-    const leftMargin = 68;
-    const rightMargin = 20;
-    const topMargin = 22;
-    const bottomMargin = 38;
+    const leftMargin = isModal ? 70 : 55;
+    const rightMargin = isModal ? 24 : 16;
+    const topMargin = isModal ? 28 : 22;
+    const bottomMargin = isModal ? 42 : 34;
 
     const plotWidth = viewBoxWidth - leftMargin - rightMargin;
     const plotHeight = viewBoxHeight - topMargin - bottomMargin;
@@ -2621,9 +3334,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const gridSteps = [1.0, 0.75, 0.5, 0.25, 0.0];
 
     function formatShortCurrency(amount) {
-      if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-      if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}k`;
-      return `₹${amount}`;
+      return (typeof PaymentsCsv !== 'undefined' && PaymentsCsv.formatCompactCurrency)
+        ? PaymentsCsv.formatCompactCurrency(amount)
+        : `₹${amount}`;
     }
 
     let gridHtml = '';
@@ -2636,14 +3349,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <line x1="${leftMargin}" y1="${y}" x2="${viewBoxWidth - rightMargin}" y2="${y}"
           class="${isBaseline ? 'trend-axis-line' : 'trend-grid-line'}"
           stroke-width="${isBaseline ? '1.5' : '1'}" />
-        <text x="${leftMargin - 8}" y="${y + 3.5}" text-anchor="end" fill="var(--text-muted)" font-size="10" font-family="sans-serif">
+        <text x="${leftMargin - 8}" y="${y + 4}" text-anchor="end" fill="var(--text-muted)" font-size="${isModal ? '12' : '11'}" font-weight="500" font-family="Geist, sans-serif">
           ${formatShortCurrency(val)}
         </text>
       `;
     });
 
     const slotWidth = plotWidth / trends.length;
-    const barWidth = Math.max(8, Math.min(34, slotWidth * 0.62));
+    const barWidth = Math.max(isModal ? 12 : 8, Math.min(isModal ? 48 : 32, slotWidth * 0.65));
 
     let barsHtml = '';
     trends.forEach((t, i) => {
@@ -2653,19 +3366,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const barY = topMargin + plotHeight - barHeight;
       const isPositive = t.amount > 0;
 
-      // Draw subtle vertical grid delimiter
       const delimiterHtml = i > 0 ? `
         <line x1="${slotX}" y1="${topMargin}" x2="${slotX}" y2="${topMargin + plotHeight}" stroke="rgba(255,255,255,0.03)" stroke-dasharray="2,2" />
+      ` : '';
+
+      // Amount label on top of bar for modal or positive spikes
+      const valueLabelHtml = (isModal && isPositive) ? `
+        <text x="${slotX + slotWidth / 2}" y="${barY - 6}" text-anchor="middle"
+          fill="var(--cyan)" font-size="11" font-weight="600" font-family="Geist, sans-serif">
+          ${formatShortCurrency(t.amount)}
+        </text>
       ` : '';
 
       barsHtml += `
         ${delimiterHtml}
         <g class="trend-slot-group" data-date="${t.date}" data-amount="${t.formattedAmount}">
-          <!-- Hover highlight column slot -->
           <rect x="${slotX}" y="${topMargin}" width="${slotWidth}" height="${plotHeight}"
-            fill="rgba(0, 229, 255, 0.06)" rx="3" opacity="0" class="trend-slot-hover" />
+            fill="rgba(0, 244, 254, 0.06)" rx="4" opacity="0" class="trend-slot-hover" />
 
-          <!-- Clean Rounded Gradient Bar without dot -->
           <rect class="trend-bar" x="${barX}" y="${barY}" width="${barWidth}" height="${barHeight}" rx="4"
             fill="${isPositive ? 'url(#trendBarGrad)' : 'rgba(255,255,255,0.08)'}"
             opacity="${isPositive ? '0.92' : '0.4'}"
@@ -2673,12 +3391,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <title>${t.date}: ${t.formattedAmount} (${t.count || 0} donations)</title>
           </rect>
 
-          <!-- X Axis Day / Week / Month Label -->
-          <text x="${slotX + slotWidth / 2}" y="${viewBoxHeight - 12}" text-anchor="middle"
-            fill="${isPositive ? 'var(--text-main)' : 'var(--text-muted)'}"
-            font-size="${trends.length > 10 ? '9' : '10.5'}"
-            font-weight="${isPositive ? '600' : '400'}"
-            font-family="sans-serif"
+          ${valueLabelHtml}
+
+          <!-- X Axis Label with High Legibility Font -->
+          <text x="${slotX + slotWidth / 2}" y="${viewBoxHeight - (isModal ? 14 : 10)}" text-anchor="middle"
+            fill="${isPositive ? '#ffffff' : 'var(--text-muted)'}"
+            font-size="${isModal ? '12.5' : (trends.length > 10 ? '10' : '11.5')}"
+            font-weight="${isPositive ? '600' : '500'}"
+            font-family="Geist, sans-serif"
           >
             ${t.dayLabel}
           </text>
@@ -2689,9 +3409,9 @@ document.addEventListener('DOMContentLoaded', () => {
     svg.innerHTML = `
       <defs>
         <linearGradient id="trendBarGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#00e5ff" />
-          <stop offset="60%" stop-color="#7928ca" />
-          <stop offset="100%" stop-color="rgba(121, 40, 202, 0.3)" />
+          <stop offset="0%" stop-color="#d5baff" />
+          <stop offset="60%" stop-color="#9146ff" />
+          <stop offset="100%" stop-color="rgba(145, 70, 255, 0.3)" />
         </linearGradient>
       </defs>
       ${gridHtml}
@@ -2708,16 +3428,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnNext = el('btn-ledger-next');
     if (!body) return;
 
-    body.innerHTML = `
-      <tr>
-        <td colspan="6" style="padding: 40px 20px; text-align: center;">
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
-            <div class="rotation-spinner spinner-lg"></div>
-            <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Loading transactions ledger...</div>
-          </div>
-        </td>
-      </tr>
-    `;
+    if (!body.children.length || !body.querySelector('tr[style*="border-bottom"]')) {
+      body.innerHTML = `
+        <tr class="table-loading-row">
+          <td colspan="7">
+            <div class="table-loading-container">
+              <div class="rotation-spinner spinner-lg"></div>
+              <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Loading transactions ledger...</div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
 
     try {
       const effectiveSearch = [analyticsState.search, analyticsState.searchDonor, analyticsState.searchNote].filter(Boolean).join(' ');
@@ -2726,6 +3448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         month: analyticsState.month,
         provider: analyticsState.provider,
         search: effectiveSearch,
+        alias: analyticsState.searchAlias || '',
         minAmount: analyticsState.minAmount,
         date: analyticsState.specificDate,
         startDate: analyticsState.startDate,
@@ -2748,7 +3471,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btnNext) btnNext.disabled = data.page >= data.totalPages;
 
       if (!txs.length) {
-        body.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">No matching transactions found</td></tr>';
+        body.innerHTML = `
+          <tr class="table-empty-row">
+            <td colspan="7">
+              <div class="table-loading-container">
+                <i data-lucide="inbox" style="width: 28px; height: 28px; color: var(--text-dim); opacity: 0.5;"></i>
+                <div style="font-size: 13px; color: var(--text-muted);">No matching transactions found</div>
+              </div>
+            </td>
+          </tr>
+        `;
+        if (window.lucide) lucide.createIcons();
         return;
       }
 
@@ -2756,23 +3489,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const meta = PaymentsCsv.getProviderMeta(tx.sourceApp);
         const pKey = PaymentsCsv.normalizeProviderKey(tx.sourceApp);
         const curr = tx.currency || 'INR';
+        const rawName = tx.rawSender || tx.sender || 'Unknown';
+        const formattedName = tx.sender || rawName;
+        const hasAlias = formattedName && rawName && formattedName.trim().toLowerCase() !== rawName.trim().toLowerCase();
 
         return `
           <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 8px 10px; color: var(--text-muted); font-size: 11px;">
-              <div style="font-weight: 500; color: var(--text-main);">${tx.date || ''}</div>
-              <div style="font-size: 10px;">${tx.time || ''}</div>
+            <td style="padding: 10px 10px; color: var(--text-muted); font-size: 12px;">
+              <div style="font-weight: 400; color: var(--text-main); font-size: 13px;">${tx.date || ''}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${tx.time || ''}</div>
             </td>
-            <td style="padding: 8px 10px;">
-              <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${TemplateEngine.escapeHtml(tx.sender || 'Unknown')}</div>
+            <td style="padding: 10px 10px;">
+              <div style="font-weight: 400; color: var(--text-main); font-size: 13px;">${TemplateEngine.escapeHtml(rawName)}</div>
             </td>
-            <td style="padding: 8px 10px;">
+            <td style="padding: 10px 10px;">
+              ${hasAlias ? `<div style="color: var(--accent-light, #d5baff); font-weight: 400; font-size: 13px;"><i data-lucide="tag" style="width: 12px; height: 12px; vertical-align: middle; margin-right: 4px;"></i>${TemplateEngine.escapeHtml(formattedName)}</div>` : '<span style="opacity: 0.3; font-size: 12px;">—</span>'}
+            </td>
+            <td style="padding: 10px 10px;">
               <span class="provider-badge ${pKey}">${TemplateEngine.escapeHtml(meta.name)}</span>
             </td>
-            <td style="padding: 8px 10px; color: var(--text-muted); font-size: 11px;">
-              ${tx.message ? `<div style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${TemplateEngine.escapeHtml(tx.message)}</div>` : '<span style="opacity: 0.4;">—</span>'}
+            <td style="padding: 10px 10px; color: var(--text-muted); font-size: 12.5px;">
+              ${tx.message ? `<div style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f1f5f9;">${TemplateEngine.escapeHtml(tx.message)}</div>` : '<span style="opacity: 0.4;">—</span>'}
             </td>
-            <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: var(--accent); font-size: 13px;">
+            <td style="padding: 10px 10px; text-align: right; font-weight: 400; color: var(--text-main); font-size: 13px; font-variant-numeric: tabular-nums;">
               ${PaymentsCsv.formatCurrency(tx.amount, curr)}
             </td>
             <td style="padding: 6px 10px; text-align: center; white-space: nowrap;">
@@ -2798,8 +3537,13 @@ document.addEventListener('DOMContentLoaded', () => {
           const targetTx = txs.find(t => t.id === txId);
           if (!targetTx) return;
 
+          const rawName = targetTx.rawSender || targetTx.sender || '';
+          const formattedName = targetTx.sender || rawName;
+          const hasAlias = formattedName && rawName && formattedName.trim().toLowerCase() !== rawName.trim().toLowerCase();
+
           if (el('input-manual-edit-id')) el('input-manual-edit-id').value = targetTx.id;
-          if (el('input-manual-donor')) el('input-manual-donor').value = targetTx.sender || '';
+          if (el('input-manual-donor')) el('input-manual-donor').value = rawName;
+          if (el('input-manual-alias')) el('input-manual-alias').value = hasAlias ? formattedName : '';
           if (el('input-manual-amount')) el('input-manual-amount').value = targetTx.amount || 0;
           if (el('select-manual-provider')) el('select-manual-provider').value = targetTx.sourceApp || 'Manual Entry';
           if (el('input-manual-date')) el('input-manual-date').value = targetTx.date || '';
@@ -2990,6 +3734,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 250);
     });
 
+    on('filter-col-alias', 'input', (e) => {
+      clearTimeout(analyticsSearchDebounce);
+      analyticsSearchDebounce = setTimeout(() => {
+        analyticsState.searchAlias = e.target.value;
+        analyticsState.page = 1;
+        fetchAndRenderAnalytics();
+      }, 250);
+    });
+
     on('filter-col-note', 'input', (e) => {
       clearTimeout(analyticsSearchDebounce);
       analyticsSearchDebounce = setTimeout(() => {
@@ -3019,6 +3772,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (el('filter-col-date-from')) el('filter-col-date-from').value = '';
       if (el('filter-col-date-to')) el('filter-col-date-to').value = '';
       if (el('filter-col-donor')) el('filter-col-donor').value = '';
+      if (el('filter-col-alias')) el('filter-col-alias').value = '';
       if (el('filter-col-note')) el('filter-col-note').value = '';
       if (el('filter-col-min-amount')) el('filter-col-min-amount').value = '';
       if (el('filter-col-provider')) el('filter-col-provider').value = 'all';
@@ -3143,49 +3897,77 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ── Ledger height controls ────────────────────────────────────────
+    // ── Ledger height expand/collapse toggle ─────────────────────────
     (function () {
-      const LEDGER_HEIGHTS = { sm: 220, md: 420, lg: 720 };
+      const NORMAL_HEIGHT = 420;
+      const EXPANDED_HEIGHT = 760;
       const LEDGER_HEIGHT_KEY = 'ledger_height_pref';
       const container = document.querySelector('.analytics-ledger-table-container');
-      if (!container) return;
+      const expandBtn = el('btn-ledger-expand');
+      if (!container || !expandBtn) return;
 
-      function setLedgerHeight(px) {
-        container.style.height = px + 'px';
-        try { localStorage.setItem(LEDGER_HEIGHT_KEY, String(px)); } catch (_) {}
-        const btnSm = el('btn-ledger-height-sm');
-        const btnMd = el('btn-ledger-height-md');
-        const btnLg = el('btn-ledger-height-lg');
-        const accent = 'var(--accent)';
-        const muted  = 'var(--text-muted)';
-        if (btnSm) btnSm.style.color = px === LEDGER_HEIGHTS.sm ? accent : muted;
-        if (btnMd) btnMd.style.color = px === LEDGER_HEIGHTS.md ? accent : muted;
-        if (btnLg) btnLg.style.color = px === LEDGER_HEIGHTS.lg ? accent : muted;
+      function updateExpandState(isExpanded) {
+        const height = isExpanded ? EXPANDED_HEIGHT : NORMAL_HEIGHT;
+        container.style.height = height + 'px';
+        try { localStorage.setItem(LEDGER_HEIGHT_KEY, isExpanded ? 'expanded' : 'collapsed'); } catch (_) { }
+
+        expandBtn.title = isExpanded ? 'Collapse table height' : 'Expand table height';
+        expandBtn.innerHTML = `<i data-lucide="${isExpanded ? 'minimize-2' : 'maximize-2'}" style="width:13px; height:13px;"></i>`;
+        if (window.lucide) lucide.createIcons();
       }
 
       // Restore persisted preference
+      let initialExpanded = false;
       try {
-        const saved = parseInt(localStorage.getItem(LEDGER_HEIGHT_KEY), 10);
-        if (saved && saved >= 220) setLedgerHeight(saved);
-        else setLedgerHeight(LEDGER_HEIGHTS.md);
-      } catch (_) { setLedgerHeight(LEDGER_HEIGHTS.md); }
+        initialExpanded = localStorage.getItem(LEDGER_HEIGHT_KEY) === 'expanded';
+      } catch (_) { }
+      updateExpandState(initialExpanded);
 
-      on('btn-ledger-height-sm', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.sm));
-      on('btn-ledger-height-md', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.md));
-      on('btn-ledger-height-lg', 'click', () => setLedgerHeight(LEDGER_HEIGHTS.lg));
-
-      // Expand/collapse toggle — cycles sm → md → lg → sm
       on('btn-ledger-expand', 'click', () => {
-        const current = parseInt(container.style.height, 10) || LEDGER_HEIGHTS.md;
-        const next = current <= LEDGER_HEIGHTS.sm ? LEDGER_HEIGHTS.md
-                   : current <= LEDGER_HEIGHTS.md  ? LEDGER_HEIGHTS.lg
-                   : LEDGER_HEIGHTS.sm;
-        setLedgerHeight(next);
+        const currentHeight = parseInt(container.style.height, 10) || NORMAL_HEIGHT;
+        const isNowExpanded = currentHeight < EXPANDED_HEIGHT;
+        updateExpandState(isNowExpanded);
       });
     })();
 
     on('select-trend-view-mode', 'change', (e) => {
       analyticsState.timelineMode = e.target.value;
+      const modalSelect = el('select-modal-trend-view-mode');
+      if (modalSelect) modalSelect.value = e.target.value;
       fetchAndRenderAnalytics();
+    });
+
+    on('select-modal-trend-view-mode', 'change', (e) => {
+      analyticsState.timelineMode = e.target.value;
+      const cardSelect = el('select-trend-view-mode');
+      if (cardSelect) cardSelect.value = e.target.value;
+      fetchAndRenderAnalytics();
+    });
+
+    const openTimelineModal = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const modal = el('modal-timeline-expand');
+      if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+        renderSingleTrendSvg(el('modal-analytics-trend-svg'), currentTimelineData, true);
+      }
+    };
+
+    const closeTimelineModal = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const modal = el('modal-timeline-expand');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    };
+
+    on('btn-open-timeline-modal', 'click', openTimelineModal);
+    on('modal-timeline-close', 'click', closeTimelineModal);
+    on('btn-close-timeline-modal', 'click', closeTimelineModal);
+    on('modal-timeline-expand', 'click', (e) => {
+      if (e.target && e.target.id === 'modal-timeline-expand') closeTimelineModal(e);
     });
 
     on('select-donut-view-mode', 'change', (e) => {
@@ -3235,33 +4017,114 @@ document.addEventListener('DOMContentLoaded', () => {
 
     on('btn-submit-export-csv', 'click', () => {
       const activeProf = getCurrentProfileName();
+      const format = el('select-export-format') ? el('select-export-format').value : 'zip';
       const scope = el('select-export-scope').value;
-      
-      let url = `/api/donations/csv?profile=${encodeURIComponent(activeProf)}`;
-      
-      if (scope === 'range') {
+
+      let baseUrl = '/api/donations/export-zip';
+      if (format === 'csv') baseUrl = '/api/donations/csv';
+      if (format === 'aliases') baseUrl = '/api/aliases/csv';
+
+      let url = `${baseUrl}?profile=${encodeURIComponent(activeProf)}`;
+
+      if (scope === 'range' && format !== 'aliases') {
         const startVal = el('input-export-start').value;
         const endVal = el('input-export-end').value;
-        
+
         if (!startVal || !endVal) {
           showToast('<i data-lucide="alert-triangle"></i> Please select both start and end months.');
           return;
         }
-        
+
         if (new Date(startVal) > new Date(endVal)) {
           showToast('<i data-lucide="alert-triangle"></i> Start month cannot be after end month.');
           return;
         }
-        
+
         url += `&startDate=${encodeURIComponent(startVal)}&endDate=${encodeURIComponent(endVal)}`;
-        showToast(`<i data-lucide="download"></i> Downloading transactions CSV from ${startVal} to ${endVal}...`);
+        showToast(`<i data-lucide="download"></i> Downloading backup (${format.toUpperCase()}) from ${startVal} to ${endVal}...`);
       } else {
         url += `&month=all`;
-        showToast('<i data-lucide="download"></i> Downloading all-time transactions CSV...');
+        showToast(`<i data-lucide="download"></i> Downloading all-time backup (${format.toUpperCase()})...`);
       }
-      
+
       window.open(url, '_blank');
       closeExportModal();
+    });
+
+    // Import Backup Modal Controls
+    on('btn-analytics-import', 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        if (el('input-import-file-picker')) el('input-import-file-picker').value = '';
+        if (el('select-import-mode')) el('select-import-mode').value = 'merge';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
+    });
+
+    const closeImportModal = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const modal = el('modal-import-backup');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    };
+
+    on('modal-import-backup-close', 'click', closeImportModal);
+    on('btn-cancel-import-backup', 'click', closeImportModal);
+    on('modal-import-backup', 'click', (e) => {
+      if (e.target.id === 'modal-import-backup') closeImportModal(e);
+    });
+
+    on('btn-submit-import-backup', 'click', () => {
+      const fileInput = el('input-import-file-picker');
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      if (!file) {
+        showToast('<i data-lucide="alert-triangle"></i> Please select a .zip or .csv backup file to import.');
+        return;
+      }
+
+      const activeProf = getCurrentProfileName();
+      const importMode = el('select-import-mode') ? el('select-import-mode').value : 'merge';
+      const reader = new FileReader();
+
+      showToast(`<i data-lucide="upload"></i> Reading ${file.name}...`);
+
+      reader.onload = async (event) => {
+        try {
+          const rawData = event.target.result;
+          const res = await fetch('/api/donations/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: activeProf, mode: importMode, csv: rawData })
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showToast(`<i data-lucide="check-circle"></i> Imported ${data.importedCount || 0} transactions and ${data.aliasCount || 0} aliases into profile [${activeProf}]`);
+            fetchAndRenderAnalytics();
+            fetchAndRenderLedger();
+            closeImportModal();
+          } else {
+            showToast('<i data-lucide="alert-triangle"></i> Import failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          showToast('<i data-lucide="alert-triangle"></i> Import error: ' + err.message);
+        }
+      };
+
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
     });
 
     // Manual Payment Modal (Record & Edit)
@@ -3278,13 +4141,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const da = String(now.getDate()).padStart(2, '0');
       const hr = String(now.getHours()).padStart(2, '0');
       const mn = String(now.getMinutes()).padStart(2, '0');
+      const sc = String(now.getSeconds()).padStart(2, '0');
 
       if (el('input-manual-edit-id')) el('input-manual-edit-id').value = '';
       if (el('input-manual-donor')) el('input-manual-donor').value = 'Anonymous Donor';
+      if (el('input-manual-alias')) el('input-manual-alias').value = '';
       if (el('input-manual-amount')) el('input-manual-amount').value = '500';
       if (el('select-manual-provider')) el('select-manual-provider').value = 'Manual Entry';
       if (el('input-manual-date')) el('input-manual-date').value = `${yr}-${mo}-${da}`;
-      if (el('input-manual-time')) el('input-manual-time').value = `${hr}:${mn}`;
+      if (el('input-manual-time')) el('input-manual-time').value = `${hr}:${mn}:${sc}`;
       if (el('input-manual-note')) el('input-manual-note').value = '';
 
       if (el('modal-manual-title-text')) el('modal-manual-title-text').textContent = 'Record Manual Payment';
@@ -3329,15 +4194,49 @@ document.addEventListener('DOMContentLoaded', () => {
       const editId = (val('input-manual-edit-id', '') || '').trim();
       const isEdit = !!editId;
       const donor = (val('input-manual-donor', 'Anonymous Donor') || 'Anonymous Donor').trim();
+      const aliasVal = val('input-manual-alias', '').trim();
       const amount = parseFloat(val('input-manual-amount', '0')) || 0;
       const source = val('select-manual-provider', 'Manual Entry');
-      const dateVal = val('input-manual-date', '');
-      const timeVal = val('input-manual-time', '');
+      let dateVal = (val('input-manual-date', '') || '').trim();
+      let timeVal = (val('input-manual-time', '') || '').trim();
+      const curNow = new Date();
+      if (!timeVal) {
+        const hr = String(curNow.getHours()).padStart(2, '0');
+        const mn = String(curNow.getMinutes()).padStart(2, '0');
+        const sc = String(curNow.getSeconds()).padStart(2, '0');
+        timeVal = `${hr}:${mn}:${sc}`;
+      } else if (window.PaymentsCsv && window.PaymentsCsv.normalizeTime) {
+        timeVal = window.PaymentsCsv.normalizeTime(timeVal);
+      } else if (/^\d{1,2}:\d{2}$/.test(timeVal)) {
+        timeVal += ':00';
+      }
+      if (!dateVal) {
+        const yr = curNow.getFullYear();
+        const mo = String(curNow.getMonth() + 1).padStart(2, '0');
+        const da = String(curNow.getDate()).padStart(2, '0');
+        dateVal = `${yr}-${mo}-${da}`;
+      } else if (window.PaymentsCsv && window.PaymentsCsv.normalizeDate) {
+        dateVal = window.PaymentsCsv.normalizeDate(dateVal);
+      }
       const note = val('input-manual-note', '').trim();
       const activeProf = getCurrentProfileName();
 
       if (amount <= 0) {
         return showToast('<i data-lucide="alert-triangle"></i> Please enter a valid donation amount');
+      }
+
+      if (donor) {
+        try {
+          if (aliasVal) {
+            await fetch('/api/aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sender: donor, alias: aliasVal, profile: activeProf })
+            });
+          } else {
+            await fetch(`/api/aliases/${encodeURIComponent(donor)}?profile=${encodeURIComponent(activeProf)}`, { method: 'DELETE' });
+          }
+        } catch (_) { }
       }
 
       try {
@@ -3434,34 +4333,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function setupCodeAutoSeeding() {
-    const configs = [
-      { id: 'chk-enable-custom-code', kind: 'alert', fields: ['input-custom-html', 'input-custom-css', 'input-custom-js'] },
-      { id: 'chk-enable-goal-custom-code', kind: 'goal', fields: ['input-goal-custom-html', 'input-goal-custom-css', 'input-goal-custom-js'] },
-      { id: 'chk-enable-lb-custom-code', kind: 'leaderboard', fields: ['input-lb-custom-html', 'input-lb-custom-css', 'input-lb-custom-js'] }
-    ];
 
-    configs.forEach(c => {
-      on(c.id, 'change', (e) => {
-        if (!e.target.checked) return;
-
-        // If HTML or CSS is empty, seed them with the default full source
-        const htmlEmpty = !val(c.fields[0], '').trim();
-        const cssEmpty = !val(c.fields[1], '').trim();
-
-        if (htmlEmpty || cssEmpty) {
-          const defaults = ConfigSchema.DEFAULT_CODE[c.kind];
-          if (htmlEmpty) setVal(c.fields[0], defaults.customHTML);
-          if (cssEmpty) setVal(c.fields[1], defaults.customCSS);
-          // Always seed JS if empty
-          if (!val(c.fields[2], '').trim()) setVal(c.fields[2], defaults.customJS);
-
-          showToast('<i data-lucide="sparkles"></i> Restored ' + c.kind + ' baseline code', 'info');
-          syncLivePreview();
-        }
-      });
-    });
-  }
 
   let activeIconInput = null;
   const LUCIDE_ICONS_LIST = [
@@ -3517,7 +4389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setTimeout(() => {
       if (window.lucide) {
-        try { lucide.createIcons(); } catch (e) {}
+        try { lucide.createIcons(); } catch (e) { }
       }
     }, 20);
 
@@ -3566,6 +4438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function initDashboard() {
     console.log('[Config] Starting dashboard boot sequence...');
     initCodeEditors();
+    CodeStudio.init();
     setupTabs();
     setupCodeEditorTabs();
     setupVariablePills();
@@ -3577,14 +4450,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCyclingWidgetEditor();
     setupIconPicker();
     setupFileBrowsers();
-    setupCodeAutoSeeding();
     setupActionButtons();
     setupSimulator();
     setupNetworkAndSystem();
     setupEarningsAnalytics();
     setupPanelResizer();
     attachInputListeners();
-    connectDashboardWebSocket();
+    setupUpdateListeners();
 
     let activeProf = 'Default';
     try {
@@ -3610,6 +4482,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     console.log('[Config] Dashboard boot sequence completed with active profile:', activeProf);
+
+    // Dismiss boot loader dynamically after all loads complete, with a standard 500ms backoff buffer for smooth icon/font painting
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        const loader = el('dashboard-boot-loader');
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.visibility = 'hidden';
+          setTimeout(() => { try { loader.remove(); } catch (_) { } }, 400);
+        }
+      });
+    }, 500);
+
+    // Trigger silent background update check
+    setTimeout(() => { checkAppUpdates(true); }, 1200);
   }
 
   initDashboard();

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ & Troubleshooting | StreamPe</title>
+  <meta name="description"
+    content="Frequently Asked Questions, Google Play Protect sideloading guide, Android permission setup, battery optimization, and OBS configuration for StreamPe." />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body id="top">
+
+  <!-- Top Announcement Bar -->
+  <div class="announcement-bar">
+    <span>🛡️ Having trouble installing the APK? Read the Google Play Protect guide below!</span>
+  </div>
+
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="brand" aria-label="StreamPe Home">
+        <img src="assets/logo.png" alt="StreamPe Logo" class="brand-logo-img" />
+        <span>StreamPe</span>
+      </a>
+
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </button>
+
+      <ul class="nav-links" id="nav-menu">
+        <li><a href="index.html#features">Features</a></li>
+        <li><a href="index.html#showcase">Showcase</a></li>
+        <li><a href="index.html#overlays">OBS Overlays</a></li>
+        <li><a href="index.html#setup">Quick Setup</a></li>
+        <li><a href="faq.html" class="active">FAQ & Troubleshooting</a></li>
+        <li><a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="nav-btn-primary">Download</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- FAQ Header Section -->
+  <section class="page-header">
+    <div class="badge">📖 Help Center & Troubleshooting</div>
+    <h1 class="page-title">Frequently Asked <span class="gradient-text">Questions</span></h1>
+    <p class="page-subtitle">
+      Step-by-step guides for Android installation, Google Play Protect, battery optimization, local network connection, and OBS overlay configuration.
+    </p>
+
+    <!-- Quick Jump Chips -->
+    <div class="quick-jump-nav">
+      <a href="#play-protect" class="jump-chip">🛡️ Google Play Protect</a>
+      <a href="#restricted-settings" class="jump-chip">⚠️ Restricted Settings (Android 13+)</a>
+      <a href="#battery-optimization" class="jump-chip">🔋 Battery & Sleep Mode</a>
+      <a href="#payment-apps" class="jump-chip">💳 Supported Payment Apps</a>
+      <a href="#desktop-connection" class="jump-chip">🔌 PC & OBS Connection</a>
+    </div>
+  </section>
+
+  <!-- FAQ Content Area -->
+  <main class="faq-container">
+
+    <!-- Category 1: Google Play Protect & Sideloading -->
+    <div class="faq-category" id="play-protect">
+      <div class="category-header">
+        <div class="category-icon">🛡️</div>
+        <div>
+          <h2 class="category-title">Google Play Protect & APK Installation</h2>
+          <p class="category-desc">Why Android warns about sideloaded open-source APKs and how to install safely.</p>
+        </div>
+      </div>
+
+      <!-- FAQ Item 1.1 -->
+      <div class="faq-card open">
+        <button class="faq-question" aria-expanded="true">
+          <span>Why does Android show "Blocked by Play Protect" or "Unsafe app blocked"?</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <p>
+            Google Play Protect automatically flags <strong>any APK built outside the Google Play Store</strong> as an "Unknown developer" application. Because StreamPe is <strong>100% free, open-source, and self-hosted</strong>, the developer APK is distributed directly via GitHub Releases rather than Google's commercial marketplace.
+          </p>
+          <div class="alert-box info">
+            <strong>🔒 100% Private & Safe:</strong> StreamPe contains <strong>zero tracking, zero ads, zero external servers, and zero cloud telemetry</strong>. All communication occurs strictly over your own private local Wi-Fi router directly between your phone and your PC.
+          </div>
+
+          <h4 style="margin-top: 18px; margin-bottom: 8px; color: var(--accent-cyan);">Option A: Instant 5-Second Installation (Recommended)</h4>
+          <ol class="styled-list">
+            <li>When the Play Protect popup appears, tap <strong>"More details"</strong> (or the down arrow ▾ at the bottom).</li>
+            <li>Tap <strong>"Install anyway"</strong> (or <em>"Install anyway (unsafe)"</em>).</li>
+            <li>The app will install immediately and is ready to use!</li>
+          </ol>
+
+          <h4 style="margin-top: 18px; margin-bottom: 8px; color: var(--accent-cyan);">Option B: Temporarily Pause Play Protect Scanning</h4>
+          <p>If your device prevents tapping "Install anyway", you can temporarily pause Play Protect scanning during installation:</p>
+          <ol class="styled-list">
+            <li>Open the <strong>Google Play Store</strong> on your phone.</li>
+            <li>Tap your <strong>Profile Icon</strong> in the top-right corner.</li>
+            <li>Select <strong>Play Protect</strong> ➔ Tap the <strong>Settings Gear (⚙️)</strong> in the top-right corner.</li>
+            <li>Toggle <strong>OFF</strong> <em>"Scan apps with Play Protect"</em>.</li>
+            <li>Open and install <code>StreamPe.apk</code>.</li>
+            <li><em>(Optional)</em> You can toggle Play Protect back <strong>ON</strong> anytime after installation completes.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- FAQ Item 1.2 -->
+      <div class="faq-card" id="restricted-settings">
+        <button class="faq-question" aria-expanded="false">
+          <span>"Restricted Setting: For your security, this setting is currently unavailable"</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <p>
+            On <strong>Android 13, 14, and 15</strong>, Google introduced a security measure that temporarily locks the <em>Notification Listener Access</em> toggle for sideloaded APKs until the user explicitly unlocks it.
+          </p>
+          <h4 style="margin-top: 14px; margin-bottom: 8px; color: var(--accent-cyan);">How to unlock in 3 steps:</h4>
+          <ol class="styled-list">
+            <li>Open your phone's <strong>Settings</strong> ➔ <strong>Apps</strong> (or <em>Manage Apps / App Management</em>).</li>
+            <li>Find and tap <strong>StreamPe</strong> in the app list.</li>
+            <li>Tap the <strong>3 Dots (⋮)</strong> menu icon in the <strong>top-right corner</strong> of the App Info screen.</li>
+            <li>Tap <strong>"Allow restricted settings"</strong> (authenticate with Fingerprint, Face Unlock, or PIN if prompted).</li>
+            <li>Re-open the <strong>StreamPe companion app</strong> and tap <strong>"Grant Notification Access"</strong> — the toggle is now unlocked!</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 2: Battery & Sleep Mode -->
+    <div class="faq-category" id="battery-optimization">
+      <div class="category-header">
+        <div class="category-icon">🔋</div>
+        <div>
+          <h2 class="category-title">Battery Optimization & Background Persistence</h2>
+          <p class="category-desc">Prevent your phone vendor from closing the background WebSocket connection during long live streams.</p>
+        </div>
+      </div>
+
+      <!-- FAQ Item 2.1 -->
+      <div class="faq-card">
+        <button class="faq-question" aria-expanded="false">
+          <span>Why do alerts stop arriving when my phone screen turns off?</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <p>
+            Aggressive Android battery management (such as Samsung One UI, Xiaomi HyperOS, OnePlus OxygenOS, or Vivo FuntouchOS) puts background network sockets to sleep when the screen turns off.
+          </p>
+          <h4 style="margin-top: 14px; margin-bottom: 8px; color: var(--accent-cyan);">Vendor-Specific Whitelist Instructions:</h4>
+          <ul class="styled-list">
+            <li><strong>Samsung (One UI):</strong> Go to <em>Settings ➔ Battery ➔ Background usage limits ➔ Never sleeping apps</em> ➔ Add <strong>StreamPe</strong>.</li>
+            <li><strong>Xiaomi / Redmi (MIUI / HyperOS):</strong> Go to <em>App Info ➔ Enable "Autostart"</em> ➔ Set <em>Battery Saver</em> to <strong>"No restrictions"</strong>.</li>
+            <li><strong>OnePlus / Realme / Oppo (ColorOS):</strong> Go to <em>App Info ➔ Battery usage</em> ➔ Enable <strong>"Allow background activity"</strong> and <strong>"Allow auto-launch"</strong>.</li>
+            <li><strong>Stock Android / Pixel / Motorola:</strong> Go to <em>Settings ➔ Apps ➔ StreamPe ➔ Battery</em> ➔ Select <strong>"Unrestricted"</strong>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 3: Supported Payment Apps -->
+    <div class="faq-category" id="payment-apps">
+      <div class="category-header">
+        <div class="category-icon">💳</div>
+        <div>
+          <h2 class="category-title">Supported Payment Apps & UPI Features</h2>
+          <p class="category-desc">Information on Google Pay, PhonePe, Amazon Pay, and custom donor notes.</p>
+        </div>
+      </div>
+
+      <!-- FAQ Item 3.1 -->
+      <div class="faq-card">
+        <button class="faq-question" aria-expanded="false">
+          <span>Which payment applications are supported?</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>App</th>
+                  <th>Support Status</th>
+                  <th>Permission Required</th>
+                  <th>Features & Highlights</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Google Pay (GPay)</strong></td>
+                  <td><span class="badge-success">💬 Highly Recommended</span></td>
+                  <td>Notification Access Only</td>
+                  <td><strong>Amount + Custom Donor Messages/Notes</strong> supported live on stream!</td>
+                </tr>
+                <tr>
+                  <td><strong>PhonePe</strong></td>
+                  <td><span class="badge-success">⚡ Highly Recommended</span></td>
+                  <td>Notification Access Only</td>
+                  <td>Instant Amount & Sender Name extraction without extra permissions.</td>
+                </tr>
+                <tr>
+                  <td><strong>Amazon Pay</strong></td>
+                  <td><span class="badge-neutral">🛒 Supported</span></td>
+                  <td>Notification Access</td>
+                  <td>UPI payments parsed from notification payload.</td>
+                </tr>
+                <tr>
+                  <td><strong>Cash / Offline</strong></td>
+                  <td><span class="badge-neutral">💵 Manual Entry</span></td>
+                  <td>None</td>
+                  <td>Add cash/offline donations directly into the stream ledger from the dashboard.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- FAQ Item 3.2 -->
+      <div class="faq-card">
+        <button class="faq-question" aria-expanded="false">
+          <span>How do custom donor messages work?</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <p>
+            When a fan pays using <strong>Google Pay</strong> and types a note (e.g. <em>"Awesome clutch in game 2! 🔥"</em>), Google Pay includes this message directly in the Android notification payload.
+          </p>
+          <p>
+            StreamPe's parser extracts the note and passes it into your custom alert template as the <code>{{message}}</code> tag so it displays animated on your OBS stream!
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 4: PC & OBS Connection -->
+    <div class="faq-category" id="desktop-connection">
+      <div class="category-header">
+        <div class="category-icon">🔌</div>
+        <div>
+          <h2 class="category-title">PC Server & OBS Connectivity</h2>
+          <p class="category-desc">Troubleshooting network firewalls, browser source transparency, and mDNS auto-discovery.</p>
+        </div>
+      </div>
+
+      <!-- FAQ Item 4.1 -->
+      <div class="faq-card">
+        <button class="faq-question" aria-expanded="false">
+          <span>"Failed to connect to server" when entering IP address</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <ul class="styled-list">
+            <li><strong>Same Wi-Fi Router:</strong> Ensure your streaming PC and phone are connected to the exact same Wi-Fi network (avoid cellular mobile data).</li>
+            <li><strong>Windows Firewall:</strong> When launching <code>StreamPe.exe</code>, make sure Windows Firewall permissions are enabled for <strong>Private networks</strong>.</li>
+            <li><strong>Correct Port:</strong> Check the header of your StreamPe desktop app for the active connection URL (e.g. <code>http://192.168.1.100:2907</code>).</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- FAQ Item 4.2 -->
+      <div class="faq-card">
+        <button class="faq-question" aria-expanded="false">
+          <span>How do I get a 100% transparent overlay in OBS Studio?</span>
+          <span class="faq-chevron"></span>
+        </button>
+        <div class="faq-answer">
+          <p>
+            All StreamPe OBS overlays are transparent by default. In the Web Control Panel (<code>/config</code>), navigate to the widget styling settings and set <strong>Background Opacity</strong> to <code>0%</code> for a completely transparent backdrop that lets your gameplay shine through.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help Banner -->
+    <div class="help-cta-banner">
+      <h3>Still need assistance?</h3>
+      <p>Join our open community or file an issue directly on GitHub.</p>
+      <div class="hero-ctas" style="margin-top: 16px;">
+        <a href="https://github.com/clowneon1/streampe/issues" target="_blank" class="btn btn-secondary">
+          <span>🐛 Open GitHub Issue</span>
+        </a>
+        <a href="https://github.com/clowneon1/streampe" target="_blank" class="btn btn-primary">
+          <span>⭐ Star on GitHub</span>
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <img src="assets/logo.png" alt="StreamPe Logo" class="brand-logo-img" />
+        <span class="footer-title">StreamPe</span>
+        <p class="footer-desc">Free & open-source real-time payment alerts for OBS Studio.</p>
+      </div>
+      <div class="footer-links-group">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="index.html#showcase">Showcase</a></li>
+          <li><a href="index.html#overlays">Overlays</a></li>
+          <li><a href="faq.html">FAQ & Troubleshooting</a></li>
+        </ul>
+      </div>
+      <div class="footer-links-group">
+        <h4>Community</h4>
+        <ul>
+          <li><a href="https://github.com/clowneon1/streampe" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank">Latest Releases</a></li>
+          <li><a href="https://github.com/clowneon1/streampe/blob/main/LICENSE" target="_blank">MIT License</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Developed with ❤️ by <a href="https://github.com/clowneon1" target="_blank">clowneon1</a> | 100% Free & Open Source under the MIT License</p>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightbox-modal" aria-hidden="true" role="dialog">
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-container">
+      <button class="lightbox-close" id="lightbox-close" aria-label="Close Lightbox">✕</button>
+      <button class="lightbox-nav prev" id="lightbox-prev" aria-label="Previous image">❮</button>
+      <button class="lightbox-nav next" id="lightbox-next" aria-label="Next image">❯</button>
+      <div class="lightbox-content">
+        <div class="lightbox-frame" id="lightbox-frame">
+          <img src="" alt="Screenshot" id="lightbox-img" class="lightbox-image" />
+        </div>
+        <div class="lightbox-info">
+          <h4 id="lightbox-title" class="lightbox-title"></h4>
+          <p id="lightbox-desc" class="lightbox-desc"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -20,7 +20,8 @@
 
   <!-- Top Announcement Bar -->
   <div class="announcement-bar">
-    <span id="announcement-text">🎉 StreamPe Released!</span>
+    <span id="announcement-text">🎉 Free, Self-Hosted Mobile Payment Alerts & OBS Overlays for Streamers!</span>
+    <a href="https://github.com/clowneon1/streampe/releases/latest" id="announcement-link" target="_blank">Download Latest</a>
   </div>
 
   <!-- Navbar -->
@@ -39,35 +40,41 @@
 
       <ul class="nav-links" id="nav-menu">
         <li><a href="#features">Features</a></li>
-        <li><a href="#carousel">Screenshots</a></li>
+        <li><a href="#showcase">Showcase</a></li>
         <li><a href="#overlays">OBS Overlays</a></li>
-        <li><a href="#setup">Setup Guide</a></li>
+        <li><a href="#setup">Quick Setup</a></li>
+        <li><a href="faq.html">FAQ & Troubleshooting</a></li>
+        <li><a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="nav-btn-primary">Download</a></li>
       </ul>
     </div>
   </header>
 
   <!-- Hero Section -->
   <section class="hero">
-    <div class="badge" id="badge-version">🚀 StreamPe Release Out Now</div>
+    <div class="badge" id="badge-version">🚀 StreamPe Stable Release Available</div>
     <h1 class="hero-title">
       Real-Time Mobile Payment Alerts for <span class="gradient-text">OBS Studio</span>
     </h1>
     <p class="hero-subtitle">
       A free, open-source, ultra-fast, and self-hosted application to display live Google Pay, PhonePe, and Amazon Pay
-      notifications, donation goal bars, top supporters, and cycling widgets on your stream.
+      notifications, donation goal bars, top supporters, and cycling widgets on your live stream.
     </p>
 
     <div class="hero-ctas">
-      <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-primary"
+      <a href="https://github.com/clowneon1/streampe/releases/latest" class="btn btn-primary"
         id="btn-download-portable">
-        <span>📦 Download Portable ZIP</span>
+        <span>📦 Download Portable ZIP (PC)</span>
       </a>
-      <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="btn btn-secondary">
-        <span>📱 Download Android Companion APK</span>
+      <a href="https://github.com/clowneon1/streampe/releases/latest" class="btn btn-secondary"
+        id="btn-download-apk">
+        <span>📱 Download Android APK</span>
+      </a>
+      <a href="faq.html#play-protect" class="btn btn-secondary" style="border-color: rgba(145, 70, 255, 0.4);">
+        <span>🛡️ Play Protect Guide</span>
       </a>
     </div>
 
-    <!-- Repository & Release Notes Links below Download buttons -->
+    <!-- Repository & Release Notes Links -->
     <div class="repo-sublink">
       <a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank" class="sublink-item">
         📋 View Release Notes ➔
@@ -75,6 +82,10 @@
       <span class="sublink-sep">&bull;</span>
       <a href="https://github.com/clowneon1/streampe" target="_blank" class="sublink-item">
         📁 Browse Source Code Repository ➔
+      </a>
+      <span class="sublink-sep">&bull;</span>
+      <a href="faq.html" class="sublink-item">
+        ❓ Troubleshooting FAQ ➔
       </a>
     </div>
 
@@ -98,24 +109,23 @@
     </div>
   </section>
 
-  <!-- Interactive Screenshot Carousel -->
-  <section class="carousel-section" id="carousel">
+  <!-- Interactive Screenshot Carousel & Lightbox -->
+  <section class="carousel-section" id="showcase">
     <div class="section-header">
-      <h2 class="section-title">Application Screenshots & Previews</h2>
-      <p class="section-desc">Explore the desktop control panel, live alert customizer, goal widget, and companion app.
-      </p>
+      <h2 class="section-title">Application Showcase & Previews</h2>
+      <p class="section-desc">Explore the desktop control panel, live alert customizer, fullscreen code studio, and companion app. Click any preview to zoom.</p>
     </div>
 
     <div class="carousel-container">
-      <div class="carousel-viewport">
+      <div class="carousel-viewport" title="Click to view full resolution">
 
         <!-- Slide 1 -->
         <div class="carousel-slide active">
           <img src="assets/earning-overview-dashboard.png" alt="Earning Overview & Analytics Dashboard" />
           <div class="carousel-caption">
             <span class="caption-title">📊 Earning Overview & Analytics Dashboard</span>
-            <span class="caption-desc">Interactive earnings dashboard with daily timeline revenue graphs, branded
-              payment breakdowns, and top supporters.</span>
+            <span class="caption-desc">Interactive earnings dashboard with daily timeline revenue graphs, branded payment breakdowns, and top supporters.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
@@ -124,48 +134,58 @@
           <img src="assets/live-alert-customizer.png" alt="Live Alert Customizer & OBS Preview Grid" />
           <div class="carousel-caption">
             <span class="caption-title">🎛️ Live Alert Customizer & Grid Preview</span>
-            <span class="caption-desc">Real-time customizer with transparent OBS grid preview, Handlebars.js template
-              support, colors, and entry animations.</span>
+            <span class="caption-desc">Real-time customizer with transparent OBS grid preview, Handlebars.js template support, colors, and entry animations.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
         <!-- Slide 3 -->
         <div class="carousel-slide">
-          <img src="assets/payment-goal-bar.png" alt="Payment Goal Bar Widget" />
+          <img src="assets/code-studio.png" alt="Fullscreen Code Studio & Live Sandbox" />
           <div class="carousel-caption">
-            <span class="caption-title">🎯 Stream Goal Bar Widget</span>
-            <span class="caption-desc">Configurable donation target track, gradient fill colors, and progress percentage
-              overflow beyond 100%.</span>
+            <span class="caption-title">💻 Fullscreen Code Studio & Live Sandbox</span>
+            <span class="caption-desc">Fullscreen code editor with real-time Handlebars HTML, CSS, and JS preview sandbox, Prettier formatting, and selector pills.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
         <!-- Slide 4 -->
         <div class="carousel-slide">
-          <img src="assets/unified-list-widget.png" alt="Unified List Widget System" />
+          <img src="assets/payment-goal-bar.png" alt="Payment Goal Bar Widget" />
           <div class="carousel-caption">
-            <span class="caption-title">🏆 Unified List Widget System</span>
-            <span class="caption-desc">Modular list system for displaying Top Supporters Leaderboard and Recent
-              Donations feed.</span>
+            <span class="caption-title">🎯 Stream Goal Bar Widget</span>
+            <span class="caption-desc">Configurable donation target track, gradient fill colors, and progress percentage overflow beyond 100%.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
         <!-- Slide 5 -->
         <div class="carousel-slide">
-          <img src="assets/auto-cycling-widget.png" alt="Auto Cycling Widget" />
+          <img src="assets/unified-list-widget.png" alt="Unified List Widget System" />
           <div class="carousel-caption">
-            <span class="caption-title">🔄 Auto-Cycling Info Widget</span>
-            <span class="caption-desc">Rotational widget cycling through top supporters, recent donations, and custom
-              promo banners with custom transition effects.</span>
+            <span class="caption-title">🏆 Unified List Widget System</span>
+            <span class="caption-desc">Modular list system for displaying Top Supporters Leaderboard and Recent Donations feed.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
         <!-- Slide 6 -->
         <div class="carousel-slide">
-          <img src="assets/native-desktop-app.png" alt="Ultra-Lightweight Tauri v2 Desktop App" />
+          <img src="assets/auto-cycling-widget.png" alt="Auto Cycling Widget" />
+          <div class="carousel-caption">
+            <span class="caption-title">🔄 Auto-Cycling Info Widget</span>
+            <span class="caption-desc">Rotational widget cycling through top supporters, recent donations, and custom promo banners with custom transition effects.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
+          </div>
+        </div>
+
+        <!-- Slide 7 -->
+        <div class="carousel-slide vertical-slide" data-orientation="vertical">
+          <img src="assets/native-desktop-app.png" alt="Ultra-Lightweight Tauri v2 Desktop App" class="vertical-img" />
           <div class="carousel-caption">
             <span class="caption-title">⚡ Native Tauri v2 Desktop Shell</span>
-            <span class="caption-desc">Compact desktop wrapper with system tray integration, start-on-boot support, and
-              one-click URL copy.</span>
+            <span class="caption-desc">Compact desktop wrapper with system tray integration, start-on-boot support, and one-click URL copy.</span>
+            <span class="carousel-hint">🔍 Click to zoom full resolution</span>
           </div>
         </div>
 
@@ -177,6 +197,7 @@
       <!-- Navigation Dots -->
       <div class="carousel-dots">
         <div class="dot active"></div>
+        <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
         <div class="dot"></div>
@@ -197,43 +218,49 @@
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
         <h3 class="feature-title">Instant Payment Alerts</h3>
-        <p class="feature-desc">Real-time alert cards popup on your stream within milliseconds of a payment hitting your
-          phone. Zero delay when fans support your stream.</p>
+        <p class="feature-desc">Real-time alert cards popup on your stream within milliseconds of a payment hitting your phone. Zero delay when fans support your stream.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">📊</div>
         <h3 class="feature-title">Revenue Analytics Dashboard</h3>
-        <p class="feature-desc">Interactive earnings dashboard with daily income charts, top supporter rankings, and
-          payment breakdowns to track your stream growth.</p>
+        <p class="feature-desc">Interactive earnings dashboard with daily income charts, top supporter rankings, and payment breakdowns to track your stream growth.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">💻</div>
+        <h3 class="feature-title">Fullscreen Code Studio</h3>
+        <p class="feature-desc">Build completely custom alert cards and widgets with custom HTML, CSS animations, and JS logic backed by a real-time live preview sandbox.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">🎯</div>
         <h3 class="feature-title">Live Donation Goal Trackers</h3>
-        <p class="feature-desc">Set funding goals for stream gear, events, or milestones with animated progress bars
-          that automatically update live as donations arrive.</p>
+        <p class="feature-desc">Set funding goals for stream gear, events, or milestones with animated progress bars that automatically update live as donations arrive.</p>
       </div>
 
       <div class="feature-card">
-        <div class="feature-icon">💬</div>
-        <h3 class="feature-title">Google Pay Donor Messages</h3>
-        <p class="feature-desc">Automatically display donor names, donation amounts, and custom donor message notes
-          directly on your live overlay screen.</p>
+        <div class="feature-icon">🏷️</div>
+        <h3 class="feature-title">Canonical Donor Aliases</h3>
+        <p class="feature-desc">Map raw bank and UPI sender names to custom streamer aliases with smart canonical matching across PhonePe, GPay, and Amazon Pay.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">🔄</div>
         <h3 class="feature-title">Auto-Cycling Overlay Widgets</h3>
-        <p class="feature-desc">Keep your stream layout clean by automatically cycling between top supporters, recent
-          donations, and custom promo banners.</p>
+        <p class="feature-desc">Keep your stream layout clean by automatically cycling between top supporters, recent donations, and custom promo banners.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <h3 class="feature-title">Multi-Profile & ZIP Backups</h3>
+        <p class="feature-desc">Maintain separate configuration profiles for gaming, chatting, or events with zero-dependency ZIP backup and migration support.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">🔒</div>
         <h3 class="feature-title">100% Private & Self-Hosted</h3>
-        <p class="feature-desc">Operates entirely within your own local Wi-Fi network. Your financial notifications stay
-          100% private on your own PC and phone.</p>
+        <p class="feature-desc">Operates entirely within your own local Wi-Fi network. Your financial notifications stay 100% private on your own PC and phone.</p>
       </div>
     </div>
   </section>
@@ -285,7 +312,7 @@
     </div>
   </section>
 
-  <!-- Redesigned Quick Setup Section -->
+  <!-- Quick Setup Section -->
   <section class="features-section" id="setup">
     <div class="section-header">
       <h2 class="section-title">🚀 Streamer Quick Setup Guide</h2>
@@ -317,7 +344,7 @@
         <div class="setup-content">
           <h3 class="setup-title">Connect Companion App</h3>
           <p class="setup-text">Install the Android companion APK on your phone. Grant Notification Access so it can
-            forward Google Pay & PhonePe alerts.</p>
+            forward Google Pay & PhonePe alerts. (<a href="faq.html#play-protect">Play Protect guide</a>)</p>
         </div>
       </div>
 
@@ -334,20 +361,53 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <p>Developed with ❤️ by <a href="https://github.com/clowneon1" target="_blank">clowneon1</a> | Distributed under the
-      <a href="https://github.com/clowneon1/streampe/blob/main/LICENSE" target="_blank">MIT License</a></p>
+    <div class="footer-container">
+      <div class="footer-brand">
+        <img src="assets/logo.png" alt="StreamPe Logo" class="brand-logo-img" />
+        <span class="footer-title">StreamPe</span>
+        <p class="footer-desc">Free & open-source real-time payment alerts for OBS Studio.</p>
+      </div>
+      <div class="footer-links-group">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#showcase">Showcase</a></li>
+          <li><a href="#overlays">Overlays</a></li>
+          <li><a href="faq.html">FAQ & Troubleshooting</a></li>
+        </ul>
+      </div>
+      <div class="footer-links-group">
+        <h4>Community</h4>
+        <ul>
+          <li><a href="https://github.com/clowneon1/streampe" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://github.com/clowneon1/streampe/releases/latest" target="_blank">Latest Releases</a></li>
+          <li><a href="https://github.com/clowneon1/streampe/blob/main/LICENSE" target="_blank">MIT License</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Developed with ❤️ by <a href="https://github.com/clowneon1" target="_blank">clowneon1</a> | 100% Free & Open Source under the MIT License</p>
+    </div>
   </footer>
 
-  <!-- Floating GitHub Circle CTA -->
-  <a href="https://github.com/clowneon1/streampe" target="_blank" class="floating-github-btn"
-    aria-label="Star StreamPe on GitHub">
-    <svg class="gh-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-      <path
-        d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-    </svg>
-    <span class="star-badge">⭐</span>
-    <span class="floating-tooltip">Star on GitHub</span>
-  </a>
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightbox-modal" aria-hidden="true" role="dialog">
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-container">
+      <button class="lightbox-close" id="lightbox-close" aria-label="Close Lightbox">✕</button>
+      <button class="lightbox-nav prev" id="lightbox-prev" aria-label="Previous image">❮</button>
+      <button class="lightbox-nav next" id="lightbox-next" aria-label="Next image">❯</button>
+      <div class="lightbox-content">
+        <div class="lightbox-frame" id="lightbox-frame">
+          <img src="" alt="Screenshot" id="lightbox-img" class="lightbox-image" />
+        </div>
+        <div class="lightbox-info">
+          <h4 id="lightbox-title" class="lightbox-title"></h4>
+          <p id="lightbox-desc" class="lightbox-desc"></p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

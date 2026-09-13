@@ -1,6 +1,6 @@
 [package]
 name = "streampe"
-version = "2.1.0"
+version = "2.3.0"
 description = "StreamPe – PC Server & Desktop App"
 authors = ["clowneon1"]
 license = "MIT"
@@ -8,7 +8,7 @@ repository = ""
 edition = "2021"
 
 [lib]
-name = "payment_alerts_obs_lib"
+name = "streampe_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

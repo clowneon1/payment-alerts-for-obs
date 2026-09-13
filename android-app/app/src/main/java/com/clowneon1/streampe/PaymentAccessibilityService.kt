@@ -2,11 +2,12 @@ package com.clowneon1.streampe
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.os.Bundle
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class PaymentAccessibilityService : AccessibilityService() {
 
@@ -32,7 +33,7 @@ class PaymentAccessibilityService : AccessibilityService() {
     }
 
     /** pkg+hash → last forward time (ms). Prevents duplicate fires. */
-    private val recentlySent = mutableMapOf<String, Long>()
+    private val recentlySent = ConcurrentHashMap<String, Long>()
     private val DEBOUNCE_MS = 2_000L
 
     override fun onServiceConnected() {
@@ -49,6 +50,7 @@ class PaymentAccessibilityService : AccessibilityService() {
         }
         NotificationService.allowedPackages =
             AppPrefs(applicationContext).selectedPackages
+        AlertLog.init(applicationContext)
         Log.d(TAG, "A11y connected — allowedPackages: ${NotificationService.allowedPackages?.size}")
     }
 
@@ -114,22 +116,10 @@ class PaymentAccessibilityService : AccessibilityService() {
         }
     }
 
-    /**
-     * Depth-first walk of [node]. When we encounter a node whose
-     * contentDescription or text matches an allowed package's app name,
-     * we collect all descendant text leaves as title + body.
-     *
-     * More reliably, we look for ViewGroup nodes that contain both a
-     * "title" leaf and a "body" leaf (heuristic: first non-empty text =
-     * title, rest = body) and whose sibling/ancestor context identifies
-     * the source package via the notification's app label.
-     */
     private fun harvestNotificationRows(
         root: AccessibilityNodeInfo,
         allowed: Set<String>
     ) {
-        // Collect all leaf text nodes grouped by their nearest scrollable/
-        // focusable container — each container ≈ one notification row.
         val containers = mutableListOf<AccessibilityNodeInfo>()
         findNotificationContainers(root, containers)
 
@@ -146,11 +136,9 @@ class PaymentAccessibilityService : AccessibilityService() {
         node: AccessibilityNodeInfo,
         out: MutableList<AccessibilityNodeInfo>
     ) {
-        // A notification row is typically a focusable, non-scrollable
-        // container that lives inside the shade scroll view.
         if (node.isFocusable && !node.isScrollable && node.childCount > 0) {
             out.add(AccessibilityNodeInfo.obtain(node))
-            return  // don't recurse into children — row is atomic
+            return
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
@@ -160,19 +148,16 @@ class PaymentAccessibilityService : AccessibilityService() {
     }
 
     private fun processContainer(container: AccessibilityNodeInfo, allowed: Set<String>) {
-        // Gather all visible text leaves in this row
         val leaves = mutableListOf<String>()
         collectTextLeaves(container, leaves)
 
         if (leaves.isEmpty()) return
 
-        // Try to match any leaf to an allowed app's label
         val matchedPkg = allowed.firstOrNull { pkg ->
             val label = appLabel(pkg)
             leaves.any { leaf -> leaf.contains(label, ignoreCase = true) }
         } ?: return
 
-        // Filter out the app label itself and redacted placeholders
         val appLabel = appLabel(matchedPkg)
         val content = leaves.filter { leaf ->
             !leaf.equals(appLabel, ignoreCase = true) && !isRedacted(leaf)
@@ -215,7 +200,7 @@ class PaymentAccessibilityService : AccessibilityService() {
     private fun isRedacted(text: String): Boolean =
         REDACTED_STRINGS.any { text.trim().lowercase().contains(it) }
 
-    private val labelCache = mutableMapOf<String, String>()
+    private val labelCache = ConcurrentHashMap<String, String>()
     private fun appLabel(pkg: String): String =
         labelCache.getOrPut(pkg) {
             try {
@@ -233,14 +218,41 @@ class PaymentAccessibilityService : AccessibilityService() {
             return
         }
         recentlySent[hash] = time
-        // Prune old entries so the map doesn't grow unbounded
+
+        // Safe prune old entries
         val cutoff = time - 30_000L
-        recentlySent.entries.removeAll { it.value < cutoff }
+        val oldKeys = recentlySent.filter { it.value < cutoff }.keys
+        for (k in oldKeys) {
+            recentlySent.remove(k)
+        }
+
+        val appName = appLabel(pkg)
+        val isTestApp = pkg.contains("whatsapp", ignoreCase = true) || appName.contains("whatsapp", ignoreCase = true)
+
+        val parsed = PaymentParser.parse(
+            title = title,
+            text = body,
+            bigText = body,
+            packageName = pkg,
+            appName = appName
+        )
+
+        // If not a test app and not a payment event, ignore
+        if (!isTestApp && parsed == null) {
+            Log.d(TAG, "[$source] Filtered non-payment: $pkg | $title | $body")
+            return
+        }
+
+        val alertId = UUID.randomUUID().toString()
 
         val payload = JSONObject().apply {
+            put("alertId",     alertId)
             put("source",      source)
             put("packageName", pkg)
-            put("appName",     appLabel(pkg))
+            put("appName",     appName)
+            put("sender",      parsed?.sender ?: "")
+            put("amount",      parsed?.amount ?: "")
+            put("message",     parsed?.message ?: "")
             put("timestamp",   time)
             put("title",       title)
             put("titleBig",    title)
@@ -253,7 +265,9 @@ class PaymentAccessibilityService : AccessibilityService() {
             put("isRedacted",  false)
         }
 
-        Log.d(TAG, "[$source] Forwarding $pkg | $title | $body")
+        AlertLog.add(AlertLog.fromJson(payload))
+
+        Log.d(TAG, "[$source] Forwarding $pkg | alertId=$alertId | ${parsed?.sender} | ${parsed?.amount}")
         WebSocketManager.send(payload.toString())
     }
 

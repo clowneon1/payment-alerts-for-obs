@@ -15,6 +15,11 @@
   }
 
   function applyGoalSettings(newSettings) {
+    if (newSettings && newSettings.widgets && newSettings.widgets.goal) {
+      if (newSettings.widgets.goal.currentAmount === undefined && config?.widgets?.goal?.currentAmount !== undefined) {
+        newSettings.widgets.goal.currentAmount = config.widgets.goal.currentAmount;
+      }
+    }
     config = StorageHelper.mergeWithDefaults(newSettings);
     const goal = config.widgets.goal;
     const root = document.documentElement;
@@ -66,11 +71,11 @@
     if (goal.code.enableCustomCode === false || !goal.code.customJS || !goal.code.customJS.trim()) return;
 
     try {
-      const start = parseFloat(goal.startAmount) || 0;
-      const current = parseFloat(goal.currentAmount) || 0;
-      const target = Math.max(start + 1, parseFloat(goal.targetAmount) || 5000);
-      const range = Math.max(1, target - start);
-      const rawPercent = ((current - start) / range) * 100;
+      const rawCurrent = parseFloat(goal.currentAmount);
+      const current = Number.isFinite(rawCurrent) ? rawCurrent : 0;
+      const rawTarget = parseFloat(goal.targetAmount);
+      const target = Number.isFinite(rawTarget) ? rawTarget : 5000;
+      const rawPercent = target > 0 ? (current / target) * 100 : (current > 0 ? 100 : 0);
       const allowOverflow = !!goal.allowOverflow;
       const percent = allowOverflow
         ? Math.max(0, rawPercent)
@@ -80,7 +85,6 @@
         title: goal.title,
         targetAmount: target,
         currentAmount: current,
-        startAmount: start,
         percent: percent,
         endDate: goal.endDate || '',
         config: goal
@@ -102,11 +106,11 @@
       return;
     }
 
-    const start = parseFloat(goal.startAmount) || 0;
-    const current = parseFloat(goal.currentAmount) || 0;
-    const target = Math.max(start + 1, parseFloat(goal.targetAmount) || 5000);
-    const range = Math.max(1, target - start);
-    const rawPercent = ((current - start) / range) * 100;
+    const rawCurrent = parseFloat(goal.currentAmount);
+    const current = Number.isFinite(rawCurrent) ? rawCurrent : 0;
+    const rawTarget = parseFloat(goal.targetAmount);
+    const target = Number.isFinite(rawTarget) ? rawTarget : 5000;
+    const rawPercent = target > 0 ? (current / target) * 100 : (current > 0 ? 100 : 0);
     const allowOverflow = !!goal.allowOverflow;
     const percentNum = allowOverflow
       ? Math.max(0, rawPercent)
@@ -120,15 +124,23 @@
       title: goal.title,
       targetAmount: formattedTarget,
       currentAmount: formattedCurrent,
+      formattedTarget: formattedTarget,
+      formattedCurrent: formattedCurrent,
+      target: target,
+      current: current,
       percent: `${percent}%`,
-      endDate: goal.endDate || ''
+      percentage: percent,
+      endDate: goal.endDate || '',
+      subtitle: goal.subtitleTemplate ? TemplateEngine.render(goal.subtitleTemplate, { currentAmount: formattedCurrent, targetAmount: formattedTarget, percent: `${percent}%` }) : ''
     };
 
     const goalTitle = TemplateEngine.render(goal.text.titleTemplate || goal.title || 'Payment Goal', context);
     context.title = goalTitle; // Use the rendered title for custom HTML
 
-    if (goal.code.enableCustomCode !== false && goal.code.customHTML && goal.code.customHTML.trim()) {
-      container.innerHTML = TemplateEngine.render(goal.code.customHTML, context);
+    if (goal.code && goal.code.enableCustomCode !== false) {
+      container.innerHTML = (typeof goal.code.customHTML === 'string' && goal.code.customHTML)
+        ? TemplateEngine.render(goal.code.customHTML, context)
+        : '';
       return;
     }
 

@@ -13,15 +13,20 @@ A free, open-source, ultra-fast, and self-hosted solution to display real-time m
 | <img src="readme-assets/earning-overview-dashboard.png" width="420" alt="StreamPe Earning Overview" /> | <img src="readme-assets/live-alert-customizer.png" width="420" alt="Live Alert Customizer" /> |
 | *Interactive earnings dashboard with income charts & payment breakdowns* | *Real-time alert customizer with live transparent OBS overlay grid* |
 
-| 🎯 Payment Goal Bar Widget | 🏆 Unified List Widget System |
+| 💻 Fullscreen Code Studio & Live Sandbox | 🎯 Payment Goal Bar Widget |
 | :---: | :---: |
-| <img src="readme-assets/payment-goal-bar.png" width="420" alt="Payment Goal Bar" /> | <img src="readme-assets/unified-list-widget.png" width="420" alt="Top Supporters & Recent List" /> |
-| *Configurable donation goal track, fill colors, and progress overflow* | *Modular list widget system for Top Supporters and Recent Donations* |
+| <img src="readme-assets/code-studio.png" width="420" alt="Fullscreen Code Studio" /> | <img src="readme-assets/payment-goal-bar.png" width="420" alt="Payment Goal Bar" /> |
+| *Monaco/CodeMirror code editor with real-time HTML/CSS/JS preview sandbox* | *Configurable donation goal track, fill colors, and progress overflow* |
 
-| 🔄 Auto-Cycling Info Widget | ⚡ Native Desktop App & System Tray |
+| 🏆 Unified List Widget System | 🔄 Auto-Cycling Info Widget |
 | :---: | :---: |
-| <img src="readme-assets/auto-cycling-widget.png" width="420" alt="Auto Cycling Widget" /> | <img src="readme-assets/native-desktop-app.png" width="420" alt="StreamPe Desktop App" /> |
-| *Rotational info widget cycling through custom cards & recent alerts* | *Ultra-lightweight Tauri v2 + Bun desktop app (< 25 MB RAM)* |
+| <img src="readme-assets/unified-list-widget.png" width="420" alt="Top Supporters & Recent List" /> | <img src="readme-assets/auto-cycling-widget.png" width="420" alt="Auto Cycling Widget" /> |
+| *Modular list widget system for Top Supporters and Recent Donations* | *Rotational info widget cycling through custom cards & recent alerts* |
+
+| ⚡ Native Tauri v2 Desktop Client | 🎛️ System Preferences & Storage Root |
+| :---: | :---: |
+| <img src="readme-assets/native-desktop-app.png" width="340" alt="Native Desktop Client" /> | <img src="readme-assets/native-system-tray.png" width="340" alt="System Tray Integration" /> |
+| *Ultra-compact desktop shell with live server status & 1-click URL copy* | *Auto-start on Windows boot, system tray minimizing & custom storage root* |
 
 ### 📱 Android Companion App Features
 
@@ -52,6 +57,7 @@ A free, open-source, ultra-fast, and self-hosted solution to display real-time m
 - **Customizable Borders**: Adjustable border width (px) and border color for all widgets (set border width to `0` to turn off borders completely).
 - **Lucide Icon Picker**: Access 60+ vector icons for Cycling Widgets and custom overlay templates.
 - **Cycling Widget**: Automatically cycles between Recent Donation & Top Supporter with configurable In/Out animation effects and duration timings.
+- **Fullscreen Code Studio**: Live HTML/CSS/JS sandbox with Handlebars templating and real-time preview (see **[Overlay Template Variables Guide](VARIABLES.md)**).
 
 ### 🔒 100% Private & Safe (Local Network Only)
 - **Runs Completely Local**: Operates entirely within your local network (`http://<YOUR-PC-IP>:2907`).
@@ -118,6 +124,7 @@ In OBS Studio, click **+ (Add Source)** ➔ **Browser**:
 Check our **[Frequently Asked Questions (FAQ) & Troubleshooting Guide](FAQ.md)** for step-by-step help with Android Play Protect, Android 13+ Restricted Settings, battery optimization, and network setup!
 
 - ❓ **FAQ & Troubleshooting**: [Read FAQ.md](FAQ.md)
+- 🎛️ **Overlay Template Variables**: [Read VARIABLES.md](VARIABLES.md)
 - 🐛 **Report a Bug**: [Submit an Issue on GitHub](https://github.com/clowneon1/streampe/issues)
 - 💡 **Feature Requests**: [Propose a Feature](https://github.com/clowneon1/streampe/issues/new?title=[Feature]+Your+Feature+Idea)
 - 💬 **Discord Support**: Join our [Discord Community Server](https://partially-practical.codepenguin.in/) for live setup assistance.

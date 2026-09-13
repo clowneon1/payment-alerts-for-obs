@@ -137,15 +137,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function savePaths(root) {
       try {
+        const chkCopy = document.getElementById('chk-copy-data');
+        const shouldCopy = chkCopy ? chkCopy.checked : false;
         const res  = await fetch('/api/system/paths', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storageRootDir: root })
+          body: JSON.stringify({ storageRootDir: root, copyCurrentData: shouldCopy })
         });
         const data = await res.json();
         if (data.ok) {
           defaultResolved = data.resolved || defaultResolved;
           if (hint) hint.style.display = 'block';
-          showToast('Saved');
+          showToast(shouldCopy ? 'Saved & Data Copied' : 'Saved');
         } else { showToast('Failed to save path'); }
       } catch (e) { showToast('Error saving path'); }
     }

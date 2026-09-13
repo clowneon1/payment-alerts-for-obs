@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@color/surface1">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@mipmap/ic_launcher"
+            android:scaleType="centerInside"
+            android:contentDescription="Logo" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="StreamPe Setup"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/textMain"
+            android:paddingStart="10dp" />
+
+        <TextView
+            android:id="@+id/tvStepCounter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="STEP 1 OF 3"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="@color/accentLight"
+            android:letterSpacing="0.08" />
+    </LinearLayout>
+
+    <!-- Progress Line -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:orientation="horizontal"
+        android:background="@color/surface2">
+
+        <View
+            android:id="@+id/progStep1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@color/accent" />
+        <View
+            android:id="@+id/progStep2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@color/surface2" />
+        <View
+            android:id="@+id/progStep3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@color/surface2" />
+    </LinearLayout>
+
+    <!-- Center Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:padding="24dp">
+
+            <!-- Step Number Badge -->
+            <TextView
+                android:id="@+id/tvStepBadgeNumber"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="01"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/accentLight"
+                android:background="@color/surface2"
+                android:gravity="center"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Title -->
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Notification Access"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:textColor="@color/textMain"
+                android:gravity="center"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Subtitle -->
+            <TextView
+                android:id="@+id/tvSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Required to detect payment notifications and send alerts to OBS."
+                android:textSize="13sp"
+                android:textColor="@color/textMuted"
+                android:gravity="center"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Status Badge -->
+            <TextView
+                android:id="@+id/tvStatusBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NOT GRANTED"
+                android:textSize="10.5sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textColor="@color/danger"
+                android:background="@color/surface2"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Configure Step Action Button (For Battery & Accessibility) -->
+            <Button
+                android:id="@+id/btnConfigureAction"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:text="Configure Settings"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="@color/accent"
+                android:layout_marginBottom="16dp"
+                android:stateListAnimator="@null"
+                android:visibility="gone" />
+
+            <!-- Restricted Settings Help Box -->
+            <LinearLayout
+                android:id="@+id/layoutRestrictedCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface2"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Restricted Setting"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/warning"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1. Tap 'Open App Info'\n2. Tap ⋮ in top right\n3. Tap 'Allow restricted settings'\n4. Return and tap 'Try Again'"
+                    android:textSize="12sp"
+                    android:textColor="@color/textMain"
+                    android:lineSpacingExtra="4dp"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/btnAppInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="Open App Info"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accentLight"
+                    android:backgroundTint="@color/accentDim"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Actions: Back & Next Navigation -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="@color/surface1">
+
+        <Button
+            android:id="@+id/btnNavBack"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:text="Back"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/textMain"
+            android:backgroundTint="@color/surface2"
+            android:layout_marginEnd="8dp"
+            android:stateListAnimator="@null"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnNavNext"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="2"
+            android:text="Enable in Settings"
+            android:textSize="13.5sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="@color/accent"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+</LinearLayout>
