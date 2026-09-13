@@ -117,7 +117,7 @@
     if (val !== undefined && val !== null) {
       const str = String(val).trim();
       if (str) {
-        // 1. YYYY-MM-DD or YYYY-M-D (with optional ISO/time suffix e.g. "2026-08-15T14:30:00Z" or "2026-08-15 14:30")
+        // 1. YYYY-MM-DD or YYYY-M-D (4-digit year, optional time suffix)
         const isoMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
         if (isoMatch) {
           const yr = isoMatch[1];
@@ -125,12 +125,15 @@
           const da = String(isoMatch[3]).padStart(2, '0');
           return `${yr}-${mo}-${da}`;
         }
-        // 2. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (with optional time suffix)
-        const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[T\s].*)?$/);
+        // 2. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY (2 or 4 digit year)
+        const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:[T\s].*)?$/);
         if (dmyMatch) {
           const p1 = parseInt(dmyMatch[1], 10);
           const p2 = parseInt(dmyMatch[2], 10);
-          const yr = dmyMatch[3];
+          let yrStr = dmyMatch[3];
+          if (yrStr.length === 2) {
+            yrStr = String(2000 + parseInt(yrStr, 10));
+          }
           let da = p1;
           let mo = p2;
           if (p1 <= 12 && p2 > 12) {
@@ -138,9 +141,17 @@
             mo = p1;
             da = p2;
           }
-          return `${yr}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+          return `${yrStr}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
         }
-        // 3. Textual dates e.g. "15 Aug 2026", "August 15, 2026", "15-Aug-2026"
+        // 3. YY-MM-DD (2-digit year at start)
+        const ymdShortMatch = str.match(/^(\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
+        if (ymdShortMatch) {
+          const yr = String(2000 + parseInt(ymdShortMatch[1], 10));
+          const mo = String(ymdShortMatch[2]).padStart(2, '0');
+          const da = String(ymdShortMatch[3]).padStart(2, '0');
+          return `${yr}-${mo}-${da}`;
+        }
+        // 4. Textual dates e.g. "15 Aug 2026", "August 15, 2026", "15-Aug-2026", "15-Aug-24"
         const parsed = new Date(str);
         if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 1970 && parsed.getFullYear() < 3000) {
           const yr = parsed.getFullYear();
@@ -148,7 +159,7 @@
           const da = String(parsed.getDate()).padStart(2, '0');
           return `${yr}-${mo}-${da}`;
         }
-        // 4. Numeric epoch string
+        // 5. Numeric epoch string
         const num = Number(str);
         if (!isNaN(num) && num > 0) {
           const d = new Date(num < 1e11 ? num * 1000 : num);
@@ -224,9 +235,14 @@
     const dateStr = normalizeDate(tx.date, rawTs);
     const timeStr = normalizeTime(tx.time, rawTs);
     let ts = rawTs;
-    if (!ts || isNaN(ts)) {
+    if (dateStr && timeStr) {
       const parsedDt = new Date(`${dateStr}T${timeStr}`);
-      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : Date.now();
+      if (!isNaN(parsedDt.getTime())) {
+        ts = parsedDt.getTime();
+      }
+    }
+    if (!ts || isNaN(ts)) {
+      ts = (rawTs && !isNaN(rawTs)) ? rawTs : Date.now();
     }
     const rawName = tx.rawSender || tx.sender || 'Unknown';
     const canonicalName = tx.canonicalSender || canonicalDonorKey(rawName);

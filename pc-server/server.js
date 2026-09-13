@@ -2181,10 +2181,14 @@ app.post('/api/donations/record', (req, res) => {
       ? PaymentsCsv.normalizeTime(body.time, body.timestamp || now.getTime())
       : curTimeStr;
 
-    let ts = Number(body.timestamp);
-    if (!ts || isNaN(ts)) {
-      const parsedDt = new Date(`${dateVal}T${timeVal}`);
-      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : now.getTime();
+    let ts = null;
+    const parsedDt = new Date(`${dateVal}T${timeVal}`);
+    if (!isNaN(parsedDt.getTime())) {
+      ts = parsedDt.getTime();
+    } else if (body.timestamp && !isNaN(Number(body.timestamp))) {
+      ts = Number(body.timestamp);
+    } else {
+      ts = now.getTime();
     }
 
     const currencyCode = (body.currency || 'INR').toUpperCase();
@@ -2241,10 +2245,14 @@ app.put('/api/donations/:id', (req, res) => {
         : currentTxs[idx].time;
     }
 
-    let ts = Number(body.timestamp) || currentTxs[idx].timestamp;
-    if (!ts || isNaN(ts)) {
-      const parsedDt = new Date(`${updatedDate}T${updatedTime}`);
-      ts = !isNaN(parsedDt.getTime()) ? parsedDt.getTime() : Date.now();
+    let ts = null;
+    const parsedDt = new Date(`${updatedDate}T${updatedTime}`);
+    if (!isNaN(parsedDt.getTime())) {
+      ts = parsedDt.getTime();
+    } else if (body.timestamp && !isNaN(Number(body.timestamp))) {
+      ts = Number(body.timestamp);
+    } else {
+      ts = existingTs;
     }
 
     currentTxs[idx] = {

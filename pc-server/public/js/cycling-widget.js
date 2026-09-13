@@ -108,11 +108,15 @@
       if (recent.length > 0) {
         const first = recent[0];
         const sender = first.sender || 'Donor';
-        const amtVal = parseFloat(first.amountValue || first.amount || 0);
+        const rawAmt = first.amountValue !== undefined ? first.amountValue : first.amount;
+        const amtVal = parseFloat(String(rawAmt || 0).replace(/[^0-9.-]/g, '')) || 0;
+        const formatted = (typeof first.amount === 'string' && first.amount.includes('₹'))
+          ? first.amount
+          : `₹${amtVal.toLocaleString('en-IN')}`;
         return {
           name: sender,
           amount: amtVal,
-          formattedAmount: `₹${amtVal.toLocaleString('en-IN')}`
+          formattedAmount: formatted
         };
       }
       return { name: 'No Recent Donations', amount: 0, formattedAmount: '₹0' };

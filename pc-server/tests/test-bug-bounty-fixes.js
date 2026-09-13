@@ -51,11 +51,14 @@ console.log('  ✅ PASS: formatCsvRow normalized truncated HH:mm time to HH:mm:s
 assert.strictEqual(PaymentsCsv.normalizeDate('25-08-2026'), '2026-08-25', 'DD-MM-YYYY must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('25/08/2026'), '2026-08-25', 'DD/MM/YYYY must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('25.08.2026'), '2026-08-25', 'DD.MM.YYYY must normalize to YYYY-MM-DD');
+assert.strictEqual(PaymentsCsv.normalizeDate('25/08/24'), '2024-08-25', 'DD/MM/YY (2-digit year) must normalize to YYYY-MM-DD');
+assert.strictEqual(PaymentsCsv.normalizeDate('25-08-24'), '2024-08-25', 'DD-MM-YY (2-digit year) must normalize to YYYY-MM-DD');
+assert.strictEqual(PaymentsCsv.normalizeDate('24-08-25'), '2024-08-25', 'YY-MM-DD (2-digit year) must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('2026/08/25'), '2026-08-25', 'YYYY/MM/DD must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('2026.08.25'), '2026-08-25', 'YYYY.MM.DD must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('2026-08-25T14:30:00.000Z'), '2026-08-25', 'ISO timestamp must normalize to YYYY-MM-DD');
 assert.strictEqual(PaymentsCsv.normalizeDate('15 Aug 2026'), '2026-08-15', 'Textual date must normalize to YYYY-MM-DD');
-console.log('  ✅ PASS: normalizeDate converts diverse date formats to consistent YYYY-MM-DD.');
+console.log('  ✅ PASS: normalizeDate converts diverse date formats (including 2-digit years) to consistent YYYY-MM-DD.');
 
 // Test normalizeTime with 12-hour AM/PM and HH:mm
 assert.strictEqual(PaymentsCsv.normalizeTime('02:30 PM'), '14:30:00', '12h PM time must normalize to 24h HH:mm:ss');
@@ -174,6 +177,32 @@ assert.ok(serverJsContent.includes('androidClients: getActiveWsCount(androidClie
 assert.ok(serverJsContent.includes('obsClients: getActiveWsCount(obsClients)'), 'Health route must return obsClients count');
 assert.ok(serverJsContent.includes('version: APP_VERSION'), 'Health route must return APP_VERSION');
 console.log('  ✅ PASS: Single unified /health endpoint verified.');
+
+// ── Test 8: Timestamp Synchronization on Record Update ──
+console.log('\n--- Test 8: Timestamp Synchronization on Record Update ---');
+const oldDate = '2024-05-10';
+const oldTime = '10:00:00';
+const oldTs = new Date(`${oldDate}T${oldTime}`).getTime();
+const newDate = '2026-09-13';
+const newTime = '15:30:00';
+const expectedNewTs = new Date(`${newDate}T${newTime}`).getTime();
+
+// Simulate updating record's date and time without explicit timestamp
+const updatedRow = PaymentsCsv.formatCsvRow({
+  id: 'evt_update_test',
+  timestamp: oldTs, // Old timestamp was present
+  date: newDate,    // User updated date to 2026-09-13
+  time: newTime,    // User updated time to 15:30:00
+  sender: 'Vikram',
+  amount: 500,
+  currency: 'INR'
+});
+const parsedUpdated = PaymentsCsv.parseCsv('id,timestamp,date,time,sender,canonicalSender,amount,currency,sourceApp,message\n' + updatedRow);
+assert.strictEqual(parsedUpdated.length, 1);
+assert.strictEqual(parsedUpdated[0].timestamp, expectedNewTs, 'Timestamp must update to match the new date and time');
+assert.strictEqual(parsedUpdated[0].date, newDate, 'Date must match updated date');
+assert.strictEqual(parsedUpdated[0].time, newTime, 'Time must match updated time');
+console.log('  ✅ PASS: Timestamp is automatically resynchronized with updated date and time.');
 
 // Cleanup temp test directory
 try {
