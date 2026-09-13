@@ -94,9 +94,13 @@
         .sort((a, b) => b.amount - a.amount);
 
       if (sorted.length > 0) {
-        return { name: sorted[0].name, amount: `₹${sorted[0].amount.toLocaleString('en-IN')}` };
+        return {
+          name: sorted[0].name,
+          amount: sorted[0].amount,
+          formattedAmount: `₹${sorted[0].amount.toLocaleString('en-IN')}`
+        };
       }
-      return { name: 'No Top Supporter', amount: '₹0' };
+      return { name: 'No Top Supporter', amount: 0, formattedAmount: '₹0' };
     }
 
     if (type === 'recent_donation') {
@@ -105,9 +109,13 @@
         const first = recent[0];
         const sender = first.sender || 'Donor';
         const amtVal = parseFloat(first.amountValue || first.amount || 0);
-        return { name: sender, amount: `₹${amtVal.toLocaleString('en-IN')}` };
+        return {
+          name: sender,
+          amount: amtVal,
+          formattedAmount: `₹${amtVal.toLocaleString('en-IN')}`
+        };
       }
-      return { name: 'No Recent Donations', amount: '₹0' };
+      return { name: 'No Recent Donations', amount: 0, formattedAmount: '₹0' };
     }
 
     return null;
@@ -131,9 +139,16 @@
     let imageUrl = item.imageUrl || '';
     let mediaType = item.mediaType || (imageUrl ? 'image' : 'icon');
 
+    let name = '';
+    let amount = '';
+    let formattedAmount = '';
+
     if (item.type === 'top_supporter' || item.type === 'recent_donation') {
       const data = getLiveData(item.type);
-      text = `${data.name} ${data.amount}`;
+      name = data.name;
+      amount = data.amount;
+      formattedAmount = data.formattedAmount;
+      text = `${data.name} ${data.formattedAmount}`;
     }
 
     let mediaHtml = '';
@@ -150,6 +165,9 @@
         ? TemplateEngine.render(widget.code.customHTML, {
             label: TemplateEngine.escapeHtml(label),
             text: TemplateEngine.escapeHtml(text),
+            name: TemplateEngine.escapeHtml(name),
+            amount: TemplateEngine.escapeHtml(amount),
+            formattedAmount: TemplateEngine.escapeHtml(formattedAmount),
             transitionEffect: inEffect,
             transitionIn: inEffect,
             mediaHtml

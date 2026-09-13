@@ -81,17 +81,28 @@
       .sort((a, b) => b.amount - a.amount)
       .slice(0, parseInt(lb.maxEntries, 10) || 5);
 
+    const max = parseInt(lb.maxEntries, 10) || 5;
+    const total = topSupporters.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
+    const formattedTotal = `₹${total.toLocaleString('en-IN')}`;
+
     const lbTitle = TemplateEngine.render(lb.text.titleTemplate || lb.title || 'Top Supporters', {
       title: lb.title,
       count: topSupporters.length,
-      max: parseInt(lb.maxEntries, 10)
+      max: max,
+      maxEntries: max,
+      totalAmount: total,
+      formattedTotal: formattedTotal
     });
 
     if (lb.code && lb.code.enableCustomCode !== false) {
       container.innerHTML = (typeof lb.code.customHTML === 'string' && lb.code.customHTML)
         ? TemplateEngine.render(lb.code.customHTML, {
             title: lbTitle,
-            count: topSupporters.length
+            count: topSupporters.length,
+            max: max,
+            maxEntries: max,
+            totalAmount: total,
+            formattedTotal: formattedTotal
           })
         : '';
       const list = container.querySelector('.lb-list');

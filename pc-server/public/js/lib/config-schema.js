@@ -253,6 +253,78 @@
     }
   };
 
+  // ── Code Studio & Template Variables Constants ───────────────────
+  const TEMPLATE_VARIABLES = {
+    alerts: [
+      { name: 'title', desc: 'Rendered alert title (e.g. Rahul)' },
+      { name: 'subtitle', desc: 'Rendered alert subtitle (e.g. sent ₹500)' },
+      { name: 'amount', desc: 'Numeric donation amount (e.g. 500)' },
+      { name: 'formattedAmount', desc: 'Formatted amount with currency (e.g. ₹500.00)' },
+      { name: 'sender', desc: 'Donor name or alias' },
+      { name: 'rawSender', desc: 'Original bank sender name' },
+      { name: 'message', desc: 'Donor message or payment note' },
+      { name: 'currency', desc: 'Currency code (e.g. INR)' },
+      { name: 'providerName', desc: 'Payment app name (e.g. PhonePe)' },
+      { name: 'providerKey', desc: 'App key (phonepe, gpay, paytm, etc)' },
+      { name: 'sourceApp', desc: 'Source app name (e.g. PhonePe)' },
+      { name: 'mediaHtml', desc: 'Rendered media element (<img> or video)' },
+      { name: 'time', desc: 'Timestamp (e.g. 10:45 AM)' },
+      { name: 'date', desc: 'Formatted date (e.g. Sep 13, 2026)' }
+    ],
+    goal: [
+      { name: 'title', desc: 'Goal title' },
+      { name: 'subtitle', desc: 'Goal subtitle' },
+      { name: 'current', desc: 'Numeric current accumulated amount' },
+      { name: 'target', desc: 'Numeric goal target amount' },
+      { name: 'currentAmount', desc: 'Formatted current amount (e.g. ₹1,200)' },
+      { name: 'targetAmount', desc: 'Formatted target amount (e.g. ₹5,000)' },
+      { name: 'formattedCurrent', desc: 'Formatted current amount' },
+      { name: 'formattedTarget', desc: 'Formatted target amount' },
+      { name: 'percent', desc: 'Progress percentage string (e.g. 50%)' },
+      { name: 'percentage', desc: 'Numeric progress percentage (0-100)' },
+      { name: 'endDate', desc: 'Goal end date or deadline' }
+    ],
+    list: [
+      { name: 'title', desc: 'List widget header title' },
+      { name: 'count', desc: 'Number of donors/rows displayed' },
+      { name: 'max', desc: 'Max allowed rows (e.g. 5)' },
+      { name: 'maxEntries', desc: 'Max allowed rows alias' },
+      { name: 'totalAmount', desc: 'Numeric total sum of listed donations' },
+      { name: 'formattedTotal', desc: 'Formatted total sum (e.g. ₹2,500)' },
+      { name: 'items', desc: 'Rows container placeholder element' }
+    ],
+    cycling: [
+      { name: 'label', desc: 'Step label (e.g. Top Supporter / Recent Donation)' },
+      { name: 'text', desc: 'Combined display text (e.g. Rahul ₹500)' },
+      { name: 'name', desc: 'Donor name (for dynamic top/recent donor steps)' },
+      { name: 'amount', desc: 'Numeric donation amount (e.g. 500)' },
+      { name: 'formattedAmount', desc: 'Formatted amount with currency (e.g. ₹500)' },
+      { name: 'transitionIn', desc: 'Active enter transition effect name' },
+      { name: 'transitionEffect', desc: 'Active transition effect alias' },
+      { name: 'mediaHtml', desc: 'Optional media HTML / icon element' }
+    ]
+  };
+
+  const CSS_CLASSES_MAP = {
+    alerts: [
+      '.alert-box', '.alert-media', '.alert-content', '.alert-sender',
+      '.alert-amount', '.alert-message', '.alert-time', '.alert-badge'
+    ],
+    goal: [
+      '.goal-container', '.goal-title', '.goal-amount-text',
+      '.goal-bar-container', '.goal-bar-fill', '.goal-percentage'
+    ],
+    list: [
+      '.lb-card', '.lb-header', '.lb-title', '.lb-list',
+      '.lb-row', '.lb-badge', '.lb-name', '.lb-amount',
+      '.rank-1', '.rank-2', '.rank-3'
+    ],
+    cycling: [
+      '.cycling-card', '.cycling-icon', '.cycling-content',
+      '.cycling-label', '.cycling-text'
+    ]
+  };
+
   const LIST_CONFIG_PRESETS = {
     'top-supporters': {
       presetKey: 'top-supporters',
@@ -640,6 +712,8 @@
     WIDGET_DEFAULTS,
     TEMPLATE_DEFAULTS,
     DEFAULT_CODE,
+    TEMPLATE_VARIABLES,
+    CSS_CLASSES_MAP,
     POSITION_PRESETS,
     generateId,
     clone,

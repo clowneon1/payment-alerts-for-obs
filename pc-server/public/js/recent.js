@@ -76,18 +76,28 @@
 
     const history = recent.recentDonations || [];
     const displayItems = history.slice(0, parseInt(recent.maxEntries, 10) || 5);
+    const max = parseInt(recent.maxEntries, 10) || 5;
+    const total = displayItems.reduce((sum, it) => sum + (parseFloat(it.amountValue || it.amount) || 0), 0);
+    const formattedTotal = `₹${total.toLocaleString('en-IN')}`;
 
     const recentTitle = TemplateEngine.render(recent.text.titleTemplate || recent.title || 'Recent Donations', {
       title: recent.title,
       count: displayItems.length,
-      max: parseInt(recent.maxEntries, 10)
+      max: max,
+      maxEntries: max,
+      totalAmount: total,
+      formattedTotal: formattedTotal
     });
 
     if (recent.code && recent.code.enableCustomCode !== false) {
       container.innerHTML = (typeof recent.code.customHTML === 'string' && recent.code.customHTML)
         ? TemplateEngine.render(recent.code.customHTML, {
             title: recentTitle,
-            count: displayItems.length
+            count: displayItems.length,
+            max: max,
+            maxEntries: max,
+            totalAmount: total,
+            formattedTotal: formattedTotal
           })
         : '';
       const list = container.querySelector('.lb-list');

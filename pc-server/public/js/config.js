@@ -148,61 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
     previewVisible: true,
     debounceTimer: null,
 
-    variablesMap: {
-      alerts: [
-        { name: 'amount', desc: 'Numeric amount (e.g. 500)' },
-        { name: 'formattedAmount', desc: 'Formatted with currency (e.g. ₹500.00)' },
-        { name: 'sender', desc: 'Donor name or alias' },
-        { name: 'rawSender', desc: 'Original bank sender name' },
-        { name: 'message', desc: 'Donor message or payment note' },
-        { name: 'currency', desc: 'Currency code (e.g. INR)' },
-        { name: 'providerName', desc: 'Payment app name (e.g. PhonePe)' },
-        { name: 'providerKey', desc: 'App key (phonepe, gpay, etc)' },
-        { name: 'mediaHtml', desc: 'Rendered media element' },
-        { name: 'time', desc: 'Timestamp (e.g. 10:45 AM)' }
-      ],
-      goal: [
-        { name: 'title', desc: 'Goal title' },
-        { name: 'currentAmount', desc: 'Current accumulated amount' },
-        { name: 'targetAmount', desc: 'Goal target amount' },
-        { name: 'percentage', desc: 'Progress percentage (0-100)' },
-        { name: 'formattedCurrent', desc: 'Formatted current (e.g. ₹1,200.00)' },
-        { name: 'formattedTarget', desc: 'Formatted target (e.g. ₹5,000.00)' }
-      ],
-      list: [
-        { name: 'title', desc: 'List widget header title' },
-        { name: 'items', desc: 'Rows container placeholder' },
-        { name: 'count', desc: 'Number of donors/rows' },
-        { name: 'totalAmount', desc: 'Total sum of listed donations' },
-        { name: 'formattedTotal', desc: 'Formatted total amount' }
-      ],
-      cycling: [
-        { name: 'label', desc: 'Step label (e.g. Top Donor)' },
-        { name: 'text', desc: 'Content text (e.g. Rahul - ₹500)' },
-        { name: 'transitionEffect', desc: 'Active transition name' },
-        { name: 'mediaHtml', desc: 'Optional media HTML' }
-      ]
-    },
-
-    cssClassesMap: {
-      alerts: [
-        '.alert-box', '.alert-media', '.alert-content', '.alert-sender',
-        '.alert-amount', '.alert-message', '.alert-time', '.alert-badge'
-      ],
-      goal: [
-        '.goal-container', '.goal-title', '.goal-amount-text',
-        '.goal-bar-container', '.goal-bar-fill', '.goal-percentage'
-      ],
-      list: [
-        '.lb-card', '.lb-header', '.lb-title', '.lb-list',
-        '.lb-row', '.lb-badge', '.lb-name', '.lb-amount',
-        '.rank-1', '.rank-2', '.rank-3'
-      ],
-      cycling: [
-        '.cycling-card', '.cycling-icon', '.cycling-content',
-        '.cycling-label', '.cycling-text'
-      ]
-    },
+    variablesMap: ConfigSchema.TEMPLATE_VARIABLES,
+    cssClassesMap: ConfigSchema.CSS_CLASSES_MAP,
 
     widgetTargetMap: {
       alerts: {
@@ -482,18 +429,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         vars.forEach(v => {
+          const varName = (typeof v === 'object' && v !== null) ? v.name : String(v);
+          const varDesc = (typeof v === 'object' && v !== null) ? v.desc : '';
+          const insertText = this.activeLang === 'js' ? varName : `{{${varName}}}`;
+
           const chip = document.createElement('span');
           chip.className = 'code-studio-chip';
-          chip.textContent = v;
+          chip.textContent = insertText;
+          if (varDesc) {
+            chip.title = `${varName}: ${varDesc} (Click to insert/copy)`;
+          }
           chip.addEventListener('click', () => {
             if (this.editor) {
               const doc = this.editor.getDoc();
               const cursor = doc.getCursor();
-              doc.replaceRange(v, cursor);
+              doc.replaceRange(insertText, cursor);
               this.editor.focus();
             }
-            copyToClipboard(v).catch(() => { });
-            showToast(`<i data-lucide="copy"></i> Copied "${v}"`);
+            copyToClipboard(insertText).catch(() => { });
+            showToast(`<i data-lucide="copy"></i> Copied "${insertText}"`);
           });
           container.appendChild(chip);
         });

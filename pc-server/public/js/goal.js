@@ -124,8 +124,14 @@
       title: goal.title,
       targetAmount: formattedTarget,
       currentAmount: formattedCurrent,
+      formattedTarget: formattedTarget,
+      formattedCurrent: formattedCurrent,
+      target: target,
+      current: current,
       percent: `${percent}%`,
-      endDate: goal.endDate || ''
+      percentage: percent,
+      endDate: goal.endDate || '',
+      subtitle: goal.subtitleTemplate ? TemplateEngine.render(goal.subtitleTemplate, { currentAmount: formattedCurrent, targetAmount: formattedTarget, percent: `${percent}%` }) : ''
     };
 
     const goalTitle = TemplateEngine.render(goal.text.titleTemplate || goal.title || 'Payment Goal', context);

@@ -57,6 +57,7 @@ A free, open-source, ultra-fast, and self-hosted solution to display real-time m
 - **Customizable Borders**: Adjustable border width (px) and border color for all widgets (set border width to `0` to turn off borders completely).
 - **Lucide Icon Picker**: Access 60+ vector icons for Cycling Widgets and custom overlay templates.
 - **Cycling Widget**: Automatically cycles between Recent Donation & Top Supporter with configurable In/Out animation effects and duration timings.
+- **Fullscreen Code Studio**: Live HTML/CSS/JS sandbox with Handlebars templating and real-time preview (see **[Overlay Template Variables Guide](VARIABLES.md)**).
 
 ### 🔒 100% Private & Safe (Local Network Only)
 - **Runs Completely Local**: Operates entirely within your local network (`http://<YOUR-PC-IP>:2907`).
@@ -123,6 +124,7 @@ In OBS Studio, click **+ (Add Source)** ➔ **Browser**:
 Check our **[Frequently Asked Questions (FAQ) & Troubleshooting Guide](FAQ.md)** for step-by-step help with Android Play Protect, Android 13+ Restricted Settings, battery optimization, and network setup!
 
 - ❓ **FAQ & Troubleshooting**: [Read FAQ.md](FAQ.md)
+- 🎛️ **Overlay Template Variables**: [Read VARIABLES.md](VARIABLES.md)
 - 🐛 **Report a Bug**: [Submit an Issue on GitHub](https://github.com/clowneon1/streampe/issues)
 - 💡 **Feature Requests**: [Propose a Feature](https://github.com/clowneon1/streampe/issues/new?title=[Feature]+Your+Feature+Idea)
 - 💬 **Discord Support**: Join our [Discord Community Server](https://partially-practical.codepenguin.in/) for live setup assistance.

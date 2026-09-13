@@ -167,10 +167,16 @@
         .slice(0, max);
     }
 
+    const total = items.reduce((sum, it) => sum + (parseFloat(it.amount || it.amountValue) || 0), 0);
+    const formattedTotal = `₹${total.toLocaleString('en-IN')}`;
+
     const listTitle = TemplateEngine.render(listConfig.text?.titleTemplate || listConfig.title || listConfig.name, {
       title: listConfig.title || listConfig.name,
       count: items.length,
-      max: max
+      max: max,
+      maxEntries: max,
+      totalAmount: total,
+      formattedTotal: formattedTotal
     });
 
     if (listConfig.code?.enableCustomCode === true) {
@@ -178,6 +184,10 @@
         ? TemplateEngine.render(listConfig.code.customHTML, {
             title: listTitle,
             count: items.length,
+            max: max,
+            maxEntries: max,
+            totalAmount: total,
+            formattedTotal: formattedTotal,
             items: items
           })
         : '';
